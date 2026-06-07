@@ -1,0 +1,97 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+
+# Building Blocks
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.BuildingBlocks.Domain", "src\BuildingBlocks\MangaERP.BuildingBlocks.Domain\MangaERP.BuildingBlocks.Domain.csproj", "{BB000001-0001-0001-0001-000000000001}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.BuildingBlocks.Application", "src\BuildingBlocks\MangaERP.BuildingBlocks.Application\MangaERP.BuildingBlocks.Application.csproj", "{BB000002-0002-0002-0002-000000000002}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.BuildingBlocks.Infrastructure", "src\BuildingBlocks\MangaERP.BuildingBlocks.Infrastructure\MangaERP.BuildingBlocks.Infrastructure.csproj", "{BB000003-0003-0003-0003-000000000003}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.BuildingBlocks.Contracts", "src\BuildingBlocks\MangaERP.BuildingBlocks.Contracts\MangaERP.BuildingBlocks.Contracts.csproj", "{BB000004-0004-0004-0004-000000000004}"
+EndProject
+
+# Api Gateway
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.ApiGateway", "src\ApiGateway\MangaERP.ApiGateway\MangaERP.ApiGateway.csproj", "{GW000001-0001-0001-0001-000000000001}"
+EndProject
+
+# Services
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.Identity", "src\Services\Identity\MangaERP.Identity\MangaERP.Identity.csproj", "{SV000001-0001-0001-0001-000000000001}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.Submission", "src\Services\Submission\MangaERP.Submission\MangaERP.Submission.csproj", "{SV000002-0002-0002-0002-000000000002}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.Series", "src\Services\Series\MangaERP.Series\MangaERP.Series.csproj", "{SV000003-0003-0003-0003-000000000003}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.Chapter", "src\Services\Chapter\MangaERP.Chapter\MangaERP.Chapter.csproj", "{SV000004-0004-0004-0004-000000000004}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.Task", "src\Services\Task\MangaERP.Task\MangaERP.Task.csproj", "{SV000005-0005-0005-0005-000000000005}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.QA", "src\Services\QA\MangaERP.QA\MangaERP.QA.csproj", "{SV000006-0006-0006-0006-000000000006}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.Publishing", "src\Services\Publishing\MangaERP.Publishing\MangaERP.Publishing.csproj", "{SV000007-0007-0007-0007-000000000007}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MangaERP.Ranking", "src\Services\Ranking\MangaERP.Ranking\MangaERP.Ranking.csproj", "{SV000008-0008-0008-0008-000000000008}"
+EndProject
+
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|Any CPU = Debug|Any CPU
+        Release|Any CPU = Release|Any CPU
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {BB000001-0001-0001-0001-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {BB000001-0001-0001-0001-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {BB000001-0001-0001-0001-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {BB000001-0001-0001-0001-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+        {BB000002-0002-0002-0002-000000000002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {BB000002-0002-0002-0002-000000000002}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {BB000002-0002-0002-0002-000000000002}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {BB000002-0002-0002-0002-000000000002}.Release|Any CPU.Build.0 = Release|Any CPU
+        {BB000003-0003-0003-0003-000000000003}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {BB000003-0003-0003-0003-000000000003}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {BB000003-0003-0003-0003-000000000003}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {BB000003-0003-0003-0003-000000000003}.Release|Any CPU.Build.0 = Release|Any CPU
+        {BB000004-0004-0004-0004-000000000004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {BB000004-0004-0004-0004-000000000004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {BB000004-0004-0004-0004-000000000004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {BB000004-0004-0004-0004-000000000004}.Release|Any CPU.Build.0 = Release|Any CPU
+        {GW000001-0001-0001-0001-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {GW000001-0001-0001-0001-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {GW000001-0001-0001-0001-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {GW000001-0001-0001-0001-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+        {SV000001-0001-0001-0001-000000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {SV000001-0001-0001-0001-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {SV000001-0001-0001-0001-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {SV000001-0001-0001-0001-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+        {SV000002-0002-0002-0002-000000000002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {SV000002-0002-0002-0002-000000000002}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {SV000002-0002-0002-0002-000000000002}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {SV000002-0002-0002-0002-000000000002}.Release|Any CPU.Build.0 = Release|Any CPU
+        {SV000003-0003-0003-0003-000000000003}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {SV000003-0003-0003-0003-000000000003}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {SV000003-0003-0003-0003-000000000003}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {SV000003-0003-0003-0003-000000000003}.Release|Any CPU.Build.0 = Release|Any CPU
+        {SV000004-0004-0004-0004-000000000004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {SV000004-0004-0004-0004-000000000004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {SV000004-0004-0004-0004-000000000004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {SV000004-0004-0004-0004-000000000004}.Release|Any CPU.Build.0 = Release|Any CPU
+        {SV000005-0005-0005-0005-000000000005}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {SV000005-0005-0005-0005-000000000005}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {SV000005-0005-0005-0005-000000000005}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {SV000005-0005-0005-0005-000000000005}.Release|Any CPU.Build.0 = Release|Any CPU
+        {SV000006-0006-0006-0006-000000000006}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {SV000006-0006-0006-0006-000000000006}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {SV000006-0006-0006-0006-000000000006}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {SV000006-0006-0006-0006-000000000006}.Release|Any CPU.Build.0 = Release|Any CPU
+        {SV000007-0007-0007-0007-000000000007}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {SV000007-0007-0007-0007-000000000007}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {SV000007-0007-0007-0007-000000000007}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {SV000007-0007-0007-0007-000000000007}.Release|Any CPU.Build.0 = Release|Any CPU
+        {SV000008-0008-0008-0008-000000000008}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {SV000008-0008-0008-0008-000000000008}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {SV000008-0008-0008-0008-000000000008}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {SV000008-0008-0008-0008-000000000008}.Release|Any CPU.Build.0 = Release|Any CPU
+    EndGlobalSection
+EndGlobal
