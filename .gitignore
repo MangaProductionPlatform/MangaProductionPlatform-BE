@@ -291,6 +291,10 @@ UpgradeLog*.htm
 ServiceFabricBackup/
 *.rptproj.bak
 
+# Custom rule để chặn file script SQL của bạn
+*.sql
+*.SQL
+
 # SQL Server files
 *.mdf
 *.ldf
