@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class InitialCreate_Postgres : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -214,7 +214,7 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     Description = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Genre = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CoverImageUrl = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ManuscriptUrl = table.Column<string>(type: "nvarchar(2048)", maxLength: 2048, nullable: false),
+                    ManuscriptUrl = table.Column<string>(type: "nvarchar(2048)", maxLength: 2048, nullable: true),
                     SubmitterId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     FeedbackMessage = table.Column<string>(type: "nvarchar(max)", nullable: true),

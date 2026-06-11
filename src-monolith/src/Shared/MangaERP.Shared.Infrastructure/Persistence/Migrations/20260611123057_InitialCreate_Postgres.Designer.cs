@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260610171201_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260611123057_InitialCreate_Postgres")]
+    partial class InitialCreate_Postgres
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -640,7 +640,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("ManuscriptUrl")
-                        .IsRequired()
                         .HasMaxLength(2048)
                         .HasColumnType("nvarchar(2048)");
 
