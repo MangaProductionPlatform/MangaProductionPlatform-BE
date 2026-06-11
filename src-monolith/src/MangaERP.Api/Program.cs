@@ -19,19 +19,27 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(port);
 });
 
-// ── CORS ──────────────────────────────────────────────────────────────────────
-// Allowed origins read from env var: CORS__AllowedOrigins (comma-separated)
-var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? "http://localhost:3000")
-    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+const string CorsPolicyName = "FrontendCors";
+
+var allowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?? new[]
+    {
+        "https://manga-production-platform-fe.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:8080"
+    };
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("FrontendPolicy", policy =>
+    options.AddPolicy(CorsPolicyName, policy =>
+    {
         policy
             .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials());
+            .AllowAnyMethod();
+    });
 });
 
 // ── Shared Infrastructure (AppDbContext) ──────────────────────────────────────
@@ -120,7 +128,7 @@ if (app.Environment.IsDevelopment() ||
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "MangaERP v1"));
 }
 
-app.UseCors("FrontendPolicy");
+app.UseCors(CorsPolicyName);
 
 // Skip HTTPS redirect in Railway (Railway handles TLS at the gateway level)
 if (!app.Environment.IsProduction())

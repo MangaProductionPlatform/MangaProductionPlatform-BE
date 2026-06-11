@@ -100,43 +100,45 @@ public class BrevoEmailService : IEmailService
 
     private static string BuildEmailHtml(string fullName, string username, string activationLink)
         => $"""
-        <!DOCTYPE html>
-        <html lang="vi">
-        <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Kích hoạt tài khoản MangaERP</title></head>
-        <body style="font-family:'Segoe UI',Arial,sans-serif;background:#f4f6f9;margin:0;padding:40px 0;">
-          <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
-            <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:40px 32px;text-align:center;">
-              <h1 style="color:#fff;margin:0;font-size:28px;letter-spacing:-0.5px;">🎌 MangaERP</h1>
-              <p style="color:rgba(255,255,255,.85);margin:8px 0 0;font-size:14px;">Nền tảng quản lý sản xuất manga</p>
+        <div style="background-color: #f9f9f9; padding: 30px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; min-height: 100%;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                
+                <div style="background: linear-gradient(135deg, #ff4e50, #f9d423); padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; letter-spacing: 1px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">
+                        MangaC&P
+                    </h1>
+                    <p style="color: #ffffff; margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Hệ thống Sáng tác & Xuất bản Manga</p>
+                </div>
+
+                <div style="padding: 40px 30px; color: #333333; line-height: 1.6;">
+                    <h2 style="margin-top: 0; color: #222222; font-size: 20px;">Chào {fullName},</h2>
+                    <p style="font-size: 15px;">Chúc mừng bạn đã gia nhập cộng đồng tác giả và dịch giả của <strong>MangaC&P</strong>! Tài khoản hệ thống của bạn đã được khởi tạo thành công.</p>
+                    
+                    <div style="background-color: #f5f5f5; border-left: 4px solid #ff4e50; padding: 15px; margin: 20px 0; border-radius: 0 4px 4px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #555555;">Tên đăng nhập (Username) của bạn là:</p>
+                        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #ff4e50;">{username}</p>
+                    </div>
+
+                    <p style="font-size: 15px; margin-bottom: 25px;">Vui lòng nhấn vào nút "Kích hoạt tài khoản" bên dưới để tiến hành thiết lập mật khẩu mới và bắt đầu hành trình sáng tác nhé:</p>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{activationLink}" target="_blank" style="background-color: #ff4e50; color: #ffffff; text-decoration: none; padding: 14px 35px; font-weight: bold; border-radius: 25px; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px rgba(255,78,80,0.3); transition: all 0.2s;">
+                            Kích Hoạt Tài Khoản
+                        </a>
+                    </div>
+
+                    <p style="font-size: 13px; color: #888888; font-style: italic; text-align: center; margin-top: 30px;">
+                        Lưu ý: Liên kết này có giá trị trong vòng 24 giờ. Nếu nút bấm trên không hoạt động, bạn có thể copy link sau dán vào trình duyệt: <br>
+                        <a href="{activationLink}" style="color: #ff4e50; word-break: break-all;">{activationLink}</a>
+                    </p>
+                </div>
+
+                <div style="background-color: #f1f1f1; padding: 20px; text-align: center; font-size: 12px; color: #999999; border-top: 1px solid #eaeaea;">
+                    <p style="margin: 0 0 5px 0;">Đây là email tự động từ hệ thống MangaC&P, vui lòng không phản hồi thư này.</p>
+                    <p style="margin: 0;">© 2026 MangaC&P. All rights reserved.</p>
+                </div>
+
             </div>
-            <div style="padding:40px 32px;">
-              <h2 style="color:#1e1b4b;margin-top:0;">Xin chào, {fullName}! 👋</h2>
-              <p style="color:#4b5563;line-height:1.6;">
-                Tài khoản doanh nghiệp của bạn đã được Admin tạo thành công trên hệ thống MangaERP.
-              </p>
-              <div style="background:#f8f7ff;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin:24px 0;">
-                <p style="margin:0 0 8px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:.5px;">Tài khoản của bạn</p>
-                <p style="margin:0;font-size:18px;font-weight:600;color:#1e1b4b;font-family:monospace;">{username}</p>
-              </div>
-              <p style="color:#4b5563;line-height:1.6;">
-                Nhấp vào nút bên dưới để đặt mật khẩu và kích hoạt tài khoản. Link này có hiệu lực trong <strong>24 giờ</strong>.
-              </p>
-              <div style="text-align:center;margin:32px 0;">
-                <a href="{activationLink}"
-                   style="display:inline-block;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:600;font-size:16px;letter-spacing:.3px;">
-                  ✅ Kích hoạt tài khoản
-                </a>
-              </div>
-              <p style="color:#9ca3af;font-size:13px;line-height:1.5;">
-                Nếu bạn không yêu cầu tài khoản này, hãy bỏ qua email này.<br>
-                Link sẽ tự động hết hạn sau 24 giờ.
-              </p>
-            </div>
-            <div style="background:#f9fafb;padding:20px 32px;text-align:center;border-top:1px solid #e5e7eb;">
-              <p style="color:#9ca3af;font-size:12px;margin:0;">© 2026 MangaERP. All rights reserved.</p>
-            </div>
-          </div>
-        </body></html>
+        </div>
         """;
 }
