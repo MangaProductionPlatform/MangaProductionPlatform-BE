@@ -33,6 +33,7 @@ services:
       - Smtp__Password=${SMTP_PASSWORD:-dev}
       - Smtp__FromAddress=${SMTP_FROM_ADDRESS:-noreply@mangacap.com}
       - Smtp__FromName=${SMTP_FROM_NAME:-MangaERP}
+      - Brevo__ApiKey=${BREVO_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

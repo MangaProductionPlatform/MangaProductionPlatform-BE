@@ -25,7 +25,8 @@ public static class IdentityModuleExtensions
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IInvitationTokenRepository, InvitationTokenRepository>();
         services.AddScoped<ITokenService, JwtTokenService>();
-        services.AddScoped<IEmailService, SmtpEmailService>();
+        services.AddHttpClient(); // Required by BrevoEmailService
+        services.AddScoped<IEmailService, BrevoEmailService>();
         services.AddScoped<IUsernameGenerator, UsernameGeneratorService>();
 
         return services;
