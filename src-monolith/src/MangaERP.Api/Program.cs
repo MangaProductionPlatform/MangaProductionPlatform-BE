@@ -21,15 +21,21 @@ builder.WebHost.ConfigureKestrel(options =>
 
 const string CorsPolicyName = "FrontendCors";
 
-var allowedOrigins = builder.Configuration
-    .GetSection("Cors:AllowedOrigins")
-    .Get<string[]>()
-    ?? new[]
+var rawAllowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+
+if (rawAllowedOrigins != null && rawAllowedOrigins.Length == 1 && rawAllowedOrigins[0].Contains(","))
+{
+    rawAllowedOrigins = rawAllowedOrigins[0].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+var allowedOrigins = (rawAllowedOrigins == null || rawAllowedOrigins.Length == 0)
+    ? new[]
     {
         "https://manga-production-platform-fe.vercel.app",
         "http://localhost:5173",
         "http://localhost:8080"
-    };
+    }
+    : rawAllowedOrigins;
 
 builder.Services.AddCors(options =>
 {
