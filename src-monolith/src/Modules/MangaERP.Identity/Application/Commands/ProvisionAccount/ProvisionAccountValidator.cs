@@ -30,5 +30,9 @@ public class ProvisionAccountValidator : AbstractValidator<ProvisionAccountComma
         RuleFor(x => x.Role)
             .Must(role => AllowedRoles.Contains(role))
             .WithMessage($"Role must be one of: {string.Join(", ", AllowedRoles.Select(r => r.ToString()))}. Reader role cannot be provisioned.");
+
+        RuleFor(x => x.ManagingTantouId)
+            .NotEmpty().WithMessage("Biên tập viên phụ trách là bắt buộc khi vai trò là Mangaka.")
+            .When(x => x.Role == UserRole.Mangaka);
     }
 }

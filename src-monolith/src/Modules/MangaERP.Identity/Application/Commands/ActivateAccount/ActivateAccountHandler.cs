@@ -7,7 +7,10 @@ namespace MangaERP.Identity.Application.Commands.ActivateAccount;
 
 public record ActivateAccountCommand(
     string Token,
-    string Password
+    string Password,
+    string? PenName = null,
+    string[]? DrawingSoftwares = null,
+    string? BankAccountNumber = null
 ) : IRequest<ActivateAccountResult>;
 
 public record ActivateAccountResult(Guid UserId, string Username, string Role);
@@ -53,6 +56,22 @@ public class ActivateAccountHandler : IRequestHandler<ActivateAccountCommand, Ac
         // Step 5: Set password and activate
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
         user.AccountStatus = AccountStatus.Active;
+
+        if (!string.IsNullOrWhiteSpace(request.PenName))
+        {
+            user.PenName = request.PenName.Trim();
+        }
+
+        if (request.DrawingSoftwares != null && request.DrawingSoftwares.Length > 0)
+        {
+            user.DrawingSoftwares = string.Join(",", request.DrawingSoftwares);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.BankAccountNumber))
+        {
+            user.BankAccountNumber = request.BankAccountNumber.Trim();
+        }
+
         await _userRepo.UpdateAsync(user, cancellationToken);
 
         // Step 6: Mark invitation token as used

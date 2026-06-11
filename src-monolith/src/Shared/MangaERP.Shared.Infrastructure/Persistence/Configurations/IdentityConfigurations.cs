@@ -20,11 +20,21 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         entity.Property(e => e.PasswordHash).IsRequired();
         entity.Property(e => e.FullName).HasMaxLength(200);
         entity.Property(e => e.AvatarUrl).HasMaxLength(2048);
+        entity.Property(e => e.PhoneNumber).HasMaxLength(50);
+        entity.Property(e => e.PenName).HasMaxLength(100);
+        entity.Property(e => e.DrawingSoftwares).HasMaxLength(500);
+        entity.Property(e => e.BankAccountNumber).HasMaxLength(100);
         entity.Property(e => e.Role)
             .HasConversion(v => v.ToString(), v => Enum.Parse<UserRole>(v)).HasMaxLength(50);
         entity.Property(e => e.AccountStatus)
             .HasConversion(v => v.ToString(), v => Enum.Parse<AccountStatus>(v))
             .HasMaxLength(50);
+
+        entity.HasOne(e => e.ManagingTantou)
+            .WithMany()
+            .HasForeignKey(e => e.ManagingTantouId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         entity.HasQueryFilter(e => !e.IsDeleted);
     }
 }

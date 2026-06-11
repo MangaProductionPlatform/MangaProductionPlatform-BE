@@ -10,7 +10,9 @@ namespace MangaERP.Identity.Application.Commands.ProvisionAccount;
 public record ProvisionAccountCommand(
     string FullName,
     string PersonalEmail,
-    UserRole Role
+    UserRole Role,
+    string? PhoneNumber = null,
+    Guid? ManagingTantouId = null
 ) : IRequest<ProvisionAccountResult>;
 
 public record ProvisionAccountResult(
@@ -52,6 +54,16 @@ public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, 
         if (await _userRepo.PersonalEmailExistsActiveOrPendingAsync(request.PersonalEmail, cancellationToken))
             throw new UserAlreadyExistsException(request.PersonalEmail);
 
+        // Validate ManagingTantouId if role is Mangaka
+        if (request.Role == UserRole.Mangaka && request.ManagingTantouId.HasValue)
+        {
+            var tantou = await _userRepo.GetByIdAsync(request.ManagingTantouId.Value, cancellationToken);
+            if (tantou == null || tantou.Role != UserRole.TantouEditor)
+            {
+                throw new InvalidOperationException("Biên tập viên phụ trách không hợp lệ hoặc không tồn tại.");
+            }
+        }
+
         // Step 2: Generate unique corporate username
         var username = await _usernameGenerator.GenerateAsync(request.FullName, request.Role, cancellationToken);
 
@@ -64,6 +76,8 @@ public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, 
             PasswordHash = string.Empty,    // not set until activation
             Role = request.Role,
             FullName = request.FullName,
+            PhoneNumber = request.PhoneNumber,
+            ManagingTantouId = request.Role == UserRole.Mangaka ? request.ManagingTantouId : null,
             AccountStatus = AccountStatus.PendingActivation,
             CreatedAt = DateTime.UtcNow
         };

@@ -17,7 +17,12 @@ public record UserSummaryDto(
     string Role,
     string AccountStatus,
     string? PersonalEmail,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? PhoneNumber = null,
+    string? PenName = null,
+    string[]? DrawingSoftwares = null,
+    string? BankAccountNumber = null,
+    Guid? ManagingTantouId = null
 );
 
 public record ListUsersResult(IEnumerable<UserSummaryDto> Users, int TotalCount);
@@ -43,7 +48,12 @@ public class ListUsersHandler : IRequestHandler<ListUsersQuery, ListUsersResult>
         var dtos = users.Select(u => new UserSummaryDto(
             u.Id, u.Username, u.FullName,
             u.Role.ToString(), u.AccountStatus.ToString(),
-            u.PersonalEmail, u.CreatedAt
+            u.PersonalEmail, u.CreatedAt,
+            u.PhoneNumber,
+            u.PenName,
+            u.DrawingSoftwares?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            u.BankAccountNumber,
+            u.ManagingTantouId
         )).ToList();
 
         return new ListUsersResult(dtos, dtos.Count);

@@ -40,7 +40,12 @@ public class AdminController : ControllerBase
     {
         try
         {
-            var command = new ProvisionAccountCommand(request.FullName, request.PersonalEmail, request.Role);
+            var command = new ProvisionAccountCommand(
+                request.FullName,
+                request.PersonalEmail,
+                request.Role,
+                request.PhoneNumber,
+                request.ManagingTantouId);
             var result = await _mediator.Send(command, ct);
             return CreatedAtAction(nameof(ProvisionAccount), new { result.UserId }, result);
         }
@@ -87,5 +92,7 @@ public class AdminController : ControllerBase
 public record ProvisionAccountRequest(
     string FullName,
     string PersonalEmail,
-    UserRole Role
+    UserRole Role,
+    string? PhoneNumber = null,
+    Guid? ManagingTantouId = null
 );

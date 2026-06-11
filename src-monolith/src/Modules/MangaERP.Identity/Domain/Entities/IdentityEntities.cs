@@ -19,6 +19,14 @@ public class User : ISoftDeletable
     public AccountStatus AccountStatus { get; set; } = AccountStatus.Active;
     public string? FullName { get; set; }
     public string? AvatarUrl { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? PenName { get; set; }
+    public string? DrawingSoftwares { get; set; }
+    public string? BankAccountNumber { get; set; }
+    public Guid? ManagingTantouId { get; set; }
+
+    // Navigation
+    public virtual User? ManagingTantou { get; set; }
 
     // Soft Delete
     public bool IsDeleted { get; set; } = false;
