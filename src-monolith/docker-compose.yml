@@ -1,0 +1,72 @@
+services:
+  # ── MangaERP Monolith ────────────────────────────────────────────────────────
+  mangaerp-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mangaerp-api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - PORT=8080
+      - ENABLE_SWAGGER=true
+      # ── Database ─────────────────────────────────────────────────────────────
+      - ConnectionStrings__DefaultConnection=Server=sqlserver,1433;Database=MangaProductionDB;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=true
+      # ── JWT ───────────────────────────────────────────────────────────────────
+      - Jwt__Key=${JWT_KEY}
+      - Jwt__Issuer=MangaERP
+      - Jwt__Audience=MangaERP.Clients
+      - Jwt__ExpiryMinutes=60
+      - Jwt__RefreshTokenExpiryDays=7
+      # ── Invitation ───────────────────────────────────────────────────────────
+      - Invitation__ExpiryHours=24
+      - Invitation__ActivationBaseUrl=${ACTIVATION_BASE_URL:-http://localhost:3000/activate}
+      # ── Seed ─────────────────────────────────────────────────────────────────
+      - Seed__AdminPassword=${ADMIN_PASSWORD}
+      # ── CORS ─────────────────────────────────────────────────────────────────
+      - Cors__AllowedOrigins=${CORS_ORIGINS:-http://localhost:3000}
+      # ── SMTP (Defaults to local Maildev, override in .env for Gmail/Brevo) ───
+      - Smtp__Host=${SMTP_HOST:-maildev}
+      - Smtp__Port=${SMTP_PORT:-1025}
+      - Smtp__Username=${SMTP_USERNAME:-dev}
+      - Smtp__Password=${SMTP_PASSWORD:-dev}
+      - Smtp__FromAddress=${SMTP_FROM_ADDRESS:-noreply@mangacap.com}
+      - Smtp__FromName=${SMTP_FROM_NAME:-MangaERP}
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      maildev:
+        condition: service_started
+    restart: on-failure
+
+  # ── SQL Server ───────────────────────────────────────────────────────────────
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mangaerp-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=${SA_PASSWORD:-MangaERP_Pa$$w0rd!}
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: [ "CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${SA_PASSWORD:-MangaERP_Pa$$w0rd!}", "-Q", "SELECT 1", "-No" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── Maildev (Mock SMTP — local only) ─────────────────────────────────────────
+  maildev:
+    image: maildev/maildev:2.1.0
+    container_name: mangaerp-maildev
+    ports:
+      - "1080:1080" # Webmail UI → http://localhost:1080
+      - "1025:1025" # SMTP port
+    restart: on-failure
+
+volumes:
+  sqlserver-data:

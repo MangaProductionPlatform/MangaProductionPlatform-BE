@@ -1,6 +1,8 @@
 # System Requirement Specification (SRS) & Architecture: Manga Production & Publishing ERP
-**Version 2.0 — Revised & Patched**
+**Version 3.0 — B2B ERP Architecture Update**
 SU26SWP05 | ThinhDP2 Team
+
+> **Changelog v3.0 (2026-06-11):** Redesigned from Microservices → **Modular Monolith**. Removed `Reader` role — system is now a **closed B2B ERP** with Admin-provisioned accounts only. Updated MF1: Mangaka (pre-provisioned) creates proposals; no role elevation step. Added implementation status tracking per section.
 
 ---
 
@@ -20,51 +22,86 @@ This system is a specialized enterprise ERP solution designed for modern comic a
 
 ## 2. Actors & Permissions
 
-The system defines six distinct actor types with strict role-based access control (RBAC). Role elevation (e.g., `Reader → Mangaka`) is performed **atomically** by the System Handler upon series approval.
+The system is a **closed B2B ERP** — there is no public self-registration. All accounts are provisioned by the Admin via the provisioning API. Role-based access control (RBAC) is enforced via JWT claims.
 
-| Actor | Access Level | Core Rights | Restrictions |
-|-------|-------------|-------------|--------------|
-| **Reader / Creator_Draft** | Default / Open Registration | Read public chapters; draft & submit series proposal for vetting | Cannot access studio tools until role is elevated |
-| **Mangaka** | Elevated after series approval | Manage Studio Workspace; create chapters; invite crew; review layers; trigger QA submission | Cannot approve own submissions; cannot QA own chapters |
-| **Assistant** | Invited by Mangaka | View assigned page tasks; download base layers & resources; upload transparent `.png` artwork layers | Read-only on unassigned tasks; no access to submission or QA flows |
-| **Tantou Editor** | Assigned by publishing house | Place canvas-anchored Bug Pins; approve or reject chapters; monitor studio production progress | Cannot modify submissions; no access to studio task assignment |
-| **Editorial Board** | Platform admin-level | Evaluate new series (MF1); assign distribution cadences; schedule releases; import vote data; cancel series | Cannot create or edit chapter content |
-| **System Handler** | Automated backend daemon | Image mutations; layer compositing; token validation; event routing; cache eviction; archival storage | Non-human actor; no direct user interaction |
+| # | Actor | Role Code | Enum Value | Core Rights | Restrictions |
+|---|-------|-----------|------------|-------------|--------------|
+| — | **Admin** | `adm` | `0` | Full system access; provision all accounts; seed by system at startup | Cannot be provisioned via API; only 1 exists (seeded) |
+| 1 | **Editorial Board** | `eb` | `1` | Evaluate series (MF1); assign schedules; cancel series; import votes | Cannot create/edit chapter content |
+| 2 | **Tantou Editor** | `tt` | `2` | Place Bug Pins; approve/reject chapters; monitor studio progress | Cannot modify submissions; no studio task assignment |
+| 3 | **Mangaka** | `mgk` | `3` | Create series proposals (MF1); manage Studio Workspace; create chapters; review layers; trigger QA | Cannot approve own submissions; cannot QA own chapters |
+| 4 | **Assistant** | `ast` | `4` | View assigned page tasks; upload `.png` artwork layers | Read-only on unassigned tasks; no submission/QA access |
+| — | **System Handler** | — | — | Image mutations; token validation; event routing; cache eviction | Non-human actor |
 
-> **Note:** User registration defaults to the `Reader` role. `Mangaka` elevation is gated exclusively through the MF1 series approval pipeline.
+> **Note (v3.0):** `Reader` role has been **removed**. This system is an internal ERP — all users are provisioned by Admin. `Mangaka` accounts are created directly by Admin via `POST /api/v1/admin/accounts/provision`. There is no public registration endpoint.
 
-### 2.1 Account Provisioning Workflow (Without HR)
-*Since the system does not have an HR module, account creation and provisioning are tied to operational actions and task-based trust relationships:*
+### 2.1 Account Provisioning Workflow
+*This system uses a centralized Admin-Led provisioning model. There is no self-registration. All accounts are created by the Admin via the provisioning API.*
 
-*   **Step 1: Core Initialization (Admin & Editorial Board)**
-    *   The system starts with a single seed **Admin** account.
-    *   When the Editorial Board is established, the Admin directly registers accounts for **Editorial Board** members. This is based on direct administrative trust.
-*   **Step 2: Operational Onboarding (Tantou Editor)**
-    *   When a new Editor joins the team, the **Editorial Board** sends an internal request (or uses the system UI) to the Admin.
-    *   The **Admin** creates the **Tantou Editor** account and sends the credentials.
-    *   The **Editorial Board** then assigns this Editor to manage specific manga series or chapters.
-*   **Step 3: Creative Role Elevation & Crew Management (Mangaka & Assistant)**
-    *   **Mangaka Provisioning (Two-Stage Vetting)**: Creators self-register as **Readers**, then apply by submitting a Series Proposal. Upon passing the two-stage vetting process (Tantou Editor recommend -> Editorial Board approve), the system automatically elevates the user's role to **Mangaka** and creates the **MangaSeries** workspace.
-    *   **Assistant Provisioning**: To hire helpers, a **Mangaka** goes to their Studio workspace, enters the helper's email, and clicks "Invite Assistant". The system generates a secure invitation token. Upon clicking, the helper is registered with the **Assistant** role and automatically joined to the manga chapter's team with restricted permissions.
+*   **Step 1: System Bootstrap**
+    *   At first startup, the `DbSeeder` automatically creates the single **Admin** account (`sysadmin.adm@company.com`) using the password set in the `ADMIN_PASSWORD` environment variable.
+*   **Step 2: Admin provisions all staff accounts**
+    *   Admin inputs: `fullName`, `personalEmail`, `role` (1=EditorialBoard, 2=TantouEditor, 3=Mangaka, 4=Assistant)
+    *   System auto-generates a corporate username: `[firstName][lastInitials].[roleCode]@company.com` (e.g. `anhnv.mgk@company.com`)
+    *   System dispatches a **secure JWT invitation email** (24h expiry) to `personalEmail`
+    *   Account status = `PendingActivation`
+*   **Step 3: Staff activates their account**
+    *   Staff clicks the link in the email → navigates to frontend `/activate?token=...`
+    *   Frontend calls `POST /api/v1/auth/activate` with the token and chosen password
+    *   Account status → `Active`; user can now log in with corporate username
+
+### 2.2 Implemented API Endpoints — Account Provisioning
+
+> ✅ **Status: IMPLEMENTED & TESTED** (as of 2026-06-11)
+
+#### 2.2.1 Admin-Led Provisioning Flow
+| Step | Actor | API | Request Body | Response |
+|------|-------|-----|-------------|----------|
+| 1 | Admin | `POST /api/v1/auth/login` | `{email, password}` | `{accessToken, refreshToken}` |
+| 2 | Admin | `POST /api/v1/admin/accounts/provision` *(Bearer token)* | `{fullName, personalEmail, role}` | `{userId, username, personalEmail, role}` |
+| 3 | Staff | `POST /api/v1/auth/activate` | `{token, newPassword}` | `{message: "Account activated"}` |
+
+#### 2.2.2 Admin Account Management
+| Step | Actor | API | Notes |
+|------|-------|-----|-------|
+| View all accounts | Admin | `GET /api/v1/admin/accounts` | Filter by `?role=&status=` |
+| View one account | Admin | `GET /api/v1/admin/accounts/{id}` | |
+
+#### 2.2.3 Username Generation Rule
+```
+Input:  "Nguyễn Văn Anh"
+Output: anhnv.[roleCode]@company.com
+
+Role codes: eb (Editorial Board) | tt (Tantou Editor) | mgk (Mangaka) | ast (Assistant)
+Collision:  anhnv.mgk → anhnv.mgk1 → anhnv.mgk2 ...
+```
+
+#### 2.2.4 Assistant Provisioning (via Mangaka — MF2 scope, not yet implemented)
+*   **Option 1 (Decentralized):** Mangaka calls `POST /api/v1/studio/assistants` from Studio team page → creates account + binds `ChapterTeams`
+*   **Option 2 (Centralized):** Mangaka submits request `POST /api/v1/admin/assistant-requests` → Admin approves → account created
 
 ---
 
 ## 3. Core Business Workflows
 
 ### MF1 — Series Submission & Vetting Workflow (Two-Stage Vetting)
-*Purpose: Project gatekeeping and role elevation from Reader to Mangaka via Editor recommend and Board approval.*
+*Purpose: Project gatekeeping. Mangaka (pre-provisioned by Admin) submits a series proposal through a two-stage editorial review. On approval, a MangaSeries record is created and linked to the submitting Mangaka.*
 
-- **Step 1** `[Reader]` **Create Series Submission** → Creator registers as a Reader, starts a new draft proposal with metadata (Title, Description, Genre, Cover Art) and uploads primary manuscript preview attachments. `Status = Draft`.
-- **Step 2** `[Reader]` **Submit Proposal** → Commits the draft to the platform. System updates status to `Pending` and locks user modifications.
-- **Step 3** `[Tantou Editor]` **Stage 1 Vetting (Editor Review)** → Tantou Editor (assigned by system or Admin based on genre) evaluates the proposal (plot, art style). Verdict options:
-  - **REJECT** → `Status = Rejected`, logs feedback, notify creator.
-  - **REQUEST REVISION** → `Status = RevisionRequired`, feedback logs appended, revert edit permissions — loop to Step 1.
-  - **RECOMMEND TO BOARD** → `Status = RecommendedToBoard`, logs recommendation comments, forwards proposal to Editorial Board for final decision.
-- **Step 4** `[Editorial Board]` **Stage 2 Vetting (Board Final Review)** → Editorial Board performs a deeper audit of the recommended proposal. Verdict options:
-  - **REJECT** → `Status = Rejected`, notify creator, terminate thread.
-  - **REQUEST REVISION** → `Status = RevisionRequired`, feedback logs appended — loop to Step 1.
+> ⚠️ **v3.0 Change:** `Reader` role removed. Submitter is always a **Mangaka** (already provisioned). There is **no role elevation** step — Mangaka role is assigned at account creation by Admin.
+
+> 🔲 **Status: PLANNED — not yet implemented**
+
+- **Step 1** `[Mangaka]` **Create Draft Proposal** → Mangaka starts a new series draft with metadata: `Title`, `Description`, `Genre`, `CoverImageUrl`. `Status = Draft`. Manuscript URL provided when submitting.
+- **Step 2** `[Mangaka]` **Submit Proposal** → Commits the draft. System updates `Status = Pending` and locks Mangaka from further edits.
+- **Step 3** `[Tantou Editor]` **Stage 1 Vetting (Editor Review)** → Editor evaluates the proposal. Verdict options:
+  - **REJECT** → `Status = Rejected`, logs feedback, notify Mangaka.
+  - **REQUEST REVISION** → `Status = RevisionRequired`, feedback appended, edit lock lifted — loop to Step 1.
+  - **RECOMMEND TO BOARD** → `Status = RecommendedToBoard`, recommendation logged.
+- **Step 4** `[Editorial Board]` **Stage 2 Vetting (Board Final Review)** → Board audits the recommended proposal. Verdict options:
+  - **REJECT** → `Status = Rejected`, notify Mangaka.
+  - **REQUEST REVISION** → `Status = RevisionRequired` — loop to Step 1.
   - **APPROVE** → proceed to Step 5.
-- **Step 5** `[System Handler]` **Atomic Process Approval & Role Elevation** → Executes an atomic DB transaction: mutates `SubmissionStatus` to `Approved`, instantiates the `MangaSeries` record (`Status = Active`), and **elevates `User.Role` from `Reader` to `Mangaka`**. Opens full access to Studio Workspace and Chapter creation (MF2).
+- **Step 5** `[System Handler]` **Atomic Approval** → Single DB transaction: `SubmissionStatus = Approved`, creates `MangaSeries` record (`Status = Active`) linked to the Mangaka. Opens Studio Workspace and Chapter creation (MF2). *(No role elevation — Mangaka was already Mangaka.)*
 
 ---
 
@@ -111,28 +148,35 @@ The system defines six distinct actor types with strict role-based access contro
 
 ### 4.1 User & Authentication
 
-| Entity / Feature | CRUD | Actor | Priority | Notes |
-|-----------------|------|-------|----------|-------|
-| Register account | C | All actors | **Must Have** | Role selected at registration; Mangaka role only via MF1 elevation |
-| Login / Logout | R | All actors | **Must Have** | JWT issued; refresh token stored in `RefreshTokens` table |
-| View / Edit profile | R, U | All actors | Should Have | `FullName`, `AvatarUrl`, bio |
-| Refresh access token | R | System | **Must Have** | Validate `RefreshTokens.IsRevoked` before issuing new JWT |
-| Revoke token on logout | U | All actors | **Must Have** | Set `RefreshTokens.IsRevoked = 1` on logout or role change |
+> ✅ **Status: IMPLEMENTED** (Identity module complete)
+
+| Entity / Feature | CRUD | Actor | Priority | Status | Notes |
+|-----------------|------|-------|----------|--------|-------|
+| Admin provision account | C | Admin | **Must Have** | ✅ Done | `POST /api/v1/admin/accounts/provision`; auto-generates username; sends email |
+| Activate account (set password) | U | Staff (email link) | **Must Have** | ✅ Done | `POST /api/v1/auth/activate`; JWT token from email |
+| Login | R | All actors | **Must Have** | ✅ Done | `POST /api/v1/auth/login`; returns JWT + refresh token |
+| List / View accounts | R | Admin | **Must Have** | ✅ Done | `GET /api/v1/admin/accounts` with role/status filters |
+| Refresh access token | R | System | **Must Have** | 🔲 Planned | Validate `RefreshTokens.IsRevoked` before issuing new JWT |
+| Revoke token on logout | U | All actors | **Must Have** | 🔲 Planned | `POST /api/v1/auth/logout`; set `IsRevoked = true` |
+| View / Edit profile | R, U | All actors | Should Have | 🔲 Planned | `FullName`, `AvatarUrl` |
 
 ### 4.2 Series Submission (MF1)
 
+> 🔲 **Status: PLANNED** — Domain entity `SeriesSubmission.cs` exists; Application/API layer not yet implemented.
+
 | Entity / Feature | CRUD | Actor | Priority | Notes |
 |-----------------|------|-------|----------|-------|
-| Create submission | C | Mangaka / Creator_Draft | **Must Have** | `Status = Draft` on create |
-| Upload manuscript file | C, U | Mangaka | **Must Have** | PDF/image stored on S3/R2 |
+| Create draft submission | C | **Mangaka** | **Must Have** | `Status = Draft` on create |
+| Upload manuscript URL | U | Mangaka | **Must Have** | Client uploads to S3/Cloudinary; passes URL to backend |
+| Submit proposal | U | Mangaka | **Must Have** | `Draft → Pending`; triggers lock & route to editor |
 | List own submissions | R | Mangaka | **Must Have** | Filter by status |
-| View submission detail | R | Mangaka, Board | **Must Have** | Manuscript, author info, status, feedback |
-| Submit proposal | U | Mangaka | **Must Have** | DRAFT → PENDING; triggers lock & route |
-| Re-upload after revision | U | Mangaka | **Must Have** | New file upload; status REVISION_REQUIRED → PENDING |
-| List submission queue | R | Editorial Board | **Must Have** | Only PENDING / UNDER_REVIEW visible |
-| Approve submission | U | Editorial Board | **Must Have** | Status → APPROVED; records `ReviewedByUserId` + `ReviewedAt`; triggers Series creation + role elevation |
-| Request revision | U | Editorial Board | **Must Have** | Status → REVISION_REQUIRED; `FeedbackMessage` required |
-| Reject submission | U | Editorial Board | **Must Have** | Status → REJECTED; `FeedbackMessage` required |
+| View submission detail | R | Mangaka, TantouEditor, EditorialBoard | **Must Have** | Manuscript URL, status, feedback |
+| Re-upload after revision | U | Mangaka | **Must Have** | New file URL; `RevisionRequired → Pending` |
+| List submission queue | R | TantouEditor, EditorialBoard | **Must Have** | Editor: Pending/UnderReview; Board: RecommendedToBoard |
+| Recommend to Board | U | TantouEditor | **Must Have** | `Status → RecommendedToBoard` |
+| Approve submission | U | EditorialBoard | **Must Have** | `Status → Approved`; atomic Series creation (no role elevation) |
+| Request revision | U | TantouEditor, EditorialBoard | **Must Have** | `Status → RevisionRequired`; `FeedbackMessage` required |
+| Reject submission | U | TantouEditor, EditorialBoard | **Must Have** | `Status → Rejected`; `FeedbackMessage` required |
 
 ### 4.3 Series Management
 
@@ -282,62 +326,162 @@ Intercepts volatile high-concurrency read scenarios by mapping customer-facing e
 
 ## 7. Architecture & Implementation Directives
 
+> ⚠️ **v3.0 Change:** Architecture migrated from **Microservices → Modular Monolith**. Single deployable, single database, modules as class libraries.
+
 | Concern | Technology / Pattern |
 |---------|---------------------|
-| Architecture | Strict Clean Architecture, Microservices (per-service database) |
+| Architecture | **Modular Monolith** — 1 ASP.NET Core Web API host + 8 module class libraries |
 | Language / Runtime | C# ASP.NET Core Web API on **.NET 9** |
-| CQRS | **MediatR** with command/query segregation |
-| API Gateway | **YARP** reverse proxy (single client entry point) |
-| Messaging | **MassTransit + RabbitMQ** for integration events |
-| Database | **SQL Server** with `UNIQUEIDENTIFIER` PKs; `BIGINT IDENTITY` for audit logs |
-| ORM | **Entity Framework Core 9** with per-service `DbContext` |
-| Real-time | `Microsoft.AspNetCore.SignalR` WebSocket push notifications |
-| Asset pipeline | **Hangfire** + `SixLabors.ImageSharp` for async `.png → .webp` conversion |
-| Object storage | **S3-compatible** (AWS S3 / Cloudflare R2) |
-| Cache layer | **Redis** for distributed read cache + invalidation on publish |
+| CQRS | **MediatR** with command/query segregation per module |
+| Database | **Single SQL Server** — `AppDbContext` shared across all modules |
+| ORM | **Entity Framework Core 9** — single migration history in `Shared.Infrastructure` |
 | Auth | **JWT Bearer** + Refresh Token rotation (`RefreshTokens` table) |
 | Validation | **FluentValidation** via MediatR pipeline behavior |
+| Real-time | `Microsoft.AspNetCore.SignalR` WebSocket push notifications *(planned)* |
+| Asset pipeline | **Hangfire** + `SixLabors.ImageSharp` for async `.png → .webp` *(planned)* |
+| Object storage | **S3-compatible** (AWS S3 / Cloudflare R2) *(planned)* |
+| Cache layer | **Redis** for distributed read cache *(planned)* |
+| Email | **MailKit** SMTP — Gmail App Password (dev) / Brevo (prod) |
+| Container | **Docker** single container; orchestrated with `docker-compose` locally |
+| Deployment | **Railway** (cloud PaaS via GitHub Docker deploy) |
 
 ### Global Soft Delete Rule
-All entities exposing soft-delete metadata (`IsDeleted`, `DeletedAt`) **MUST** contain data provider global query filters within the `DbContext` pipeline configuration (see Section 5.4).
+All entities with `ISoftDeletable` (`IsDeleted`, `DeletedAt`) **MUST** have EF Core global query filters in `AppDbContext`. Soft-delete is intercepted in `SaveChangesAsync()` — hard deletes are converted automatically.
 
 ---
 
-## 8. Solution Structure (Microservices)
+## 8. Solution Structure (Modular Monolith — `src-monolith/`)
+
+> ✅ **Scaffold complete.** All projects created, dependencies wired, `InitialCreate` migration applied.
 
 ```
-MangaERP/
-├── src/
-│   ├── BuildingBlocks/
-│   │   ├── MangaERP.BuildingBlocks.Domain/        ← Base entities, aggregate root, value objects
-│   │   ├── MangaERP.BuildingBlocks.Application/   ← CQRS interfaces, behaviors, Result<T>
-│   │   ├── MangaERP.BuildingBlocks.Infrastructure/ ← EventBus, BaseDbContext, S3 service
-│   │   └── MangaERP.BuildingBlocks.Contracts/     ← Integration events, shared DTOs
-│   ├── ApiGateway/
-│   │   └── MangaERP.ApiGateway/                   ← YARP reverse proxy, JWT middleware
-│   ├── Services/
-│   │   ├── Identity/MangaERP.Identity/            ← Auth, JWT, refresh tokens
-│   │   ├── Submission/MangaERP.Submission/        ← MF1: series submission vetting
-│   │   ├── Series/MangaERP.Series/                ← Series management post-approval
-│   │   ├── Chapter/MangaERP.Chapter/              ← MF2: chapter + pages
-│   │   ├── Task/MangaERP.Task/                    ← MF2: layer assignment
-│   │   ├── QA/MangaERP.QA/                        ← MF3: bug pins + approve
-│   │   ├── Publishing/MangaERP.Publishing/        ← MF3: schedule + auto-publish
-│   │   └── Ranking/MangaERP.Ranking/              ← Vote data + ranking board
-│   ├── Infrastructure/
-│   │   ├── Notification/MangaERP.Notification/    ← SignalR + SMTP fallback
-│   │   ├── Asset/MangaERP.Asset/                  ← ImageSharp png→webp optimizer
-│   │   └── BackgroundJobs/MangaERP.BackgroundJobs/ ← Hangfire scheduled jobs
-│   └── Hubs/
-│       └── MangaERP.SignalR/                       ← Standalone SignalR hub process
-├── tests/
-│   ├── UnitTests/
-│   ├── IntegrationTests/
-│   └── ArchTests/
-├── docker/
-│   ├── docker-compose.yml
-│   └── docker-compose.override.yml
-└── docs/
-    ├── adr/
-    └── api/openapi/
+src-monolith/
+├── MangaERP.sln
+├── Dockerfile                          ← Single multi-stage Docker build (Railway-ready)
+├── docker-compose.yml                  ← API + SQL Server + Maildev (local dev)
+├── .env                                ← Local secrets (NOT committed to Git)
+├── .env.example                        ← Template safe to commit
+├── .gitignore / .dockerignore
+└── src/
+    ├── MangaERP.Api/                   ← [HOST] Program.cs, appsettings.json, Controllers
+    │
+    ├── Shared/
+    │   ├── MangaERP.Shared.Domain/     ← AggregateRoot, Entity, ISoftDeletable, Exceptions
+    │   ├── MangaERP.Shared.Application/← IDbContextProvider (anti-circular-dep), MediatR base
+    │   └── MangaERP.Shared.Infrastructure/ ← AppDbContext, EF Configs, Migrations, DbSeeder
+    │
+    └── Modules/
+        ├── MangaERP.Identity/          ← ✅ COMPLETE: Domain, Commands, Queries, Repos, Services, Controllers
+        ├── MangaERP.Submission/        ← ✅ COMPLETE: Domain, Commands, Queries, Repos, Controller (MF1)
+        ├── MangaERP.Series/            ← ✅ COMPLETE: Domain, Repos, Atomic integration (MF1)
+        ├── MangaERP.Chapter/           ← 🔲 Domain entities done; Application/API pending (MF2)
+        ├── MangaERP.Task/              ← 🔲 Domain entities done; Application/API pending (MF2)
+        ├── MangaERP.QA/                ← 🔲 Domain entities done; Application/API pending (MF3)
+        ├── MangaERP.Publishing/        ← 🔲 Domain entities done; Application/API pending (MF3)
+        └── MangaERP.Ranking/           ← 🔲 Domain entities done; Application/API pending
 ```
+
+### Module Status Legend
+| Symbol | Meaning |
+|--------|---------|
+| ✅ | Fully implemented and tested |
+| 🔲 | Planned / Domain exists / Not yet built |
+| ⚠️ | Partially implemented or needs revision |
+
+---
+
+## 9. Implementation Progress Tracker
+
+> Last updated: **2026-06-11**. Update this section every sprint.
+
+### 9.1 Infrastructure & DevOps
+| Item | Status | Notes |
+|------|--------|-------|
+| Modular Monolith scaffold (11 projects) | ✅ Done | All projects created, solution wired |
+| EF Core `InitialCreate` migration | ✅ Done | Full schema: 17 tables across all modules |
+| Docker single-container build | ✅ Done | Multi-stage Dockerfile, non-root user |
+| `docker-compose.yml` (API + SQL + Maildev) | ✅ Done | Health checks, depends_on, restart policy |
+| `.env` / `.env.example` secrets separation | ✅ Done | All secrets in `.env`, safe for Railway |
+| `.gitignore` / `.dockerignore` | ✅ Done | Secrets excluded from Git and Docker build context |
+| Railway deployment readiness | ✅ Done | Dynamic PORT, CORS config-driven, Swagger toggle |
+| DbSeeder (Admin auto-seed) | ✅ Done | Reads password from `ADMIN_PASSWORD` env var; throws if missing |
+
+### 9.2 Identity Module (MangaERP.Identity)
+| Feature | API Endpoint | Status |
+|---------|-------------|--------|
+| Admin provision account | `POST /api/v1/admin/accounts/provision` | ✅ Done |
+| Auto-generate username (Vietnamese support) | Internal service | ✅ Done |
+| Send invitation email (HTML template) | SMTP via MailKit | ✅ Done |
+| Activate account (set password) | `POST /api/v1/auth/activate` | ✅ Done |
+| Login (JWT + refresh token) | `POST /api/v1/auth/login` | ✅ Done |
+| List accounts | `GET /api/v1/admin/accounts` | ✅ Done |
+| FluentValidation (provision + activate) | MediatR pipeline | ✅ Done |
+| Logout (revoke token) | `POST /api/v1/auth/logout` | 🔲 Planned |
+| Refresh access token | `POST /api/v1/auth/refresh` | 🔲 Planned |
+| View/Edit profile | `GET/PUT /api/v1/profile` | 🔲 Planned |
+
+### 9.3 MF1 — Series Submission Module (MangaERP.Submission + MangaERP.Series)
+| Feature | Status |
+|---------|--------|
+| `SeriesSubmission` domain entity (all business methods) | ✅ Done |
+| `MangaSeries` domain entity | ✅ Done |
+| EF Core configurations for both entities | ✅ Done |
+| Application Commands (CreateDraft, Submit, Recommend, Approve, Reject, RequestRevision) | ✅ Done |
+| Application Queries (GetMySubmissions, GetQueue, GetDetail) | ✅ Done |
+| API Controller (`SubmissionsController`) | ✅ Done |
+| Atomic ApproveSubmission (Submission + Series in 1 transaction) | ✅ Done |
+
+### 9.4 MF2 — Chapter & Task Modules
+| Feature | Status |
+|---------|--------|
+| Domain entities (Chapter, PageTask, PreviewPage, ArtworkLayer, etc.) | ✅ Done |
+| EF Core configurations | ✅ Done |
+| Application layer | 🔲 Planned |
+| API Controllers | 🔲 Planned |
+
+### 9.5 MF3 — QA & Publishing Modules
+| Feature | Status |
+|---------|--------|
+| Domain entities (BugPin, QASession, PublicationRecord, Notification) | ✅ Done |
+| EF Core configurations | ✅ Done |
+| Application layer | 🔲 Planned |
+| API Controllers | 🔲 Planned |
+
+### 9.6 Supporting Flows (MF5, MF6, MF7, MF8)
+| Flow | Status |
+|------|--------|
+| MF5: Asset upload & ImageSharp optimization (Hangfire) | 🔲 Planned |
+| MF6: Real-time SignalR notifications | 🔲 Planned |
+| MF7: Artwork layer version control & audit log | 🔲 Planned |
+| MF8: Redis cache invalidation on publish | 🔲 Planned |
+
+---
+
+## 10. Environment Configuration Reference
+
+> Used by team members to set up local dev or configure Railway.
+
+### 10.1 Local Dev (`.env` file — never commit)
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `JWT_KEY` | JWT signing secret (min 32 chars) | `MangaCAP@SuperSecTok...` |
+| `SQL_SA_PASSWORD` | SQL Server SA password | `YourStrong@Passw0rd` |
+| `ADMIN_PASSWORD` | Seeded admin account password | `Admin@Dev2026!` |
+| `SMTP_USERNAME` | Gmail address for sending email | `yourname@gmail.com` |
+| `SMTP_PASSWORD` | Gmail App Password (16 chars) | `abcd efgh ijkl mnop` |
+| `SMTP_FROM_ADDRESS` | Sender address | `yourname@gmail.com` |
+| `SMTP_FROM_NAME` | Sender display name | `MangaC&P Official` |
+| `ACTIVATION_BASE_URL` | Frontend activation URL | `http://localhost:3000/activate` |
+
+### 10.2 SMTP Modes
+| Mode | Configuration | When to use |
+|------|-------------|-------------|
+| **Maildev** (default local) | `SMTP_USERNAME=` (empty) → routes to `maildev:1025` | Local dev, view at `http://localhost:1080` |
+| **Gmail** (real email) | Fill `SMTP_USERNAME` + `SMTP_PASSWORD` App Password | Demo, staging |
+| **Brevo** (production) | `SMTP_HOST=smtp-relay.brevo.com`, Brevo API key | Production Railway deploy |
+
+### 10.3 Default Admin Account (seeded at first startup)
+| Field | Value |
+|-------|-------|
+| Email / Username | `sysadmin.adm@company.com` |
+| Password | Value of `ADMIN_PASSWORD` in `.env` |

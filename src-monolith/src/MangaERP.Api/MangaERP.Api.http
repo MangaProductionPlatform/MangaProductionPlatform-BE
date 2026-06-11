@@ -1,0 +1,6 @@
+@MangaERP.Api_HostAddress = http://localhost:5110
+
+GET {{MangaERP.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
