@@ -15,9 +15,9 @@ public static class SharedInfrastructureExtensions
         this IServiceCollection services, IConfiguration config)
     {
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(
+            options.UseNpgsql(
                 config.GetConnectionString("DefaultConnection"),
-                sql => sql.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
+                npgsql => npgsql.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
 
         // Allow all modules to access AppDbContext without a direct circular reference
         services.AddScoped<IDbContextProvider, AppDbContextProvider>();
