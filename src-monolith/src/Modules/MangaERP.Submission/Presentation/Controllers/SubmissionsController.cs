@@ -15,6 +15,7 @@ using MangaERP.Submission.Application.Queries.GetSubmissionQueue;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using MangaERP.Submission.Domain.Exceptions;
 
 namespace MangaERP.Submission.Presentation.Controllers;
 
@@ -95,12 +96,18 @@ public class SubmissionsController : ControllerBase
     [HttpPost("{id:guid}/submit")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(SubmitProposalResult), 200)]
+    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> Submit(Guid id, CancellationToken ct)
     {
-        var command = new SubmitProposalCommand(id, GetUserId());
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new SubmitProposalCommand(id, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
 
     /// <summary>
@@ -109,12 +116,18 @@ public class SubmissionsController : ControllerBase
     [HttpPost("{id:guid}/resubmit")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(ReSubmitProposalResult), 200)]
+    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> ReSubmit(Guid id, CancellationToken ct)
     {
-        var command = new ReSubmitProposalCommand(id, GetUserId());
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new ReSubmitProposalCommand(id, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
 
     /// <summary>
@@ -152,12 +165,18 @@ public class SubmissionsController : ControllerBase
     [HttpPost("{id:guid}/start-review")]
     [Authorize(Roles = "TantouEditor")]
     [ProducesResponseType(typeof(StartReviewResult), 200)]
+    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> StartReview(Guid id, CancellationToken ct)
     {
-        var command = new StartReviewCommand(id, GetUserId());
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new StartReviewCommand(id, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
 
     /// <summary>
@@ -166,42 +185,98 @@ public class SubmissionsController : ControllerBase
     [HttpPost("{id:guid}/recommend")]
     [Authorize(Roles = "TantouEditor")]
     [ProducesResponseType(typeof(RecommendToBoardResult), 200)]
+    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> Recommend(Guid id, [FromBody] RecommendRequest request, CancellationToken ct)
     {
-        var command = new RecommendToBoardCommand(id, GetUserId(), request.RecommendationMessage);
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new RecommendToBoardCommand(id, GetUserId(), request.RecommendationMessage);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
 
     /// <summary>
-    /// [TantouEditor / EditorialBoard] Request revision for a submission.
-    /// Editors can request revision on Pending/UnderReview. Board can request revision on RecommendedToBoard.
+    /// [TantouEditor] Request revision for a submission.
     /// </summary>
-    [HttpPost("{id:guid}/request-revision")]
-    [Authorize(Roles = "TantouEditor,EditorialBoard")]
+    [HttpPost("{id:guid}/te-request-revision")]
+    [Authorize(Roles = "TantouEditor")]
     [ProducesResponseType(typeof(RequestRevisionResult), 200)]
+    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
-    public async Task<IActionResult> RequestRevision(Guid id, [FromBody] FeedbackRequest request, CancellationToken ct)
+    public async Task<IActionResult> TeRequestRevision(Guid id, [FromBody] FeedbackRequest request, CancellationToken ct)
     {
-        var command = new RequestRevisionCommand(id, GetUserId(), request.FeedbackMessage);
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new RequestRevisionCommand(id, GetUserId(), "TantouEditor", request.Reason);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
 
     /// <summary>
-    /// [TantouEditor / EditorialBoard] Reject a submission.
-    /// Editors can reject Pending/UnderReview. Board can reject RecommendedToBoard.
+    /// [EditorialBoard] Request revision for a submission.
     /// </summary>
-    [HttpPost("{id:guid}/reject")]
-    [Authorize(Roles = "TantouEditor,EditorialBoard")]
-    [ProducesResponseType(typeof(RejectSubmissionResult), 200)]
+    [HttpPost("{id:guid}/eb-request-revision")]
+    [Authorize(Roles = "EditorialBoard")]
+    [ProducesResponseType(typeof(RequestRevisionResult), 200)]
+    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
-    public async Task<IActionResult> Reject(Guid id, [FromBody] FeedbackRequest request, CancellationToken ct)
+    public async Task<IActionResult> EbRequestRevision(Guid id, [FromBody] FeedbackRequest request, CancellationToken ct)
     {
-        var command = new RejectSubmissionCommand(id, GetUserId(), request.FeedbackMessage);
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new RequestRevisionCommand(id, GetUserId(), "EditorialBoard", request.Reason);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [TantouEditor] Reject a submission.
+    /// </summary>
+    [HttpPost("{id:guid}/te-reject")]
+    [Authorize(Roles = "TantouEditor")]
+    [ProducesResponseType(typeof(RejectSubmissionResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> TeReject(Guid id, [FromBody] FeedbackRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new RejectSubmissionCommand(id, GetUserId(), "TantouEditor", request.Reason);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [EditorialBoard] Reject a submission.
+    /// </summary>
+    [HttpPost("{id:guid}/eb-reject")]
+    [Authorize(Roles = "EditorialBoard")]
+    [ProducesResponseType(typeof(RejectSubmissionResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> EbReject(Guid id, [FromBody] FeedbackRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new RejectSubmissionCommand(id, GetUserId(), "EditorialBoard", request.Reason);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
 
     /// <summary>
@@ -210,12 +285,18 @@ public class SubmissionsController : ControllerBase
     [HttpPost("{id:guid}/approve")]
     [Authorize(Roles = "EditorialBoard")]
     [ProducesResponseType(typeof(ApproveSubmissionResult), 200)]
+    [ProducesResponseType(400)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> Approve(Guid id, CancellationToken ct)
     {
-        var command = new ApproveSubmissionCommand(id, GetUserId());
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new ApproveSubmissionCommand(id, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
 
     // ── SHARED FLOWS ──────────────────────────────────────────────────────────
@@ -256,4 +337,4 @@ public record UpdateMetadataRequest(
 
 public record RecommendRequest(string RecommendationMessage);
 
-public record FeedbackRequest(string FeedbackMessage);
+public record FeedbackRequest(string Reason);

@@ -1,7 +1,9 @@
 using System.Text;
+using DotNetEnv;
 using MangaERP.Identity;
 using MangaERP.Submission;
 using MangaERP.Series;
+using MangaERP.Studio;
 using MangaERP.Shared.Infrastructure;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -9,7 +11,16 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
+// ── Load .env for local development (ignored in Docker / Render / Railway) ────
+// DotNetEnv tự động inject vào System.Environment → ASP.NET Core config sẽ đọc được
+// Tìm file .env từ thư mục src-monolith (thư mục gốc của project)
+Env.TraversePath().Load();
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Đảm bảo ASP.NET Core đọc các biến đã được DotNetEnv inject vào System.Environment
+// Biến dạng Smtp__Host trong .env sẽ được map tự động sang Smtp:Host trong config
+builder.Configuration.AddEnvironmentVariables();
 
 // ── Dynamic PORT (Railway / Docker) ───────────────────────────────────────────
 // Railway injects $PORT at runtime. Kestrel listens on that port.
@@ -55,6 +66,7 @@ builder.Services.AddSharedInfrastructure(builder.Configuration);
 builder.Services.AddIdentityModule();
 builder.Services.AddSubmissionModule();
 builder.Services.AddSeriesModule();
+builder.Services.AddStudioModule();
 // builder.Services.AddChapterModule();
 // builder.Services.AddTaskModule();
 // builder.Services.AddQaModule();
@@ -112,7 +124,11 @@ using (var scope = app.Services.CreateScope())
     var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
     try
     {
+        // [POSTGRESQL - Mặc định khi deploy] (Uncomment khi deploy)
         await db.Database.MigrateAsync();
+
+        // [SQL SERVER / SSMS - Dùng test local]
+        // await db.Database.EnsureCreatedAsync();
         // Seed admin on first run in both Development AND Production (Railway)
         // if no admin exists yet
         await DbSeeder.SeedAsync(db, config);

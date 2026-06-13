@@ -24,13 +24,13 @@ public class SubmissionRepository : ISubmissionRepository
 
     public async System.Threading.Tasks.Task<IEnumerable<SeriesSubmission>> GetPendingQueueAsync(CancellationToken ct = default)
         => await _db.SeriesSubmissions
-            .Where(s => s.Status == SubmissionStatus.Pending || s.Status == SubmissionStatus.UnderReview)
+            .Where(s => s.Status == SubmissionStatus.Pending_TE_Review)
             .OrderBy(s => s.CreatedAt)
             .ToListAsync(ct);
 
     public async System.Threading.Tasks.Task<IEnumerable<SeriesSubmission>> GetRecommendedQueueAsync(CancellationToken ct = default)
         => await _db.SeriesSubmissions
-            .Where(s => s.Status == SubmissionStatus.RecommendedToBoard)
+            .Where(s => s.Status == SubmissionStatus.Pending_EB_Review)
             .OrderBy(s => s.CreatedAt)
             .ToListAsync(ct);
 
@@ -38,8 +38,9 @@ public class SubmissionRepository : ISubmissionRepository
         => await _db.SeriesSubmissions.AnyAsync(s => 
             s.SubmitterId == submitterId && 
             s.Title.ToLower() == title.ToLower() && 
-            s.Status != SubmissionStatus.Approved && 
-            s.Status != SubmissionStatus.Rejected, 
+            s.Status != SubmissionStatus.EB_Approved && 
+            s.Status != SubmissionStatus.TE_Rejected &&
+            s.Status != SubmissionStatus.EB_Rejected, 
             ct);
 
     public async System.Threading.Tasks.Task AddAsync(SeriesSubmission submission, CancellationToken ct = default)

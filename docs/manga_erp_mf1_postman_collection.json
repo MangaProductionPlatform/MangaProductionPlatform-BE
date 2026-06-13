@@ -1,0 +1,521 @@
+{
+	"info": {
+		"_postman_id": "4b68fd12-c283-4a11-b0db-6e691238aa51",
+		"name": "MangaERP - Main Flow 1 (Series Submission & Vetting)",
+		"description": "Collection test API cho toàn bộ Main Flow 1: Nộp và duyệt bản thảo truyện qua 2 bước (Reader -> Editor -> Board). Tự động lưu Token và ID bằng Scripts.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. Preparation (Auth & Roles)",
+			"item": [
+				{
+					"name": "0.1 Register Reader",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"reader_test\",\n  \"email\": \"reader.test@example.com\",\n  \"password\": \"Password123@\",\n  \"fullName\": \"Nguyen Reader Test\",\n  \"role\": \"Reader\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "0.2 Login Reader",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.token) {",
+									"    pm.collectionVariables.set(\"readerToken\", jsonData.token);",
+									"}",
+									"if (jsonData.userId) {",
+									"    pm.collectionVariables.set(\"submitterId\", jsonData.userId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"reader.test@example.com\",\n  \"password\": \"Password123@\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "0.3 Register Tantou Editor",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"editor_test\",\n  \"email\": \"editor.test@example.com\",\n  \"password\": \"Password123@\",\n  \"fullName\": \"Nguyen Editor Test\",\n  \"role\": \"TantouEditor\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "0.4 Login Tantou Editor",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.token) {",
+									"    pm.collectionVariables.set(\"editorToken\", jsonData.token);",
+									"}",
+									"if (jsonData.userId) {",
+									"    pm.collectionVariables.set(\"editorId\", jsonData.userId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"editor.test@example.com\",\n  \"password\": \"Password123@\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "0.5 Register Editorial Board",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"board_test\",\n  \"email\": \"board.test@example.com\",\n  \"password\": \"Password123@\",\n  \"fullName\": \"Nguyen Board Test\",\n  \"role\": \"EditorialBoard\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"register"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "0.6 Login Editorial Board",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.token) {",
+									"    pm.collectionVariables.set(\"boardToken\", jsonData.token);",
+									"}",
+									"if (jsonData.userId) {",
+									"    pm.collectionVariables.set(\"boardMemberId\", jsonData.userId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"board.test@example.com\",\n  \"password\": \"Password123@\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "1. Happy Path Flow",
+			"item": [
+				{
+					"name": "1.1 Submit Proposal (Reader)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.submissionId) {",
+									"    pm.collectionVariables.set(\"submissionId\", jsonData.submissionId);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{readerToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"submitterId\": \"{{submitterId}}\",\n  \"title\": \"Hành Trình Kỳ Thú\",\n  \"description\": \"Câu chuyện phiêu lưu của cậu bé Tèo tại thế giới song song.\",\n  \"genre\": \"Adventure, Fantasy\",\n  \"coverImageUrl\": \"https://example.com/images/cover.jpg\",\n  \"manuscriptUrl\": \"https://example.com/files/manuscript.pdf\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"submissions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1.2 Recommend Proposal (Tantou Editor)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{editorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reviewerEditorId\": \"{{editorId}}\",\n  \"feedbackMessage\": \"Cốt truyện hấp dẫn, tạo hình nhân vật tốt. Đề xuất duyệt bản thảo này.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions/{{submissionId}}/recommend",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"submissions",
+								"{{submissionId}}",
+								"recommend"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1.3 Approve Proposal (Editorial Board)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{boardToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions/{{submissionId}}/approve?reviewerId={{boardMemberId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"submissions",
+								"{{submissionId}}",
+								"approve"
+							],
+							"query": [
+								{
+									"key": "reviewerId",
+									"value": "{{boardMemberId}}"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Alternative Paths",
+			"item": [
+				{
+					"name": "2.1 Request Revision (Editorial Board / Editor)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{editorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reviewerUserId\": \"{{editorId}}\",\n  \"feedbackMessage\": \"Cần vẽ lại bìa truyện sáng sủa hơn và bổ sung phân cảnh chiến đấu ở trang 5.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions/{{submissionId}}/request-revision",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"submissions",
+								"{{submissionId}}",
+								"request-revision"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.2 Reject Submission (Editorial Board / Editor)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{editorToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"reviewerUserId\": \"{{editorId}}\",\n  \"feedbackMessage\": \"Ý tưởng trùng lặp nhiều tác phẩm hiện hành, nội dung chưa đạt yêu cầu.\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/submissions/{{submissionId}}/reject",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"submissions",
+								"{{submissionId}}",
+								"reject"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5010",
+			"type": "string"
+		},
+		{
+			"key": "readerToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "editorToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "boardToken",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "submitterId",
+			"value": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+			"type": "string"
+		},
+		{
+			"key": "editorId",
+			"value": "9c12ab91-23ef-4bb8-868c-4a37b38f8ab2",
+			"type": "string"
+		},
+		{
+			"key": "boardMemberId",
+			"value": "5fa85f64-5717-4562-b3fc-2c963f66afa2",
+			"type": "string"
+		},
+		{
+			"key": "submissionId",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

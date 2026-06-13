@@ -57,7 +57,7 @@ public class ApproveSubmissionHandler
             return new ApproveSubmissionResult(
                 cmd.SubmissionId,
                 existingSeries.Id,
-                "Approved",
+                "EB_Approved",
                 existingSeries.Status.ToString(),
                 existingSeries.CreatedAt);
 

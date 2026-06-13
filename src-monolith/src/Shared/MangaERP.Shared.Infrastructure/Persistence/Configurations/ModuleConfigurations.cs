@@ -4,6 +4,7 @@ using MangaERP.Publishing.Domain.Entities;
 using MangaERP.QA.Domain.Entities;
 using MangaERP.Ranking.Domain.Entities;
 using MangaERP.Series.Domain.Entities;
+using MangaERP.Studio.Domain.Entities;
 using MangaERP.Submission.Domain.Entities;
 using MangaERP.Task.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -186,5 +187,20 @@ public class SystemAuditLogConfiguration : IEntityTypeConfiguration<SystemAuditL
         b.Property(e => e.EntityType).HasMaxLength(50);
         b.Property(e => e.IpAddress).HasMaxLength(50);
         b.HasIndex(e => new { e.Timestamp, e.ActorId });
+    }
+}
+
+public class StudioInvitationConfiguration : IEntityTypeConfiguration<StudioInvitation>
+{
+    public void Configure(EntityTypeBuilder<StudioInvitation> b)
+    {
+        b.ToTable("StudioInvitations"); b.HasKey(e => e.Id);
+        b.Property(e => e.AssistantEmail).IsRequired().HasMaxLength(256);
+        b.Property(e => e.Status).HasConversion(v => v.ToString(),
+            v => Enum.Parse<StudioInvitationStatus>(v)).HasMaxLength(50);
+        b.Property(e => e.Message).HasMaxLength(1000);
+        b.Property(e => e.ActivationToken).HasMaxLength(2048);
+        b.HasIndex(e => new { e.SeriesId, e.AssistantEmail });
+        b.HasIndex(e => new { e.AssistantUserId, e.Status });
     }
 }

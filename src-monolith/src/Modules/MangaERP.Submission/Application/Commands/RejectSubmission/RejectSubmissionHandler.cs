@@ -16,6 +16,7 @@ namespace MangaERP.Submission.Application.Commands.RejectSubmission;
 public record RejectSubmissionCommand(
     Guid SubmissionId,
     Guid ReviewerId,         // extracted from JWT by controller (Editor or Board member)
+    string ActorRole,
     string FeedbackMessage
 ) : IRequest<RejectSubmissionResult>;
 
@@ -41,8 +42,8 @@ public class RejectSubmissionHandler
         var submission = await _repo.GetByIdAsync(cmd.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
-        // Domain guards: không reject Draft hoặc Approved
-        submission.Reject(cmd.ReviewerId, cmd.FeedbackMessage);
+        // Domain guards using ActorRole
+        submission.Reject(cmd.ActorRole, cmd.ReviewerId, cmd.FeedbackMessage);
 
         await _repo.SaveChangesAsync(ct);
 

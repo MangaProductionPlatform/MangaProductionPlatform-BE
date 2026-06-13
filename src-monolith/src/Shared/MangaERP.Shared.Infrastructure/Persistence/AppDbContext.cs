@@ -6,6 +6,7 @@ using MangaERP.Publishing.Domain.Entities;
 using MangaERP.QA.Domain.Entities;
 using MangaERP.Ranking.Domain.Entities;
 using MangaERP.Series.Domain.Entities;
+using MangaERP.Studio.Domain.Entities;
 using MangaERP.Submission.Domain.Entities;
 using MangaERP.Task.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -40,6 +41,9 @@ public class AppDbContext : DbContext
     public DbSet<ArtworkLayer>        ArtworkLayers        => Set<ArtworkLayer>();
     public DbSet<AssistantInvitation> AssistantInvitations => Set<AssistantInvitation>();
     public DbSet<ChapterTeam>         ChapterTeams         => Set<ChapterTeam>();
+
+    // ── Studio ────────────────────────────────────────────────
+    public DbSet<StudioInvitation> StudioInvitations => Set<StudioInvitation>();
 
     // ── QA ────────────────────────────────────────────────────
     public DbSet<BugPin>     BugPins     => Set<BugPin>();

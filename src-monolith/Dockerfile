@@ -19,6 +19,7 @@ COPY src/Modules/MangaERP.Task/MangaERP.Task.csproj                             
 COPY src/Modules/MangaERP.QA/MangaERP.QA.csproj                                       src/Modules/MangaERP.QA/
 COPY src/Modules/MangaERP.Publishing/MangaERP.Publishing.csproj                       src/Modules/MangaERP.Publishing/
 COPY src/Modules/MangaERP.Ranking/MangaERP.Ranking.csproj                             src/Modules/MangaERP.Ranking/
+COPY src/Modules/MangaERP.Studio/MangaERP.Studio.csproj                               src/Modules/MangaERP.Studio/
 
 RUN dotnet restore src/MangaERP.Api/MangaERP.Api.csproj
 

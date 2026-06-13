@@ -1,5 +1,6 @@
 using MediatR;
 using MangaERP.Identity.Application.Commands.UpdateProfile;
+using MangaERP.Shared.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -29,14 +30,21 @@ public class UsersController : ControllerBase
     [ProducesResponseType(404)]
     public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileRequest request, CancellationToken ct)
     {
-        var command = new UpdateProfileCommand(
-            GetUserId(),
-            request.PenName,
-            request.DrawingSoftwares,
-            request.BankAccountNumber
-        );
-        await _mediator.Send(command, ct);
-        return Ok(new { message = "Profile updated successfully." });
+        try
+        {
+            var command = new UpdateProfileCommand(
+                GetUserId(),
+                request.PenName,
+                request.DrawingSoftwares,
+                request.BankAccountNumber
+            );
+            await _mediator.Send(command, ct);
+            return Ok(new { message = "Profile updated successfully." });
+        }
+        catch (EntityNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 }
 

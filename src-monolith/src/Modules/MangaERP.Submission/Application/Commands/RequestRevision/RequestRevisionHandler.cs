@@ -14,6 +14,7 @@ namespace MangaERP.Submission.Application.Commands.RequestRevision;
 public record RequestRevisionCommand(
     Guid SubmissionId,
     Guid ReviewerId,         // extracted from JWT by controller (Editor or Board member)
+    string ActorRole,
     string FeedbackMessage
 ) : IRequest<RequestRevisionResult>;
 
@@ -39,8 +40,8 @@ public class RequestRevisionHandler
         var submission = await _repo.GetByIdAsync(cmd.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
-        // Domain guards: không request revision trên Draft/Approved/Rejected
-        submission.RequestRevision(cmd.ReviewerId, cmd.FeedbackMessage);
+        // Domain guards using ActorRole
+        submission.RequestRevision(cmd.ActorRole, cmd.ReviewerId, cmd.FeedbackMessage);
 
         await _repo.SaveChangesAsync(ct);
 
