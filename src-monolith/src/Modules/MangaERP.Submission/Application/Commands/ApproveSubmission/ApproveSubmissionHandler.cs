@@ -66,14 +66,19 @@ public class ApproveSubmissionHandler
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
         // ── Domain validation BEFORE opening the transaction ──────────────────
-        // Gọi Approve() ở đây để InvalidStateTransitionException propagate sạch lên
-        // controller (trả về 400) mà không bị che bởi rollback hoặc transaction exception.
         submission.Approve(cmd.ReviewerId);
 
-        // ── Atomic transaction ────────────────────────────────────────────────
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        try
+        // ── Atomic transaction via ExecutionStrategy ──────────────────────────
+        // NpgsqlRetryingExecutionStrategy (EnableRetryOnFailure) không cho phép
+        // BeginTransactionAsync trực tiếp. Phải wrap trong ExecutionStrategy.
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        ApproveSubmissionResult? result = null;
+
+        await strategy.ExecuteAsync(async () =>
         {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+
             // Create MangaSeries linked to this submission and Mangaka
             var series = MangaSeries.Create(
                 authorId:      submission.SubmitterId,
@@ -86,22 +91,18 @@ public class ApproveSubmissionHandler
             // Persist both in the same transaction
             await _seriesRepo.AddAsync(series, ct);
             await _submissionRepo.SaveChangesAsync(ct);
-            // Note: SaveChangesAsync on one repo saves all tracked changes in AppDbContext
 
             await tx.CommitAsync(ct);
 
-            return new ApproveSubmissionResult(
+            result = new ApproveSubmissionResult(
                 submission.Id,
                 series.Id,
                 submission.Status.ToString(),
                 series.Status.ToString(),
                 submission.ReviewedAt!.Value);
-        }
-        catch
-        {
-            await tx.RollbackAsync(ct);
-            throw;
-        }
+        });
+
+        return result!;
     }
 }
 
