@@ -11,7 +11,7 @@ namespace MangaERP.Submission.Application.Commands.ApproveSubmission;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Editorial Board duyệt submission: RecommendedToBoard → Approved.
+/// Editorial Board duyệt submission: Pending_EB_Review → EB_Approved.
 /// Đồng thời tạo MangaSeries trong cùng một DB transaction.
 /// ReviewerId được controller trích từ JWT claim.
 /// </summary>
