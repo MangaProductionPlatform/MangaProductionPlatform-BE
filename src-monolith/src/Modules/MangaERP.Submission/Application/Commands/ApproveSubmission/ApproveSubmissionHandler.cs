@@ -65,14 +65,16 @@ public class ApproveSubmissionHandler
         var submission = await _submissionRepo.GetByIdAsync(cmd.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
+        // ── Domain validation BEFORE opening the transaction ──────────────────
+        // Gọi Approve() ở đây để InvalidStateTransitionException propagate sạch lên
+        // controller (trả về 400) mà không bị che bởi rollback hoặc transaction exception.
+        submission.Approve(cmd.ReviewerId);
+
         // ── Atomic transaction ────────────────────────────────────────────────
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         try
         {
-            // 1. Domain: RecommendedToBoard → Approved
-            submission.Approve(cmd.ReviewerId);
-
-            // 2. Create MangaSeries linked to this submission and Mangaka
+            // Create MangaSeries linked to this submission and Mangaka
             var series = MangaSeries.Create(
                 authorId:      submission.SubmitterId,
                 submissionId:  submission.Id,
@@ -81,7 +83,7 @@ public class ApproveSubmissionHandler
                 genre:         submission.Genre,
                 coverImageUrl: submission.CoverImageUrl);
 
-            // 3. Persist both in the same transaction
+            // Persist both in the same transaction
             await _seriesRepo.AddAsync(series, ct);
             await _submissionRepo.SaveChangesAsync(ct);
             // Note: SaveChangesAsync on one repo saves all tracked changes in AppDbContext
