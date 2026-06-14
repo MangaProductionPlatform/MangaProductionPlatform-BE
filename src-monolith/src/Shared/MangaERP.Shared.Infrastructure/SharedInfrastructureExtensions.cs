@@ -1,9 +1,13 @@
+using MangaERP.Chapter.Application.Ports;
+using MangaERP.Publishing.Application.Ports;
 using MangaERP.Shared.Application.Ports;
 using MangaERP.Shared.Infrastructure.Persistence;
 using MangaERP.Shared.Infrastructure.Repositories;
+using MangaERP.Shared.Infrastructure.Services;
 using MangaERP.Submission.Application.Ports;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Studio.Application.Ports;
+using MangaERP.Task.Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +44,14 @@ public static class SharedInfrastructureExtensions
         // Studio module infrastructure (here to avoid circular dependency)
         services.AddScoped<IStudioInvitationRepository, StudioInvitationRepository>();
         services.AddScoped<IStudioIdentityService, StudioIdentityService>();
+
+        // Chapter / Task / Notification infrastructure (MF2)
+        services.AddScoped<IChapterRepository, ChapterRepository>();
+        services.AddScoped<IPageTaskRepository, PageTaskRepository>();
+        services.AddScoped<IPreviewPageRepository, PreviewPageRepository>();
+        services.AddScoped<IArtworkLayerRepository, ArtworkLayerRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         return services;
     }
