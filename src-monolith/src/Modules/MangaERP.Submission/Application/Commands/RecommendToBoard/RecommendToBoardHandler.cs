@@ -8,7 +8,7 @@ namespace MangaERP.Submission.Application.Commands.RecommendToBoard;
 
 /// <summary>
 /// Tantou Editor recommend submission lên Editorial Board:
-/// Pending/UnderReview → RecommendedToBoard.
+/// Pending_TE_Review → Pending_EB_Review.
 /// EditorId được controller trích từ JWT claim.
 /// </summary>
 public record RecommendToBoardCommand(
@@ -38,7 +38,7 @@ public class RecommendToBoardHandler
         var submission = await _repo.GetByIdAsync(cmd.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
-        // Domain: Pending/UnderReview → RecommendedToBoard
+        // Domain: Pending_TE_Review → Pending_EB_Review
         submission.RecommendToBoard(cmd.EditorId, cmd.RecommendationMessage);
 
         await _repo.SaveChangesAsync(ct);

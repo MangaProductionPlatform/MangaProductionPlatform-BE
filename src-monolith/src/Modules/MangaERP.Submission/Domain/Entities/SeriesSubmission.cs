@@ -108,22 +108,30 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
 
     /// <summary>
     /// Editor bắt đầu xét: Pending_TE_Review (Trạng thái không đổi, chỉ gán AssignedEditorId).
+    /// Nếu submission đã được editor khác claim, ném exception để tránh xung đột.
     /// </summary>
     public void StartReview(Guid editorId)
     {
         if (Status != SubmissionStatus.Pending_TE_Review)
             throw new InvalidStateTransitionException("Chỉ có thể nhận kiểm duyệt khi bản thảo ở trạng thái Pending_TE_Review.");
+        if (AssignedEditorId.HasValue && AssignedEditorId != editorId)
+            throw new InvalidStateTransitionException("Bản thảo này đã được biên tập viên khác nhận kiểm duyệt.");
         AssignedEditorId = editorId;
     }
 
     /// <summary>
     /// Editor recommend lên Board: Pending_TE_Review → Pending_EB_Review.
+    /// Nếu submission đã được claim bởi editor khác thì không cho recommend.
     /// </summary>
     public void RecommendToBoard(Guid editorId, string message)
     {
         if (Status != SubmissionStatus.Pending_TE_Review)
             throw new InvalidStateTransitionException("Biên tập viên chỉ được phép đề xuất khi bản thảo đang chờ TE duyệt.");
+        // Nếu đã có editor claim rồi, chỉ cho phép chính editor đó recommend
+        if (AssignedEditorId.HasValue && AssignedEditorId != editorId)
+            throw new InvalidStateTransitionException("Chỉ biên tập viên đã nhận kiểm duyệt mới được phép đề xuất bản thảo này.");
         Status = SubmissionStatus.Pending_EB_Review;
+        // Gán AssignedEditorId nếu chưa có (trường hợp bỏ qua StartReview)
         AssignedEditorId = editorId;
         EditorRecommendationMessage = message;
         ReviewedByUserId = editorId;

@@ -11,7 +11,7 @@ namespace MangaERP.Submission.Application.Commands.ApproveSubmission;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Editorial Board duyệt submission: RecommendedToBoard → Approved.
+/// Editorial Board duyệt submission: Pending_EB_Review → EB_Approved.
 /// Đồng thời tạo MangaSeries trong cùng một DB transaction.
 /// ReviewerId được controller trích từ JWT claim.
 /// </summary>
@@ -65,14 +65,21 @@ public class ApproveSubmissionHandler
         var submission = await _submissionRepo.GetByIdAsync(cmd.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
-        // ── Atomic transaction ────────────────────────────────────────────────
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        try
-        {
-            // 1. Domain: RecommendedToBoard → Approved
-            submission.Approve(cmd.ReviewerId);
+        // ── Domain validation BEFORE opening the transaction ──────────────────
+        submission.Approve(cmd.ReviewerId);
 
-            // 2. Create MangaSeries linked to this submission and Mangaka
+        // ── Atomic transaction via ExecutionStrategy ──────────────────────────
+        // NpgsqlRetryingExecutionStrategy (EnableRetryOnFailure) không cho phép
+        // BeginTransactionAsync trực tiếp. Phải wrap trong ExecutionStrategy.
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        ApproveSubmissionResult? result = null;
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+            // Create MangaSeries linked to this submission and Mangaka
             var series = MangaSeries.Create(
                 authorId:      submission.SubmitterId,
                 submissionId:  submission.Id,
@@ -81,25 +88,21 @@ public class ApproveSubmissionHandler
                 genre:         submission.Genre,
                 coverImageUrl: submission.CoverImageUrl);
 
-            // 3. Persist both in the same transaction
+            // Persist both in the same transaction
             await _seriesRepo.AddAsync(series, ct);
             await _submissionRepo.SaveChangesAsync(ct);
-            // Note: SaveChangesAsync on one repo saves all tracked changes in AppDbContext
 
             await tx.CommitAsync(ct);
 
-            return new ApproveSubmissionResult(
+            result = new ApproveSubmissionResult(
                 submission.Id,
                 series.Id,
                 submission.Status.ToString(),
                 series.Status.ToString(),
                 submission.ReviewedAt!.Value);
-        }
-        catch
-        {
-            await tx.RollbackAsync(ct);
-            throw;
-        }
+        });
+
+        return result!;
     }
 }
 

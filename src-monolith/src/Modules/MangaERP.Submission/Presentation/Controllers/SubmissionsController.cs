@@ -48,55 +48,81 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(400)]
     public async Task<IActionResult> CreateDraft([FromBody] CreateDraftRequest request, CancellationToken ct)
     {
-        var command = new CreateDraftSubmissionCommand(
-            SubmitterId: GetUserId(),
-            Title: request.Title,
-            Description: request.Description,
-            Genre: request.Genre,
-            CoverImageUrl: request.CoverImageUrl,
-            ManuscriptUrl: request.ManuscriptUrl
-        );
+        try
+        {
+            var command = new CreateDraftSubmissionCommand(
+                SubmitterId: GetUserId(),
+                Title: request.Title,
+                Description: request.Description,
+                Genre: request.Genre,
+                CoverImageUrl: request.CoverImageUrl,
+                ManuscriptUrl: request.ManuscriptUrl
+            );
 
-        var result = await _mediator.Send(command, ct);
-        return CreatedAtAction(nameof(GetById), new { id = result.SubmissionId }, result);
+            var result = await _mediator.Send(command, ct);
+            return CreatedAtAction(nameof(GetById), new { id = result.SubmissionId }, result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
     }
 
     /// <summary>
     /// [Mangaka] Update the manuscript URL of a draft or revision-required submission.
+    /// Chỉ được phép khi trạng thái là Draft hoặc Requires_Revision.
     /// </summary>
     [HttpPut("{id:guid}/manuscript")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(UpdateManuscriptResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> UpdateManuscript(Guid id, [FromBody] UpdateManuscriptRequest request, CancellationToken ct)
     {
-        var command = new UpdateManuscriptCommand(id, GetUserId(), request.ManuscriptUrl);
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new UpdateManuscriptCommand(id, GetUserId(), request.ManuscriptUrl);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
     }
 
     /// <summary>
     /// [Mangaka] Update metadata of a draft or revision-required submission.
+    /// Chỉ được phép khi trạng thái là Draft hoặc Requires_Revision.
     /// </summary>
     [HttpPut("{id:guid}/metadata")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(UpdateDraftMetadataResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> UpdateMetadata(Guid id, [FromBody] UpdateMetadataRequest request, CancellationToken ct)
     {
-        var command = new UpdateDraftMetadataCommand(
-            id, GetUserId(), request.Title, request.Description, request.Genre, request.CoverImageUrl);
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        try
+        {
+            var command = new UpdateDraftMetadataCommand(
+                id, GetUserId(), request.Title, request.Description, request.Genre, request.CoverImageUrl);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
     }
 
     /// <summary>
     /// [Mangaka] Submit a draft proposal for the first time.
+    /// Draft → Pending_TE_Review. ManuscriptUrl phải đã được upload trước.
     /// </summary>
     [HttpPost("{id:guid}/submit")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(SubmitProposalResult), 200)]
     [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> Submit(Guid id, CancellationToken ct)
     {
@@ -108,15 +134,18 @@ public class SubmissionsController : ControllerBase
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
     }
 
     /// <summary>
     /// [Mangaka] Re-submit a proposal after addressing revision feedback.
+    /// Requires_Revision → Pending_TE_Review.
     /// </summary>
     [HttpPost("{id:guid}/resubmit")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(ReSubmitProposalResult), 200)]
     [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> ReSubmit(Guid id, CancellationToken ct)
     {
@@ -128,6 +157,7 @@ public class SubmissionsController : ControllerBase
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
     }
 
     /// <summary>
@@ -138,29 +168,39 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<SubmissionSummaryDto>), 200)]
     public async Task<IActionResult> GetMySubmissions([FromQuery] string? statusFilter, CancellationToken ct)
     {
-        var query = new GetMySubmissionsQuery(GetUserId(), statusFilter);
-        var result = await _mediator.Send(query, ct);
-        return Ok(result);
+        try
+        {
+            var query = new GetMySubmissionsQuery(GetUserId(), statusFilter);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (Exception ex) { return StatusCode(500, new { error = "Internal error", message = ex.Message }); }
     }
 
     // ── VETTING / STAFF FLOWS ──────────────────────────────────────────────────
 
     /// <summary>
     /// [TantouEditor / EditorialBoard] Get the active vetting queues.
-    /// TantouEditor sees Pending/UnderReview. EditorialBoard sees RecommendedToBoard.
+    /// TantouEditor sees Pending_TE_Review. EditorialBoard sees Pending_EB_Review.
     /// </summary>
     [HttpGet("queue")]
     [Authorize(Roles = "TantouEditor,EditorialBoard,Admin")]
     [ProducesResponseType(typeof(IEnumerable<SubmissionSummaryDto>), 200)]
     public async Task<IActionResult> GetQueue(CancellationToken ct)
     {
-        var query = new GetSubmissionQueueQuery(GetUserRole());
-        var result = await _mediator.Send(query, ct);
-        return Ok(result);
+        try
+        {
+            var query = new GetSubmissionQueueQuery(GetUserRole());
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { error = "Internal error", message = ex.Message }); }
     }
 
     /// <summary>
-    /// [TantouEditor] Mark a pending submission as UnderReview by this editor.
+    /// [TantouEditor] Claim a pending submission for review.
+    /// Pending_TE_Review → (status không đổi, chỉ gán AssignedEditorId).
     /// </summary>
     [HttpPost("{id:guid}/start-review")]
     [Authorize(Roles = "TantouEditor")]
@@ -180,7 +220,8 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [TantouEditor] Recommend an UnderReview submission to the Editorial Board.
+    /// [TantouEditor] Recommend submission to the Editorial Board.
+    /// Pending_TE_Review → Pending_EB_Review.
     /// </summary>
     [HttpPost("{id:guid}/recommend")]
     [Authorize(Roles = "TantouEditor")]
@@ -201,6 +242,7 @@ public class SubmissionsController : ControllerBase
 
     /// <summary>
     /// [TantouEditor] Request revision for a submission.
+    /// Pending_TE_Review → Requires_Revision + feedback.
     /// </summary>
     [HttpPost("{id:guid}/te-request-revision")]
     [Authorize(Roles = "TantouEditor")]
@@ -221,6 +263,7 @@ public class SubmissionsController : ControllerBase
 
     /// <summary>
     /// [EditorialBoard] Request revision for a submission.
+    /// Pending_EB_Review → Requires_Revision + feedback.
     /// </summary>
     [HttpPost("{id:guid}/eb-request-revision")]
     [Authorize(Roles = "EditorialBoard")]
@@ -240,7 +283,8 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [TantouEditor] Reject a submission.
+    /// [TantouEditor] Reject a submission permanently.
+    /// Pending_TE_Review → TE_Rejected (permanently locked).
     /// </summary>
     [HttpPost("{id:guid}/te-reject")]
     [Authorize(Roles = "TantouEditor")]
@@ -260,7 +304,8 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [EditorialBoard] Reject a submission.
+    /// [EditorialBoard] Reject a submission permanently.
+    /// Pending_EB_Review → EB_Rejected (permanently locked).
     /// </summary>
     [HttpPost("{id:guid}/eb-reject")]
     [Authorize(Roles = "EditorialBoard")]
@@ -281,6 +326,7 @@ public class SubmissionsController : ControllerBase
 
     /// <summary>
     /// [EditorialBoard] Approve a recommended submission. Triggers series creation.
+    /// Pending_EB_Review → EB_Approved + MangaSeries created.
     /// </summary>
     [HttpPost("{id:guid}/approve")]
     [Authorize(Roles = "EditorialBoard")]
@@ -297,6 +343,7 @@ public class SubmissionsController : ControllerBase
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi nghiệp vụ", message = ex.Message }); }
     }
 
     // ── SHARED FLOWS ──────────────────────────────────────────────────────────
@@ -312,9 +359,14 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        var query = new GetSubmissionDetailQuery(id, GetUserId(), GetUserRole());
-        var result = await _mediator.Send(query, ct);
-        return Ok(result);
+        try
+        {
+            var query = new GetSubmissionDetailQuery(id, GetUserId(), GetUserRole());
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
     }
 }
 

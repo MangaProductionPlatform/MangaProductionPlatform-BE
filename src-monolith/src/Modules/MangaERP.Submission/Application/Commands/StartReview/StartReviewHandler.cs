@@ -7,7 +7,7 @@ namespace MangaERP.Submission.Application.Commands.StartReview;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Tantou Editor nhận xét submission: Pending → UnderReview.
+/// Tantou Editor nhận xét submission: Pending_TE_Review (status không đổi, chỉ gán AssignedEditorId).
 /// EditorId được controller trích từ JWT claim.
 /// </summary>
 public record StartReviewCommand(

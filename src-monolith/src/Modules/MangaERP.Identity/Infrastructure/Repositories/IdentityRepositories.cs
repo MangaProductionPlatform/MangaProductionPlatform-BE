@@ -45,6 +45,12 @@ public class UserRepository : IUserRepository
         _db.Set<User>().Update(user);
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(User user, CancellationToken ct = default)
+    {
+        _db.Set<User>().Remove(user);
+        await _db.SaveChangesAsync(ct);
+    }
 }
 
 public class RefreshTokenRepository : IRefreshTokenRepository
