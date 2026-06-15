@@ -23,16 +23,13 @@ public record AssignedTaskDto(
 public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IEnumerable<AssignedTaskDto>>
 {
     private readonly IPageTaskRepository _pageTaskRepo;
-    private readonly IChapterRepository _chapterRepo;
     private readonly IArtworkLayerRepository _layerRepo;
 
     public GetAssignedTasksHandler(
         IPageTaskRepository pageTaskRepo,
-        IChapterRepository chapterRepo,
         IArtworkLayerRepository layerRepo)
     {
         _pageTaskRepo = pageTaskRepo;
-        _chapterRepo = chapterRepo;
         _layerRepo = layerRepo;
     }
 
@@ -49,7 +46,7 @@ public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IE
                 continue;
             }
 
-            var chapter = await _chapterRepo.GetByIdAsync(task.ChapterId, ct);
+            var chapter = task.Chapter; // Đã được Include sẵn bởi GetByAssistantAsync
             var layer = await _layerRepo.GetCurrentByPageTaskIdAsync(task.Id, ct);
 
             result.Add(new AssignedTaskDto(

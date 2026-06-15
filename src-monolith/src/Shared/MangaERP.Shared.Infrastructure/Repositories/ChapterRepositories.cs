@@ -56,13 +56,13 @@ public class PageTaskRepository : IPageTaskRepository
 
     public async System.Threading.Tasks.Task<PageTask?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await _db.PageTasks
-            .Include(p => p.Chapter)
             .Include(p => p.PreviewPage)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public async System.Threading.Tasks.Task<PageTask?> GetByChapterAndPageNumberAsync(
         Guid chapterId, int pageNumber, CancellationToken ct = default)
         => await _db.PageTasks
+            .IgnoreQueryFilters() // Bỏ qua soft-delete filter để tránh unique index violation khi trang đã bị xóa mềm
             .FirstOrDefaultAsync(p => p.ChapterId == chapterId && p.PageNumber == pageNumber, ct);
 
     public async System.Threading.Tasks.Task<IEnumerable<PageTask>> GetByChapterIdAsync(Guid chapterId, CancellationToken ct = default)
