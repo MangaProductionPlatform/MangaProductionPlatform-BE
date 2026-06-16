@@ -3,7 +3,7 @@ using MangaERP.Chapter.Application.Ports;
 using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Identity.Application.Ports;
 using MangaERP.Identity.Domain.Enums;
-using MangaERP.Publishing.Application.Ports;
+using MangaERP.Shared.Application.Ports;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Studio.Application.Ports;
 using MangaERP.Studio.Domain.Entities;
