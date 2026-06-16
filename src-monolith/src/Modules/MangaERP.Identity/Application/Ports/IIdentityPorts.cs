@@ -44,6 +44,9 @@ public interface IEmailService
 {
     Task SendInvitationEmailAsync(string toEmail, string activationLink,
         string username, string fullName, CancellationToken ct = default);
+
+    Task SendUsernameUpdatedEmailAsync(string toEmail, string newUsername,
+        string fullName, CancellationToken ct = default);
 }
 
 public interface IUsernameGenerator
