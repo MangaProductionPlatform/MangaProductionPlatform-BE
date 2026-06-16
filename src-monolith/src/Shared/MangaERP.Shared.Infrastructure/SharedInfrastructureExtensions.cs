@@ -43,11 +43,6 @@ public static class SharedInfrastructureExtensions
         services.AddScoped<ISubmissionRepository, SubmissionRepository>();
         services.AddScoped<ISeriesRepository, SeriesRepository>();
 
-        // Chapter module infrastructure
-        services.AddScoped<ChapterRepository>();
-        services.AddScoped<IChapterRepository>(sp => sp.GetRequiredService<ChapterRepository>());
-        services.AddScoped<IPageTaskRepository>(sp => sp.GetRequiredService<ChapterRepository>());
-
         // QA module infrastructure
         services.AddScoped<QARepositories>();
         services.AddScoped<IBugPinRepository>(sp => sp.GetRequiredService<QARepositories>());
