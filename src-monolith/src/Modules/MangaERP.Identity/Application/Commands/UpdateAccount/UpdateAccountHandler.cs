@@ -28,13 +28,16 @@ public class UpdateAccountHandler : IRequestHandler<UpdateAccountCommand, Update
 {
     private readonly IUserRepository _userRepo;
     private readonly IUsernameGenerator _usernameGenerator;
+    private readonly IEmailService _emailService;
 
     public UpdateAccountHandler(
         IUserRepository userRepo,
-        IUsernameGenerator usernameGenerator)
+        IUsernameGenerator usernameGenerator,
+        IEmailService emailService)
     {
         _userRepo = userRepo;
         _usernameGenerator = usernameGenerator;
+        _emailService = emailService;
     }
 
     public async Task<UpdateAccountResult> Handle(UpdateAccountCommand request, CancellationToken cancellationToken)
@@ -62,6 +65,9 @@ public class UpdateAccountHandler : IRequestHandler<UpdateAccountCommand, Update
             }
         }
 
+        var usernameChanged = false;
+        var oldStatus = user.AccountStatus;
+
         // If Role or FullName changes, regenerate username
         if (user.Role != request.Role || !string.Equals(user.FullName, request.FullName, StringComparison.OrdinalIgnoreCase))
         {
@@ -74,6 +80,7 @@ public class UpdateAccountHandler : IRequestHandler<UpdateAccountCommand, Update
             user.Username = newUsername;
             user.Email = newUsername;
             user.Role = request.Role;
+            usernameChanged = true;
         }
 
         user.FullName = request.FullName;
@@ -82,10 +89,20 @@ public class UpdateAccountHandler : IRequestHandler<UpdateAccountCommand, Update
 
         await _userRepo.UpdateAsync(user, cancellationToken);
 
+        // Send email if active and username changed
+        if (usernameChanged && oldStatus == AccountStatus.Active && !string.IsNullOrWhiteSpace(user.PersonalEmail))
+        {
+            await _emailService.SendUsernameUpdatedEmailAsync(
+                user.PersonalEmail,
+                user.Username,
+                user.FullName ?? "User",
+                cancellationToken);
+        }
+
         return new UpdateAccountResult(
             user.Id,
             user.Username,
-            user.FullName,
+            user.FullName ?? string.Empty,
             user.PersonalEmail ?? string.Empty,
             user.Role.ToString(),
             user.PhoneNumber,
