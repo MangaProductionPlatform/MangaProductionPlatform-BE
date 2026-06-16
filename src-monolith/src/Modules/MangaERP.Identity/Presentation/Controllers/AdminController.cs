@@ -1,5 +1,10 @@
 using MediatR;
 using MangaERP.Identity.Application.Commands.ProvisionAccount;
+using MangaERP.Identity.Application.Commands.UpdateAccountRole;
+using MangaERP.Identity.Application.Commands.UpdateAccountStatus;
+using MangaERP.Identity.Application.Commands.UpdateAccount;
+using MangaERP.Identity.Application.Commands.ResendActivation;
+using MangaERP.Identity.Application.Commands.DeleteAccount;
 using MangaERP.Identity.Application.Queries.ListUsers;
 using MangaERP.Identity.Domain.Enums;
 using MangaERP.Shared.Domain.Exceptions;
@@ -87,9 +92,128 @@ public class AdminController : ControllerBase
         if (user is null) return NotFound(new { message = $"User {userId} not found." });
         return Ok(user);
     }
+
+    /// <summary>
+    /// Update user's role.
+    /// </summary>
+    [HttpPatch("accounts/{userId:guid}/role")]
+    [ProducesResponseType(typeof(UpdateAccountRoleResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> UpdateRole(
+        Guid userId, [FromBody] UpdateRoleRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateAccountRoleCommand(userId, request.Role);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// Update user's status.
+    /// </summary>
+    [HttpPatch("accounts/{userId:guid}/status")]
+    [ProducesResponseType(typeof(UpdateAccountStatusResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> UpdateStatus(
+        Guid userId, [FromBody] UpdateStatusRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateAccountStatusCommand(userId, request.Status);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// Update user's details.
+    /// </summary>
+    [HttpPut("accounts/{userId:guid}")]
+    [ProducesResponseType(typeof(UpdateAccountResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(409)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> UpdateAccount(
+        Guid userId, [FromBody] UpdateAccountRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateAccountCommand(
+                userId,
+                request.FullName,
+                request.PersonalEmail,
+                request.Role,
+                request.PhoneNumber,
+                request.ManagingTantouId);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UserAlreadyExistsException ex) { return Conflict(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// Resend account activation link.
+    /// </summary>
+    [HttpPost("accounts/{userId:guid}/resend-activation")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> ResendActivation(Guid userId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new ResendActivationCommand(userId);
+            await _mediator.Send(command, ct);
+            return Ok(new { message = "Activation link resent successfully." });
+        }
+        catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// Delete user account.
+    /// </summary>
+    [HttpDelete("accounts/{userId:guid}")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> DeleteAccount(Guid userId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new DeleteAccountCommand(userId);
+            await _mediator.Send(command, ct);
+            return Ok(new { message = "Account deleted successfully." });
+        }
+        catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+    }
 }
 
 public record ProvisionAccountRequest(
+    string FullName,
+    string PersonalEmail,
+    UserRole Role,
+    string? PhoneNumber = null,
+    Guid? ManagingTantouId = null
+);
+
+public record UpdateRoleRequest(UserRole Role);
+public record UpdateStatusRequest(AccountStatus Status);
+public record UpdateAccountRequest(
     string FullName,
     string PersonalEmail,
     UserRole Role,
