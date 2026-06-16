@@ -1,0 +1,73 @@
+services:
+  # ── MangaERP Monolith ────────────────────────────────────────────────────────
+  mangaerp-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mangaerp-api
+    ports:
+      - "8080:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - PORT=8080
+      - ENABLE_SWAGGER=true
+      # ── Database ─────────────────────────────────────────────────────────────
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=MangaProductionDB;Username=postgres;Password=${POSTGRES_PASSWORD}
+      # ── JWT ───────────────────────────────────────────────────────────────────
+      - Jwt__Key=${JWT_KEY}
+      - Jwt__Issuer=MangaERP
+      - Jwt__Audience=MangaERP.Clients
+      - Jwt__ExpiryMinutes=60
+      - Jwt__RefreshTokenExpiryDays=7
+      # ── Invitation ───────────────────────────────────────────────────────────
+      - Invitation__ExpiryHours=24
+      - Invitation__ActivationBaseUrl=${ACTIVATION_BASE_URL:-http://localhost:3000/activate}
+      # ── Seed ─────────────────────────────────────────────────────────────────
+      - Seed__AdminPassword=${ADMIN_PASSWORD}
+      # ── CORS ─────────────────────────────────────────────────────────────────
+      - Cors__AllowedOrigins=${CORS_ORIGINS:-http://localhost:3000}
+      # ── SMTP (Defaults to local Maildev, override in .env for Gmail/Brevo) ───
+      - Smtp__Host=${SMTP_HOST:-maildev}
+      - Smtp__Port=${SMTP_PORT:-1025}
+      - Smtp__Username=${SMTP_USERNAME:-dev}
+      - Smtp__Password=${SMTP_PASSWORD:-dev}
+      - Smtp__FromAddress=${SMTP_FROM_ADDRESS:-noreply@mangacap.com}
+      - Smtp__FromName=${SMTP_FROM_NAME:-MangaERP}
+      - Brevo__ApiKey=${BREVO_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      maildev:
+        condition: service_started
+    restart: on-failure
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: mangaerp-postgres
+    environment:
+      - POSTGRES_DB=MangaProductionDB
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-MangaERP_Pa$$w0rd!}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d MangaProductionDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── Maildev (Mock SMTP — local only) ─────────────────────────────────────────
+  maildev:
+    image: maildev/maildev:2.1.0
+    container_name: mangaerp-maildev
+    ports:
+      - "1080:1080" # Webmail UI → http://localhost:1080
+      - "1025:1025" # SMTP port
+    restart: on-failure
+
+volumes:
+  postgres-data:

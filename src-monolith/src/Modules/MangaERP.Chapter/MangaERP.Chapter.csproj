@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>MangaERP.Chapter</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\MangaERP.Shared.Domain\MangaERP.Shared.Domain.csproj" />
+    <ProjectReference Include="..\..\Shared\MangaERP.Shared.Application\MangaERP.Shared.Application.csproj" />
+    <ProjectReference Include="..\MangaERP.Series\MangaERP.Series.csproj" />
+    <ProjectReference Include="..\MangaERP.Publishing\MangaERP.Publishing.csproj" />
+    <ProjectReference Include="..\MangaERP.Identity\MangaERP.Identity.csproj" />
+    <ProjectReference Include="..\MangaERP.Studio\MangaERP.Studio.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MediatR" Version="12.4.1" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.2" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

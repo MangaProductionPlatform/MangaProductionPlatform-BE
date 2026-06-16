@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>MangaERP.Api</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Shared -->
+    <ProjectReference Include="..\Shared\MangaERP.Shared.Domain\MangaERP.Shared.Domain.csproj" />
+    <ProjectReference Include="..\Shared\MangaERP.Shared.Application\MangaERP.Shared.Application.csproj" />
+    <ProjectReference Include="..\Shared\MangaERP.Shared.Infrastructure\MangaERP.Shared.Infrastructure.csproj" />
+    <!-- Modules -->
+    <ProjectReference Include="..\Modules\MangaERP.Identity\MangaERP.Identity.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.Submission\MangaERP.Submission.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.Series\MangaERP.Series.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.Chapter\MangaERP.Chapter.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.Task\MangaERP.Task.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.QA\MangaERP.QA.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.Publishing\MangaERP.Publishing.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.Ranking\MangaERP.Ranking.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.Studio\MangaERP.Studio.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.2" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.2" />
+  </ItemGroup>
+</Project>

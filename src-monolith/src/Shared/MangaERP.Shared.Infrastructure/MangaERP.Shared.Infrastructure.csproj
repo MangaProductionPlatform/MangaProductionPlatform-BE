@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>MangaERP.Shared.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MangaERP.Shared.Domain\MangaERP.Shared.Domain.csproj" />
+    <ProjectReference Include="..\MangaERP.Shared.Application\MangaERP.Shared.Application.csproj" />
+    <!-- All module domain projects so AppDbContext can reference their entities -->
+    <ProjectReference Include="..\..\Modules\MangaERP.Identity\MangaERP.Identity.csproj" />
+    <ProjectReference Include="..\..\Modules\MangaERP.Submission\MangaERP.Submission.csproj" />
+    <ProjectReference Include="..\..\Modules\MangaERP.Series\MangaERP.Series.csproj" />
+    <ProjectReference Include="..\..\Modules\MangaERP.Chapter\MangaERP.Chapter.csproj" />
+    <ProjectReference Include="..\..\Modules\MangaERP.Task\MangaERP.Task.csproj" />
+    <ProjectReference Include="..\..\Modules\MangaERP.QA\MangaERP.QA.csproj" />
+    <ProjectReference Include="..\..\Modules\MangaERP.Publishing\MangaERP.Publishing.csproj" />
+    <ProjectReference Include="..\..\Modules\MangaERP.Ranking\MangaERP.Ranking.csproj" />
+    <ProjectReference Include="..\..\Modules\MangaERP.Studio\MangaERP.Studio.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.2" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.2" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+  </ItemGroup>
+</Project>
