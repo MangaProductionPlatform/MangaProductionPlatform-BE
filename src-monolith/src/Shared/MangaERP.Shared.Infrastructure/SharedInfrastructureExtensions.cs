@@ -24,18 +24,18 @@ public static class SharedInfrastructureExtensions
     {
         // ── DATABASE CONFIGURATION ──────────────────────────────────────────────────
         // [POSTGRESQL CONFIG] - Mặc định khi deploy (Hãy uncomment dòng này khi deploy)
-        /*
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(
                 config.GetConnectionString("DefaultConnection"),
                 npgsql => npgsql.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
-        */
 
         // [SQL SERVER CONFIG] - Dùng để test local với SSMS
+        /*
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(
                 config.GetConnectionString("DefaultConnection"),
                 sqlServer => sqlServer.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
+        */
         // Allow all modules to access AppDbContext without a direct circular reference
         services.AddScoped<IDbContextProvider, AppDbContextProvider>();
 

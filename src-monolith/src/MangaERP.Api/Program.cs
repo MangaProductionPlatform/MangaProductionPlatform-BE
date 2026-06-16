@@ -130,10 +130,10 @@ using (var scope = app.Services.CreateScope())
     try
     {
         // [POSTGRESQL - Mặc định khi deploy] (Uncomment khi deploy)
-        // await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync();
 
         // [SQL SERVER / SSMS - Dùng test local]
-        await db.Database.EnsureCreatedAsync();
+        // await db.Database.EnsureCreatedAsync();
         // Seed admin on first run in both Development AND Production (Railway)
         // if no admin exists yet
         await DbSeeder.SeedAsync(db, config);
