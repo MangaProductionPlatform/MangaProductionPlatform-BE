@@ -67,7 +67,6 @@ public static class SharedInfrastructureExtensions
         services.AddScoped<IPageTaskRepository, PageTaskRepository>();
         services.AddScoped<IPreviewPageRepository, PreviewPageRepository>();
         services.AddScoped<IArtworkLayerRepository, ArtworkLayerRepository>();
-        services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<INotificationService, NotificationService>();
 
         return services;

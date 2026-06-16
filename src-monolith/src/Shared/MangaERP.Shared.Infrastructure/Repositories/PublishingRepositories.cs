@@ -67,4 +67,7 @@ public class PublishingRepositories : IPublicationRecordRepository, INotificatio
         _db.Notifications.Update(notification);
         await _db.SaveChangesAsync(ct);
     }
+
+    async System.Threading.Tasks.Task<int> INotificationRepository.SaveChangesAsync(CancellationToken ct)
+        => await _db.SaveChangesAsync(ct);
 }
