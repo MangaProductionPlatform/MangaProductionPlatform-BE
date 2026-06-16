@@ -6,6 +6,9 @@ using MangaERP.Series;
 using MangaERP.Studio;
 using MangaERP.Chapter;
 using MangaERP.Task;
+using MangaERP.Chapter;
+using MangaERP.QA;
+using MangaERP.Publishing;
 using MangaERP.Shared.Infrastructure;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -69,8 +72,8 @@ builder.Services.AddIdentityModule();
 builder.Services.AddSubmissionModule();
 builder.Services.AddSeriesModule();
 builder.Services.AddStudioModule();
-builder.Services.AddChapterModule();
-builder.Services.AddTaskModule();
+// builder.Services.AddChapterModule();
+// builder.Services.AddTaskModule();
 // builder.Services.AddQaModule();
 // builder.Services.AddPublishingModule();
 // builder.Services.AddRankingModule();
@@ -127,10 +130,10 @@ using (var scope = app.Services.CreateScope())
     try
     {
         // [POSTGRESQL - Mặc định khi deploy] (Uncomment khi deploy)
-        await db.Database.MigrateAsync();
+        // await db.Database.MigrateAsync();
 
         // [SQL SERVER / SSMS - Dùng test local]
-        // await db.Database.EnsureCreatedAsync();
+        await db.Database.EnsureCreatedAsync();
         // Seed admin on first run in both Development AND Production (Railway)
         // if no admin exists yet
         await DbSeeder.SeedAsync(db, config);

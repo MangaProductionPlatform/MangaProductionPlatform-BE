@@ -1,0 +1,79 @@
+using MediatR;
+using FluentValidation;
+using MangaERP.QA.Application.Ports;
+using MangaERP.QA.Domain.Entities;
+using MangaERP.Chapter.Application.Ports;
+using MangaERP.Chapter.Domain.Entities;
+
+namespace MangaERP.QA.Application.Commands;
+
+public record AddBugPinCommand(
+    Guid ChapterId,
+    Guid PageTaskId,
+    Guid EditorId,
+    decimal CoordinateX,
+    decimal CoordinateY,
+    string NoteMessage,
+    string IssueType,
+    Guid BatchToken
+) : IRequest<Guid>;
+
+public class AddBugPinHandler : IRequestHandler<AddBugPinCommand, Guid>
+{
+    private readonly IBugPinRepository _bugPinRepo;
+    private readonly IChapterRepository _chapterRepo;
+
+    public AddBugPinHandler(IBugPinRepository bugPinRepo, IChapterRepository chapterRepo)
+    {
+        _bugPinRepo = bugPinRepo;
+        _chapterRepo = chapterRepo;
+    }
+
+    public async Task<Guid> Handle(AddBugPinCommand request, CancellationToken cancellationToken)
+    {
+        // 1. Verify Chapter state
+        var chapter = await _chapterRepo.GetByIdAsync(request.ChapterId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Chapter {request.ChapterId} not found.");
+
+        if (chapter.Status != ChapterStatus.ReadyForQA)
+            throw new InvalidOperationException("Chỉ có thể thêm ghim lỗi cho chương truyện đang trong trạng thái ReadyForQA.");
+
+        // 2. Validate coordinates (0.00% to 100.00%)
+        if (request.CoordinateX < 0 || request.CoordinateX > 100 || request.CoordinateY < 0 || request.CoordinateY > 100)
+            throw new ArgumentException("Tọa độ X và Y phải nằm trong khoảng từ 0.00 đến 100.00.");
+
+        // 3. Create BugPin
+        var bugPin = new BugPin
+        {
+            ChapterId = request.ChapterId,
+            PageTaskId = request.PageTaskId,
+            EditorId = request.EditorId,
+            CoordinateX = request.CoordinateX,
+            CoordinateY = request.CoordinateY,
+            NoteMessage = request.NoteMessage.Trim(),
+            IssueType = request.IssueType,
+            BatchToken = request.BatchToken,
+            Status = "Open",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _bugPinRepo.AddAsync(bugPin, cancellationToken);
+        return bugPin.Id;
+    }
+}
+
+public class AddBugPinValidator : AbstractValidator<AddBugPinCommand>
+{
+    public AddBugPinValidator()
+    {
+        RuleFor(x => x.ChapterId).NotEmpty();
+        RuleFor(x => x.PageTaskId).NotEmpty();
+        RuleFor(x => x.EditorId).NotEmpty();
+        RuleFor(x => x.CoordinateX).InclusiveBetween(0m, 100m);
+        RuleFor(x => x.CoordinateY).InclusiveBetween(0m, 100m);
+        RuleFor(x => x.NoteMessage).NotEmpty().MaximumLength(1000);
+        RuleFor(x => x.IssueType).Must(x => x == "Visual" || x == "Content" || x == "Text" || x == "Layout")
+            .WithMessage("IssueType phải là Visual, Content, Text hoặc Layout.");
+        RuleFor(x => x.BatchToken).NotEmpty();
+    }
+}
