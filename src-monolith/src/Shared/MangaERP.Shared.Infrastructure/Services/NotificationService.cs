@@ -3,6 +3,8 @@ using MangaERP.Identity.Domain.Enums;
 using MangaERP.Publishing.Application.Ports;
 using MangaERP.Publishing.Domain.Entities;
 
+using MangaERP.Shared.Application.Ports;
+
 namespace MangaERP.Shared.Infrastructure.Services;
 
 public class NotificationService : INotificationService

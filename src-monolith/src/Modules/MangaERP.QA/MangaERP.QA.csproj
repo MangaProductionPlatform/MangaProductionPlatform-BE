@@ -8,11 +8,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Shared\MangaERP.Shared.Domain\MangaERP.Shared.Domain.csproj" />
     <ProjectReference Include="..\..\Shared\MangaERP.Shared.Application\MangaERP.Shared.Application.csproj" />
+    <ProjectReference Include="..\MangaERP.Chapter\MangaERP.Chapter.csproj" />
+
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MediatR" Version="12.4.1" />
     <PackageReference Include="FluentValidation" Version="11.11.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.2" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>

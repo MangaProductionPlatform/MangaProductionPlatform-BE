@@ -1,7 +1,7 @@
 using FluentValidation;
 using MangaERP.Chapter.Application.Ports;
 using MangaERP.Chapter.Domain.Entities;
-using MangaERP.Publishing.Application.Ports;
+using MangaERP.Shared.Application.Ports;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Task.Application.Ports;
 using MediatR;

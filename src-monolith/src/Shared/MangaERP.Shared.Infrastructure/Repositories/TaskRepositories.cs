@@ -61,16 +61,3 @@ public class ArtworkLayerRepository : IArtworkLayerRepository
         => _db.SaveChangesAsync(ct);
 }
 
-public class NotificationRepository : INotificationRepository
-{
-    private readonly AppDbContext _db;
-
-    public NotificationRepository(IDbContextProvider provider)
-        => _db = (AppDbContext)provider.GetDbContext();
-
-    public async System.Threading.Tasks.Task AddAsync(Notification notification, CancellationToken ct = default)
-        => await _db.Notifications.AddAsync(notification, ct);
-
-    public System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default)
-        => _db.SaveChangesAsync(ct);
-}
