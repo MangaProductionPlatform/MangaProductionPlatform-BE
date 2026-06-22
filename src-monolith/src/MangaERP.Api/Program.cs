@@ -100,7 +100,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // ── Controllers ────────────────────────────────────────────────────────────────
-builder.Services.AddControllers();
+// JsonStringEnumConverter: cho phép API nhận enum dưới dạng chuỗi ("Content", "Visual", "Typo")
+// thay vì chỉ số nguyên (0, 1, 2). Không breaking với client dùng số nguyên.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
