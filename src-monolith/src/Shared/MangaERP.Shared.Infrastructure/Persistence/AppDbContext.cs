@@ -27,7 +27,8 @@ public class AppDbContext : DbContext
     public DbSet<InvitationToken>  InvitationTokens  => Set<InvitationToken>();
 
     // ── Submission ────────────────────────────────────────────
-    public DbSet<SeriesSubmission> SeriesSubmissions => Set<SeriesSubmission>();
+    public DbSet<SeriesSubmission> SeriesSubmissions     => Set<SeriesSubmission>();
+    public DbSet<SubmissionFeedbackPin> SubmissionFeedbackPins => Set<SubmissionFeedbackPin>();
 
     // ── Series ────────────────────────────────────────────────
     public DbSet<MangaSeries>      MangaSeries       => Set<MangaSeries>();

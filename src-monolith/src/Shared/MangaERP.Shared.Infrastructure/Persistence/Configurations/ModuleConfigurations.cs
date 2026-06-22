@@ -21,6 +21,27 @@ public class SeriesSubmissionConfiguration : IEntityTypeConfiguration<SeriesSubm
         b.Property(e => e.ManuscriptUrl).IsRequired(false).HasMaxLength(2048);
         b.Property(e => e.Status).HasConversion(v => v.ToString(), v => Enum.Parse<SubmissionStatus>(v)).HasMaxLength(50);
         b.HasQueryFilter(e => !e.IsDeleted);
+
+        // 1:N relationship with FeedbackPins
+        b.HasMany<SubmissionFeedbackPin>()
+         .WithOne()
+         .HasForeignKey(p => p.SubmissionId)
+         .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class SubmissionFeedbackPinConfiguration : IEntityTypeConfiguration<SubmissionFeedbackPin>
+{
+    public void Configure(EntityTypeBuilder<SubmissionFeedbackPin> b)
+    {
+        b.ToTable("SubmissionFeedbackPins"); b.HasKey(e => e.Id);
+        b.Property(e => e.PageIdentifier).IsRequired().HasMaxLength(2048);
+        b.Property(e => e.CoordinateX).HasColumnType("decimal(5,2)");
+        b.Property(e => e.CoordinateY).HasColumnType("decimal(5,2)");
+        b.Property(e => e.Comment).IsRequired().HasMaxLength(2000);
+        b.Property(e => e.Category).HasConversion(
+            v => v.ToString(), v => Enum.Parse<FeedbackPinCategory>(v)).HasMaxLength(50);
+        b.HasIndex(e => new { e.SubmissionId, e.IsArchived });
     }
 }
 
@@ -31,6 +52,7 @@ public class MangaSeriesConfiguration : IEntityTypeConfiguration<MangaSeries>
         b.ToTable("MangaSeries"); b.HasKey(e => e.Id);
         b.Property(e => e.Title).IsRequired().HasMaxLength(256);
         b.Property(e => e.Status).HasConversion(v => v.ToString(), v => Enum.Parse<SeriesStatus>(v)).HasMaxLength(50);
+        b.HasIndex(e => e.SubmissionId).IsUnique();
         b.HasQueryFilter(e => !e.IsDeleted);
     }
 }
@@ -152,6 +174,7 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         b.Property(e => e.Title).IsRequired().HasMaxLength(256);
         b.Property(e => e.NotifyType).IsRequired().HasMaxLength(100);
         b.Property(e => e.RelatedEntityType).HasMaxLength(50);
+        b.Property(e => e.TargetUrl).HasMaxLength(2048);
         b.HasIndex(e => new { e.ReceiverId, e.IsRead });
     }
 }

@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\Shared\MangaERP.Shared.Domain\MangaERP.Shared.Domain.csproj" />
     <ProjectReference Include="..\..\Shared\MangaERP.Shared.Application\MangaERP.Shared.Application.csproj" />
     <ProjectReference Include="..\MangaERP.Series\MangaERP.Series.csproj" />
+    <ProjectReference Include="..\MangaERP.Identity\MangaERP.Identity.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MediatR" Version="12.4.1" />

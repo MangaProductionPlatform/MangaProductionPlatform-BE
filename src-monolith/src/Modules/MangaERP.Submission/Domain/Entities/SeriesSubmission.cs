@@ -6,10 +6,8 @@ namespace MangaERP.Submission.Domain.Entities;
 public enum SubmissionStatus
 {
     Draft,
-    Pending_TE_Review,
     Pending_EB_Review,
     Requires_Revision,
-    TE_Rejected,
     EB_Rejected,
     EB_Approved
 }
@@ -58,7 +56,7 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     // ── Mangaka transitions ────────────────────────────────────────────────────
 
     /// <summary>
-    /// Nộp draft lần đầu: Draft → Pending_TE_Review.
+    /// Nộp draft lần đầu: Draft → Pending_EB_Review.
     /// ManuscriptUrl phải có trước khi gọi.
     /// </summary>
     public void SubmitDraft()
@@ -67,17 +65,17 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
             throw new InvalidStateTransitionException("Chỉ có bản thảo ở trạng thái Draft mới được nộp lần đầu.");
         if (string.IsNullOrWhiteSpace(ManuscriptUrl))
             throw new InvalidStateTransitionException("Vui lòng tải lên file bản thảo trước khi nộp.");
-        Status = SubmissionStatus.Pending_TE_Review;
+        Status = SubmissionStatus.Pending_EB_Review;
     }
 
     /// <summary>
-    /// Nộp lại sau khi chỉnh sửa: Requires_Revision → Pending_TE_Review.
+    /// Nộp lại sau khi chỉnh sửa: Requires_Revision → Pending_EB_Review.
     /// </summary>
     public void ReSubmit()
     {
         if (Status != SubmissionStatus.Requires_Revision)
             throw new InvalidStateTransitionException("Chỉ có thể nộp lại bản thảo khi trạng thái là Requires_Revision.");
-        Status = SubmissionStatus.Pending_TE_Review;
+        Status = SubmissionStatus.Pending_EB_Review;
         FeedbackMessage = null;
     }
 
@@ -104,40 +102,6 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
         CoverImageUrl = coverImageUrl;
     }
 
-    // ── Tantou Editor transitions ──────────────────────────────────────────────
-
-    /// <summary>
-    /// Editor bắt đầu xét: Pending_TE_Review (Trạng thái không đổi, chỉ gán AssignedEditorId).
-    /// Nếu submission đã được editor khác claim, ném exception để tránh xung đột.
-    /// </summary>
-    public void StartReview(Guid editorId)
-    {
-        if (Status != SubmissionStatus.Pending_TE_Review)
-            throw new InvalidStateTransitionException("Chỉ có thể nhận kiểm duyệt khi bản thảo ở trạng thái Pending_TE_Review.");
-        if (AssignedEditorId.HasValue && AssignedEditorId != editorId)
-            throw new InvalidStateTransitionException("Bản thảo này đã được biên tập viên khác nhận kiểm duyệt.");
-        AssignedEditorId = editorId;
-    }
-
-    /// <summary>
-    /// Editor recommend lên Board: Pending_TE_Review → Pending_EB_Review.
-    /// Nếu submission đã được claim bởi editor khác thì không cho recommend.
-    /// </summary>
-    public void RecommendToBoard(Guid editorId, string message)
-    {
-        if (Status != SubmissionStatus.Pending_TE_Review)
-            throw new InvalidStateTransitionException("Biên tập viên chỉ được phép đề xuất khi bản thảo đang chờ TE duyệt.");
-        // Nếu đã có editor claim rồi, chỉ cho phép chính editor đó recommend
-        if (AssignedEditorId.HasValue && AssignedEditorId != editorId)
-            throw new InvalidStateTransitionException("Chỉ biên tập viên đã nhận kiểm duyệt mới được phép đề xuất bản thảo này.");
-        Status = SubmissionStatus.Pending_EB_Review;
-        // Gán AssignedEditorId nếu chưa có (trường hợp bỏ qua StartReview)
-        AssignedEditorId = editorId;
-        EditorRecommendationMessage = message;
-        ReviewedByUserId = editorId;
-        ReviewedAt = DateTime.UtcNow;
-    }
-
     // ── Editorial Board transitions ────────────────────────────────────────────
 
     /// <summary>
@@ -146,66 +110,47 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     public void Approve(Guid reviewerId)
     {
         if (Status != SubmissionStatus.Pending_EB_Review)
-            throw new InvalidStateTransitionException("Chỉ có thể duyệt bản thảo khi đã được chuyển tiếp lên Ban Biên Tập.");
+            throw new InvalidStateTransitionException("Chỉ có thể duyệt bản thảo khi đang chờ Ban Biên Tập duyệt.");
         Status = SubmissionStatus.EB_Approved;
         ReviewedByUserId = reviewerId;
         ReviewedAt = DateTime.UtcNow;
     }
 
-    // ── Shared transitions (Editor hoặc Board) ────────────────────────────────
+    // ── Shared transitions (Board) ────────────────────────────────
 
     /// <summary>
-    /// Từ chối (TE hoặc EB).
+    /// Từ chối (EB).
     /// </summary>
     public void Reject(string actorRole, Guid reviewerId, string feedbackMessage)
     {
         if (string.IsNullOrWhiteSpace(feedbackMessage))
             throw new InvalidStateTransitionException("Lý do từ chối không được để trống.");
 
-        if (actorRole == "TantouEditor")
-        {
-            if (Status != SubmissionStatus.Pending_TE_Review)
-                throw new InvalidStateTransitionException("Tantou Editor chỉ được từ chối khi bản thảo đang chờ TE duyệt.");
-            Status = SubmissionStatus.TE_Rejected;
-        }
-        else if (actorRole == "EditorialBoard")
-        {
-            if (Status != SubmissionStatus.Pending_EB_Review)
-                throw new InvalidStateTransitionException("Editorial Board chỉ được từ chối khi bản thảo đang ở bước EB duyệt.");
-            Status = SubmissionStatus.EB_Rejected;
-        }
-        else
-        {
-            throw new InvalidStateTransitionException("Vai trò này không có quyền từ chối bản thảo.");
-        }
+        if (actorRole != "EditorialBoard")
+            throw new InvalidStateTransitionException("Chỉ có Editorial Board mới có quyền từ chối bản thảo.");
 
+        if (Status != SubmissionStatus.Pending_EB_Review)
+            throw new InvalidStateTransitionException("Editorial Board chỉ được từ chối khi bản thảo đang chờ duyệt.");
+
+        Status = SubmissionStatus.EB_Rejected;
         FeedbackMessage = feedbackMessage;
         ReviewedByUserId = reviewerId;
         ReviewedAt = DateTime.UtcNow;
     }
 
     /// <summary>
-    /// Yêu cầu chỉnh sửa (TE hoặc EB).
+    /// Yêu cầu chỉnh sửa (EB).
     /// </summary>
     public void RequestRevision(string actorRole, Guid reviewerId, string feedbackMessage)
     {
         if (string.IsNullOrWhiteSpace(feedbackMessage))
             throw new InvalidStateTransitionException("Lý do yêu cầu sửa đổi không được để trống.");
 
-        if (actorRole == "TantouEditor")
-        {
-            if (Status != SubmissionStatus.Pending_TE_Review)
-                throw new InvalidStateTransitionException("Tantou Editor chỉ được yêu cầu sửa đổi khi bản thảo đang chờ TE duyệt.");
-        }
-        else if (actorRole == "EditorialBoard")
-        {
-            if (Status != SubmissionStatus.Pending_EB_Review)
-                throw new InvalidStateTransitionException("Editorial Board chỉ được yêu cầu sửa đổi khi bản thảo đang ở bước EB duyệt.");
-        }
-        else
-        {
-            throw new InvalidStateTransitionException("Vai trò này không có quyền yêu cầu sửa đổi bản thảo.");
-        }
+        if (actorRole != "EditorialBoard")
+            throw new InvalidStateTransitionException("Chỉ có Editorial Board mới có quyền yêu cầu sửa đổi bản thảo.");
+
+        if (Status != SubmissionStatus.Pending_EB_Review)
+            throw new InvalidStateTransitionException("Editorial Board chỉ được yêu cầu sửa đổi khi bản thảo đang chờ duyệt.");
 
         Status = SubmissionStatus.Requires_Revision;
         FeedbackMessage = feedbackMessage;

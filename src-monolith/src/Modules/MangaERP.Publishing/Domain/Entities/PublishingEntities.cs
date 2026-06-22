@@ -22,5 +22,6 @@ public class Notification
     public string NotifyType { get; set; } = string.Empty;
     public Guid? RelatedEntityId { get; set; }
     public string? RelatedEntityType { get; set; }
+    public string? TargetUrl { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
