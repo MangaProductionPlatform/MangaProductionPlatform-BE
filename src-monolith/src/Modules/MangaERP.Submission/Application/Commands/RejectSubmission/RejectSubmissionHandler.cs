@@ -1,4 +1,5 @@
 using FluentValidation;
+using MangaERP.Shared.Application.Ports;
 using MangaERP.Submission.Application.Ports;
 using MediatR;
 
@@ -7,10 +8,8 @@ namespace MangaERP.Submission.Application.Commands.RejectSubmission;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Từ chối submission — dùng bởi cả Tantou Editor VÀ Editorial Board.
-/// Controller phân biệt quyền: TantouEditor chỉ reject Pending/UnderReview;
-/// EditorialBoard chỉ reject RecommendedToBoard.
-/// Domain entity đã guard các trường hợp không hợp lệ.
+/// Từ chối submission — chỉ dùng bởi Editorial Board.
+/// Domain entity đã guard: chỉ chấp nhận khi trạng thái Pending_EB_Review.
 /// ReviewerId được controller trích từ JWT claim.
 /// </summary>
 public record RejectSubmissionCommand(
@@ -32,9 +31,13 @@ public class RejectSubmissionHandler
     : IRequestHandler<RejectSubmissionCommand, RejectSubmissionResult>
 {
     private readonly ISubmissionRepository _repo;
+    private readonly INotificationService _notificationService;
 
-    public RejectSubmissionHandler(ISubmissionRepository repo)
-        => _repo = repo;
+    public RejectSubmissionHandler(ISubmissionRepository repo, INotificationService notificationService)
+    {
+        _repo = repo;
+        _notificationService = notificationService;
+    }
 
     public async Task<RejectSubmissionResult> Handle(
         RejectSubmissionCommand cmd, CancellationToken ct)
@@ -46,6 +49,13 @@ public class RejectSubmissionHandler
         submission.Reject(cmd.ActorRole, cmd.ReviewerId, cmd.FeedbackMessage);
 
         await _repo.SaveChangesAsync(ct);
+
+        // Send notification AFTER successful save
+        await _notificationService.NotifySubmissionRejectedAsync(
+            receiverId:      submission.SubmitterId,
+            submissionId:    submission.Id,
+            feedbackMessage: cmd.FeedbackMessage,
+            ct:              ct);
 
         return new RejectSubmissionResult(
             submission.Id,

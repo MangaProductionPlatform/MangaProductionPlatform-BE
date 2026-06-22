@@ -22,12 +22,6 @@ public class SubmissionRepository : ISubmissionRepository
             .OrderByDescending(s => s.CreatedAt)
             .ToListAsync(ct);
 
-    public async System.Threading.Tasks.Task<IEnumerable<SeriesSubmission>> GetPendingQueueAsync(CancellationToken ct = default)
-        => await _db.SeriesSubmissions
-            .Where(s => s.Status == SubmissionStatus.Pending_TE_Review)
-            .OrderBy(s => s.CreatedAt)
-            .ToListAsync(ct);
-
     public async System.Threading.Tasks.Task<IEnumerable<SeriesSubmission>> GetRecommendedQueueAsync(CancellationToken ct = default)
         => await _db.SeriesSubmissions
             .Where(s => s.Status == SubmissionStatus.Pending_EB_Review)
@@ -39,7 +33,6 @@ public class SubmissionRepository : ISubmissionRepository
             s.SubmitterId == submitterId && 
             s.Title.ToLower() == title.ToLower() && 
             s.Status != SubmissionStatus.EB_Approved && 
-            s.Status != SubmissionStatus.TE_Rejected &&
             s.Status != SubmissionStatus.EB_Rejected, 
             ct);
 
@@ -48,4 +41,23 @@ public class SubmissionRepository : ISubmissionRepository
 
     public System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default)
         => _db.SaveChangesAsync(ct);
+
+    // ── Feedback Pins ─────────────────────────────────────────────────────────
+
+    public async System.Threading.Tasks.Task<IEnumerable<SubmissionFeedbackPin>> GetActivePinsBySubmissionIdAsync(
+        Guid submissionId, CancellationToken ct = default)
+        => await _db.SubmissionFeedbackPins
+            .Where(p => p.SubmissionId == submissionId && !p.IsArchived)
+            .OrderBy(p => p.CreatedAt)
+            .ToListAsync(ct);
+
+    public async System.Threading.Tasks.Task<IEnumerable<SubmissionFeedbackPin>> GetAllPinsBySubmissionIdAsync(
+        Guid submissionId, CancellationToken ct = default)
+        => await _db.SubmissionFeedbackPins
+            .Where(p => p.SubmissionId == submissionId)
+            .OrderBy(p => p.CreatedAt)
+            .ToListAsync(ct);
+
+    public async System.Threading.Tasks.Task AddPinAsync(SubmissionFeedbackPin pin, CancellationToken ct = default)
+        => await _db.SubmissionFeedbackPins.AddAsync(pin, ct);
 }

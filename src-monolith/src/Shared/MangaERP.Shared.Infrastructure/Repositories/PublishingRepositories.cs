@@ -57,10 +57,8 @@ public class PublishingRepositories : IPublicationRecordRepository, INotificatio
             .ToListAsync(ct);
 
     async System.Threading.Tasks.Task INotificationRepository.AddAsync(Notification notification, CancellationToken ct)
-    {
-        await _db.Notifications.AddAsync(notification, ct);
-        await _db.SaveChangesAsync(ct);
-    }
+        // Only stages the entity — caller is responsible for calling SaveChangesAsync.
+        => await _db.Notifications.AddAsync(notification, ct);
 
     async System.Threading.Tasks.Task INotificationRepository.UpdateAsync(Notification notification, CancellationToken ct)
     {

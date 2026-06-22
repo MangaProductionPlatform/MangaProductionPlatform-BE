@@ -7,9 +7,7 @@ using MangaERP.Shared.Infrastructure.Services;
 using MangaERP.Submission.Application.Ports;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Studio.Application.Ports;
-using MangaERP.Chapter.Application.Ports;
 using MangaERP.QA.Application.Ports;
-using MangaERP.Publishing.Application.Ports;
 using MangaERP.Task.Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -36,6 +34,7 @@ public static class SharedInfrastructureExtensions
                 config.GetConnectionString("DefaultConnection"),
                 sqlServer => sqlServer.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
         */
+
         // Allow all modules to access AppDbContext without a direct circular reference
         services.AddScoped<IDbContextProvider, AppDbContextProvider>();
 
@@ -62,6 +61,8 @@ public static class SharedInfrastructureExtensions
         services.AddScoped<IPageTaskRepository, PageTaskRepository>();
         services.AddScoped<IPreviewPageRepository, PreviewPageRepository>();
         services.AddScoped<IArtworkLayerRepository, ArtworkLayerRepository>();
+
+        // Shared Services
         services.AddScoped<INotificationService, NotificationService>();
 
         return services;

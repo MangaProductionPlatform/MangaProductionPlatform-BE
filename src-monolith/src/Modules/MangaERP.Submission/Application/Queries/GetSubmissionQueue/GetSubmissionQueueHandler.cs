@@ -7,12 +7,11 @@ namespace MangaERP.Submission.Application.Queries.GetSubmissionQueue;
 // ── Query ─────────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Lấy danh sách submission queue:
-/// - TantouEditor: thấy Pending + UnderReview
-/// - EditorialBoard: thấy RecommendedToBoard
+/// Lấy danh sách submission queue cho Editorial Board / Admin.
+/// Trả về các submissions có trạng thái Pending_EB_Review.
 /// </summary>
 public record GetSubmissionQueueQuery(
-    string RequesterRole     // "TantouEditor" or "EditorialBoard"
+    string RequesterRole     // "EditorialBoard" or "Admin"
 ) : IRequest<IEnumerable<SubmissionSummaryDto>>;
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -28,14 +27,12 @@ public class GetSubmissionQueueHandler
     public async Task<IEnumerable<SubmissionSummaryDto>> Handle(
         GetSubmissionQueueQuery query, CancellationToken ct)
     {
-        var submissions = query.RequesterRole switch
+        if (query.RequesterRole != "EditorialBoard" && query.RequesterRole != "Admin")
         {
-            "TantouEditor"   => await _repo.GetPendingQueueAsync(ct),
-            "EditorialBoard" => await _repo.GetRecommendedQueueAsync(ct),
-            "Admin"          => (await _repo.GetPendingQueueAsync(ct))
-                                    .Concat(await _repo.GetRecommendedQueueAsync(ct)),
-            _ => throw new UnauthorizedAccessException("You do not have access to the submission queue.")
-        };
+            throw new UnauthorizedAccessException("You do not have access to the submission queue.");
+        }
+
+        var submissions = await _repo.GetRecommendedQueueAsync(ct);
 
         return submissions.Select(s => new SubmissionSummaryDto(
             s.Id,

@@ -3,6 +3,7 @@ using System;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260619065939_AddMangaSeriesSubmissionIdUniqueIndex")]
+    partial class AddMangaSeriesSubmissionIdUniqueIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -334,10 +337,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<string>("RelatedEntityType")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
-
-                    b.Property<string>("TargetUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -746,52 +745,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.ToTable("SeriesSubmissions", (string)null);
                 });
 
-            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionFeedbackPin", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("Comment")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<double>("CoordinateX")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<double>("CoordinateY")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsArchived")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("PageIdentifier")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<Guid>("SubmissionId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SubmissionId", "IsArchived");
-
-                    b.ToTable("SubmissionFeedbackPins", (string)null);
-                });
-
             modelBuilder.Entity("MangaERP.Task.Domain.Entities.ArtworkLayer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -967,15 +920,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ManagingTantou");
-                });
-
-            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionFeedbackPin", b =>
-                {
-                    b.HasOne("MangaERP.Submission.Domain.Entities.SeriesSubmission", null)
-                        .WithMany()
-                        .HasForeignKey("SubmissionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MangaERP.Chapter.Domain.Entities.Chapter", b =>

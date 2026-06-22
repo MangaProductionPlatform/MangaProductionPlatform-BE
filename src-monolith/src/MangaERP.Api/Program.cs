@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using MangaERP.Shared.Infrastructure.Hubs;
 
 // ── Load .env for local development (ignored in Docker / Render / Railway) ────
 // DotNetEnv tự động inject vào System.Environment → ASP.NET Core config sẽ đọc được
@@ -59,7 +60,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials(); // Required for SignalR WebSocket transport
     });
 });
 
@@ -99,6 +101,7 @@ builder.Services.AddAuthorization();
 
 // ── Controllers ────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -163,4 +166,5 @@ if (!app.Environment.IsProduction())
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 app.Run();

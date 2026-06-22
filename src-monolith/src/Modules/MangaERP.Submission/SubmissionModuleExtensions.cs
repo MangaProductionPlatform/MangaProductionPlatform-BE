@@ -1,4 +1,6 @@
 using FluentValidation;
+using MangaERP.Shared.Application.Behaviors;
+using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 
@@ -10,9 +12,12 @@ public static class SubmissionModuleExtensions
     {
         var assembly = Assembly.GetExecutingAssembly();
 
-        // Register MediatR handlers for this assembly
+        // Register MediatR handlers + ValidationBehavior pipeline for this assembly
         services.AddMediatR(cfg =>
-            cfg.RegisterServicesFromAssembly(assembly));
+        {
+            cfg.RegisterServicesFromAssembly(assembly);
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        });
 
         // Register FluentValidation validators for this assembly
         services.AddValidatorsFromAssembly(assembly);

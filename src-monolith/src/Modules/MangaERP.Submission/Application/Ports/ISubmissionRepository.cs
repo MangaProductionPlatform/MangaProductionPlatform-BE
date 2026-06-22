@@ -17,17 +17,12 @@ public interface ISubmissionRepository
     Task<IEnumerable<SeriesSubmission>> GetBySubmitterIdAsync(Guid submitterId, CancellationToken ct = default);
 
     /// <summary>
-    /// Lấy queue cho Tantou Editor: submissions đang Pending hoặc UnderReview.
-    /// </summary>
-    Task<IEnumerable<SeriesSubmission>> GetPendingQueueAsync(CancellationToken ct = default);
-
-    /// <summary>
-    /// Lấy queue cho Editorial Board: submissions đang RecommendedToBoard.
+    /// Lấy queue cho Editorial Board: submissions đang Pending_EB_Review.
     /// </summary>
     Task<IEnumerable<SeriesSubmission>> GetRecommendedQueueAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Kiểm tra Mangaka đã có submission đang active chưa (Draft, Pending, UnderReview, RecommendedToBoard).
+    /// Kiểm tra Mangaka đã có submission đang active chưa (Draft, Pending_EB_Review, Requires_Revision).
     /// Dùng để giới hạn 1 submission active per Mangaka per series title.
     /// </summary>
     Task<bool> HasActiveSubmissionAsync(Guid submitterId, string title, CancellationToken ct = default);
@@ -39,4 +34,15 @@ public interface ISubmissionRepository
 
     /// <summary>Persist tất cả thay đổi đang tracked.</summary>
     Task<int> SaveChangesAsync(CancellationToken ct = default);
+
+    // ── Feedback Pins ─────────────────────────────────────────────────────────
+
+    /// <summary>Lấy danh sách feedback pins đang active (chưa archived) của một submission.</summary>
+    Task<IEnumerable<SubmissionFeedbackPin>> GetActivePinsBySubmissionIdAsync(Guid submissionId, CancellationToken ct = default);
+
+    /// <summary>Lấy tất cả feedback pins (bao gồm archived) của một submission — dùng cho history view.</summary>
+    Task<IEnumerable<SubmissionFeedbackPin>> GetAllPinsBySubmissionIdAsync(Guid submissionId, CancellationToken ct = default);
+
+    /// <summary>Thêm feedback pin mới vào DbContext (chưa save).</summary>
+    Task AddPinAsync(SubmissionFeedbackPin pin, CancellationToken ct = default);
 }
