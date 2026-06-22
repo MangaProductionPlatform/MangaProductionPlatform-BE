@@ -131,4 +131,77 @@ public class NotificationService : INotificationService
                 createdAt = notification.CreatedAt
             }, ct);
     }
+
+    public async System.Threading.Tasks.Task NotifySubmissionApprovedAsync(
+        Guid receiverId, Guid submissionId, Guid seriesId,
+        string seriesTitle, CancellationToken ct = default)
+    {
+        var db = GetDb();
+
+        // 1. Persist notification to database
+        var notification = new Notification
+        {
+            ReceiverId = receiverId,
+            Title = "Chúc mừng! Bản thảo của bạn đã được phê duyệt",
+            Message = $"Series \"{seriesTitle}\" đã được kích hoạt. Bạn có thể bắt đầu tạo Chapter ngay bây giờ.",
+            NotifyType = "SubmissionApproved",
+            RelatedEntityId = submissionId,
+            RelatedEntityType = "Submission",
+            TargetUrl = $"/workspace/series/{seriesId}"
+        };
+
+        await db.Notifications.AddAsync(notification, ct);
+        await db.SaveChangesAsync(ct);
+
+        // 2. Push real-time via SignalR
+        await _hubContext.Clients.User(receiverId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id = notification.Id,
+                title = notification.Title,
+                message = notification.Message,
+                notifyType = notification.NotifyType,
+                submissionId,
+                seriesId,
+                seriesTitle,
+                targetUrl = notification.TargetUrl,
+                createdAt = notification.CreatedAt
+            }, ct);
+    }
+
+    public async System.Threading.Tasks.Task NotifySubmissionRejectedAsync(
+        Guid receiverId, Guid submissionId, string feedbackMessage,
+        CancellationToken ct = default)
+    {
+        var db = GetDb();
+
+        // 1. Persist notification to database
+        var notification = new Notification
+        {
+            ReceiverId = receiverId,
+            Title = "Bản thảo của bạn đã bị từ chối",
+            Message = feedbackMessage,
+            NotifyType = "SubmissionRejected",
+            RelatedEntityId = submissionId,
+            RelatedEntityType = "Submission",
+            TargetUrl = $"/workspace/submissions/{submissionId}"
+        };
+
+        await db.Notifications.AddAsync(notification, ct);
+        await db.SaveChangesAsync(ct);
+
+        // 2. Push real-time via SignalR
+        await _hubContext.Clients.User(receiverId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id = notification.Id,
+                title = notification.Title,
+                message = notification.Message,
+                notifyType = notification.NotifyType,
+                submissionId,
+                feedbackMessage,
+                targetUrl = notification.TargetUrl,
+                createdAt = notification.CreatedAt
+            }, ct);
+    }
 }

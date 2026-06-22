@@ -40,17 +40,20 @@ public class ApproveSubmissionHandler
     private readonly ISeriesRepository _seriesRepo;
     private readonly IUserRepository _userRepo;
     private readonly IDbContextProvider _dbContextProvider;
+    private readonly INotificationService _notificationService;
 
     public ApproveSubmissionHandler(
         ISubmissionRepository submissionRepo,
         ISeriesRepository seriesRepo,
         IUserRepository userRepo,
-        IDbContextProvider dbContextProvider)
+        IDbContextProvider dbContextProvider,
+        INotificationService notificationService)
     {
         _submissionRepo = submissionRepo;
         _seriesRepo = seriesRepo;
         _userRepo = userRepo;
         _dbContextProvider = dbContextProvider;
+        _notificationService = notificationService;
     }
 
     public async Task<ApproveSubmissionResult> Handle(
@@ -123,6 +126,14 @@ public class ApproveSubmissionHandler
                 series.Status.ToString(),
                 submission.ReviewedAt!.Value);
         });
+
+        // Send notification AFTER successful commit (outside transaction)
+        await _notificationService.NotifySubmissionApprovedAsync(
+            receiverId:   submission.SubmitterId,
+            submissionId: submission.Id,
+            seriesId:     result!.SeriesId,
+            seriesTitle:  submission.Title,
+            ct:           ct);
 
         return result!;
     }

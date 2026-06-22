@@ -14,4 +14,20 @@ public interface INotificationService
     Task NotifySubmissionRevisionAsync(
         Guid receiverId, Guid submissionId, string message,
         int pinCount, string? targetUrl, CancellationToken ct = default);
+
+    /// <summary>
+    /// Thông báo Mangaka rằng bản thảo đã được Editorial Board phê duyệt.
+    /// Bao gồm thông tin Series vừa được tạo.
+    /// </summary>
+    Task NotifySubmissionApprovedAsync(
+        Guid receiverId, Guid submissionId, Guid seriesId,
+        string seriesTitle, CancellationToken ct = default);
+
+    /// <summary>
+    /// Thông báo Mangaka rằng bản thảo đã bị Editorial Board từ chối chính thức.
+    /// Bao gồm lý do từ chối.
+    /// </summary>
+    Task NotifySubmissionRejectedAsync(
+        Guid receiverId, Guid submissionId, string feedbackMessage,
+        CancellationToken ct = default);
 }
