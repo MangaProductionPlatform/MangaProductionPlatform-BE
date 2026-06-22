@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using MangaERP.Submission.Domain.Exceptions;
 using MangaERP.Submission.Domain.Entities;
+using FluentValidation;
 
 namespace MangaERP.Submission.Presentation.Controllers;
 
@@ -62,6 +63,7 @@ public class SubmissionsController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return CreatedAtAction(nameof(GetById), new { id = result.SubmissionId }, result);
         }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
@@ -85,6 +87,7 @@ public class SubmissionsController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
@@ -109,6 +112,7 @@ public class SubmissionsController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
@@ -132,6 +136,7 @@ public class SubmissionsController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
@@ -155,6 +160,7 @@ public class SubmissionsController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
@@ -219,6 +225,7 @@ public class SubmissionsController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
@@ -240,6 +247,7 @@ public class SubmissionsController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
@@ -261,6 +269,7 @@ public class SubmissionsController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi nghiệp vụ", message = ex.Message }); }
