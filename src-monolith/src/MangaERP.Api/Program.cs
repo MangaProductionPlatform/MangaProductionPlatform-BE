@@ -4,6 +4,10 @@ using MangaERP.Identity;
 using MangaERP.Submission;
 using MangaERP.Series;
 using MangaERP.Studio;
+using MangaERP.Chapter;
+using MangaERP.Task;
+using MangaERP.QA;
+using MangaERP.Publishing;
 using MangaERP.Shared.Infrastructure;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -69,10 +73,10 @@ builder.Services.AddIdentityModule();
 builder.Services.AddSubmissionModule();
 builder.Services.AddSeriesModule();
 builder.Services.AddStudioModule();
-// builder.Services.AddChapterModule();
-// builder.Services.AddTaskModule();
-// builder.Services.AddQaModule();
-// builder.Services.AddPublishingModule();
+builder.Services.AddChapterModule();
+builder.Services.AddTaskModule();
+builder.Services.AddQaModule();
+builder.Services.AddPublishingModule();
 // builder.Services.AddRankingModule();
 
 // ── JWT Authentication ─────────────────────────────────────────────────────────

@@ -1,36 +1,33 @@
 using MangaERP.Identity.Application.Ports;
 using MangaERP.Identity.Domain.Enums;
+using MangaERP.Publishing.Application.Ports;
 using MangaERP.Publishing.Domain.Entities;
 using MangaERP.Shared.Application.Ports;
 using MangaERP.Shared.Infrastructure.Hubs;
-using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.AspNetCore.SignalR;
 
 namespace MangaERP.Shared.Infrastructure.Services;
 
 public class NotificationService : INotificationService
 {
-    private readonly IDbContextProvider _dbContextProvider;
+    private readonly INotificationRepository _notificationRepo;
     private readonly IUserRepository _userRepo;
     private readonly IHubContext<NotificationHub> _hubContext;
 
     public NotificationService(
-        IDbContextProvider dbContextProvider,
+        INotificationRepository notificationRepo,
         IUserRepository userRepo,
         IHubContext<NotificationHub> hubContext)
     {
-        _dbContextProvider = dbContextProvider;
+        _notificationRepo = notificationRepo;
         _userRepo = userRepo;
         _hubContext = hubContext;
     }
 
-    private AppDbContext GetDb() => (AppDbContext)_dbContextProvider.GetDbContext();
-
     public async System.Threading.Tasks.Task NotifyTaskAssignedAsync(
         Guid assistantId, Guid pageTaskId, int pageNumber, CancellationToken ct = default)
     {
-        var db = GetDb();
-        await db.Notifications.AddAsync(new Notification
+        await _notificationRepo.AddAsync(new Notification
         {
             ReceiverId = assistantId,
             Title = "New page task assigned",
@@ -39,14 +36,13 @@ public class NotificationService : INotificationService
             RelatedEntityId = pageTaskId,
             RelatedEntityType = "PageTask"
         }, ct);
-        await db.SaveChangesAsync(ct);
+        await _notificationRepo.SaveChangesAsync(ct);
     }
 
     public async System.Threading.Tasks.Task NotifyRevisionRequiredAsync(
         Guid assistantId, Guid pageTaskId, string rejectionNote, CancellationToken ct = default)
     {
-        var db = GetDb();
-        await db.Notifications.AddAsync(new Notification
+        await _notificationRepo.AddAsync(new Notification
         {
             ReceiverId = assistantId,
             Title = "Revision required",
@@ -55,14 +51,13 @@ public class NotificationService : INotificationService
             RelatedEntityId = pageTaskId,
             RelatedEntityType = "PageTask"
         }, ct);
-        await db.SaveChangesAsync(ct);
+        await _notificationRepo.SaveChangesAsync(ct);
     }
 
     public async System.Threading.Tasks.Task NotifyTaskApprovedAsync(
         Guid assistantId, Guid pageTaskId, CancellationToken ct = default)
     {
-        var db = GetDb();
-        await db.Notifications.AddAsync(new Notification
+        await _notificationRepo.AddAsync(new Notification
         {
             ReceiverId = assistantId,
             Title = "Layer approved",
@@ -71,17 +66,16 @@ public class NotificationService : INotificationService
             RelatedEntityId = pageTaskId,
             RelatedEntityType = "PageTask"
         }, ct);
-        await db.SaveChangesAsync(ct);
+        await _notificationRepo.SaveChangesAsync(ct);
     }
 
     public async System.Threading.Tasks.Task NotifyChapterReadyForQAAsync(
         Guid chapterId, string chapterTitle, CancellationToken ct = default)
     {
-        var db = GetDb();
         var editors = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
         foreach (var editor in editors)
         {
-            await db.Notifications.AddAsync(new Notification
+            await _notificationRepo.AddAsync(new Notification
             {
                 ReceiverId = editor.Id,
                 Title = "Chapter ready for QA",
@@ -93,16 +87,13 @@ public class NotificationService : INotificationService
         }
 
         if (editors.Any())
-            await db.SaveChangesAsync(ct);
+            await _notificationRepo.SaveChangesAsync(ct);
     }
 
     public async System.Threading.Tasks.Task NotifySubmissionRevisionAsync(
         Guid receiverId, Guid submissionId, string message,
         int pinCount, string? targetUrl, CancellationToken ct = default)
     {
-        var db = GetDb();
-
-        // 1. Persist notification to database
         var notification = new Notification
         {
             ReceiverId = receiverId,
@@ -114,10 +105,9 @@ public class NotificationService : INotificationService
             TargetUrl = targetUrl
         };
 
-        await db.Notifications.AddAsync(notification, ct);
-        await db.SaveChangesAsync(ct);
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
 
-        // 2. Push real-time notification via SignalR to the specific user
         await _hubContext.Clients.User(receiverId.ToString())
             .SendAsync("ReceiveNotification", new
             {
@@ -136,9 +126,6 @@ public class NotificationService : INotificationService
         Guid receiverId, Guid submissionId, Guid seriesId,
         string seriesTitle, CancellationToken ct = default)
     {
-        var db = GetDb();
-
-        // 1. Persist notification to database
         var notification = new Notification
         {
             ReceiverId = receiverId,
@@ -150,10 +137,9 @@ public class NotificationService : INotificationService
             TargetUrl = $"/workspace/series/{seriesId}"
         };
 
-        await db.Notifications.AddAsync(notification, ct);
-        await db.SaveChangesAsync(ct);
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
 
-        // 2. Push real-time via SignalR
         await _hubContext.Clients.User(receiverId.ToString())
             .SendAsync("ReceiveNotification", new
             {
@@ -173,9 +159,6 @@ public class NotificationService : INotificationService
         Guid receiverId, Guid submissionId, string feedbackMessage,
         CancellationToken ct = default)
     {
-        var db = GetDb();
-
-        // 1. Persist notification to database
         var notification = new Notification
         {
             ReceiverId = receiverId,
@@ -187,10 +170,9 @@ public class NotificationService : INotificationService
             TargetUrl = $"/workspace/submissions/{submissionId}"
         };
 
-        await db.Notifications.AddAsync(notification, ct);
-        await db.SaveChangesAsync(ct);
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
 
-        // 2. Push real-time via SignalR
         await _hubContext.Clients.User(receiverId.ToString())
             .SendAsync("ReceiveNotification", new
             {
