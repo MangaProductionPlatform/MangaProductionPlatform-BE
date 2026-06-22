@@ -110,7 +110,8 @@ public class ChaptersController : ControllerBase
                 GetUserId(),
                 chapterId,
                 request.PageNumber,
-                request.AssignedAssistantId);
+                request.AssignedAssistantId,
+                request.TaskDescription);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -146,4 +147,4 @@ public record CreateChapterRequest(
 
 public record AddBasePageRequest(int PageNumber);
 
-public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId);
+public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? TaskDescription = null);

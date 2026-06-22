@@ -16,6 +16,7 @@ public record AssignedTaskDto(
     decimal ChapterNumber,
     int PageNumber,
     string TaskStatus,
+    string? TaskDescription,
     string? CurrentLayerType,
     int? CurrentLayerVersion,
     DateTime UpdatedAt);
@@ -56,6 +57,7 @@ public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IE
                 chapter?.ChapterNumber ?? 0,
                 task.PageNumber,
                 task.TaskStatus.ToString(),
+                task.TaskDescription,
                 layer?.LayerType,
                 layer?.Version,
                 task.UpdatedAt));

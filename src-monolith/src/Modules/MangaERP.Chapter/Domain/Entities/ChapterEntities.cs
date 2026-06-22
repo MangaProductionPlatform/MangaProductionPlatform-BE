@@ -82,6 +82,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public Guid ChapterId { get; set; }
     public int PageNumber { get; set; }
     public Guid? AssignedAssistantId { get; set; }
+    public string? TaskDescription { get; set; }
     public PageTaskStatus TaskStatus { get; set; } = PageTaskStatus.Pending;
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
@@ -105,12 +106,13 @@ public class PageTask : AggregateRoot, ISoftDeletable
         };
     }
 
-    public void Activate(Guid assistantId)
+    public void Activate(Guid assistantId, string? taskDescription = null)
     {
         if (TaskStatus != PageTaskStatus.Pending)
             throw new InvalidOperationException("Only Pending page tasks can be activated.");
 
         AssignedAssistantId = assistantId;
+        TaskDescription = taskDescription;
         TaskStatus = PageTaskStatus.Incomplete;
         UpdatedAt = DateTime.UtcNow;
     }

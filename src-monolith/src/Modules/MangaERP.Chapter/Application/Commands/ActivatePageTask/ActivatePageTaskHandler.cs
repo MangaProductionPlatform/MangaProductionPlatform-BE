@@ -15,13 +15,15 @@ public record ActivatePageTaskCommand(
     Guid MangakaId,
     Guid ChapterId,
     int PageNumber,
-    Guid AssignedAssistantId
+    Guid AssignedAssistantId,
+    string? TaskDescription = null
 ) : IRequest<ActivatePageTaskResult>;
 
 public record ActivatePageTaskResult(
     Guid PageTaskId,
     int PageNumber,
     Guid AssignedAssistantId,
+    string? TaskDescription,
     string TaskStatus);
 
 public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, ActivatePageTaskResult>
@@ -70,7 +72,7 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
 
         await EnsureAssistantInStudioAsync(series.Id, cmd.AssignedAssistantId, ct);
 
-        pageTask.Activate(cmd.AssignedAssistantId);
+        pageTask.Activate(cmd.AssignedAssistantId, cmd.TaskDescription);
         await _pageTaskRepo.UpdateAsync(pageTask, ct);
         await _pageTaskRepo.SaveChangesAsync(ct);
 
@@ -81,6 +83,7 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
             pageTask.Id,
             pageTask.PageNumber,
             pageTask.AssignedAssistantId!.Value,
+            pageTask.TaskDescription,
             pageTask.TaskStatus.ToString());
     }
 
