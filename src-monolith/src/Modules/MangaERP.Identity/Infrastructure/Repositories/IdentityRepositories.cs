@@ -3,6 +3,8 @@ using MangaERP.Identity.Domain.Entities;
 using MangaERP.Identity.Domain.Enums;
 using MangaERP.Shared.Application.Ports;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace MangaERP.Identity.Infrastructure.Repositories;
 
@@ -50,6 +52,22 @@ public class UserRepository : IUserRepository
     {
         _db.Set<User>().Remove(user);
         await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<Dictionary<Guid, int>> GetTantouEditorsLoadAsync(List<Guid> teIds, CancellationToken ct = default)
+    {
+        var counts = await _db.Set<User>()
+            .Where(u => u.ManagingTantouId.HasValue && teIds.Contains(u.ManagingTantouId.Value))
+            .GroupBy(u => u.ManagingTantouId!.Value)
+            .Select(g => new { TantouId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var result = teIds.ToDictionary(id => id, id => 0);
+        foreach (var c in counts)
+        {
+            result[c.TantouId] = c.Count;
+        }
+        return result;
     }
 }
 

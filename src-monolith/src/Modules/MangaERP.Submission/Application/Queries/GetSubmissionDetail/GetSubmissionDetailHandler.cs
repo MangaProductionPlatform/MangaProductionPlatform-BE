@@ -1,4 +1,5 @@
 using MangaERP.Submission.Application.Ports;
+using MangaERP.Identity.Application.Ports;
 using MediatR;
 
 namespace MangaERP.Submission.Application.Queries.GetSubmissionDetail;
@@ -14,6 +15,12 @@ public record GetSubmissionDetailQuery(
     string RequesterRole     // "Mangaka", "TantouEditor", "EditorialBoard", "Admin"
 ) : IRequest<SubmissionDetailDto>;
 
+public record SubmitterDto(
+    Guid UserId,
+    string? FullName,
+    string? PenName,
+    string? PersonalEmail);
+
 public record SubmissionDetailDto(
     Guid Id,
     string Title,
@@ -22,6 +29,7 @@ public record SubmissionDetailDto(
     string? CoverImageUrl,
     string? ManuscriptUrl,
     Guid SubmitterId,
+    SubmitterDto? Submitter,
     string Status,
     string? FeedbackMessage,
     string? EditorRecommendationMessage,
@@ -36,9 +44,13 @@ public class GetSubmissionDetailHandler
     : IRequestHandler<GetSubmissionDetailQuery, SubmissionDetailDto>
 {
     private readonly ISubmissionRepository _repo;
+    private readonly IUserRepository _userRepo;
 
-    public GetSubmissionDetailHandler(ISubmissionRepository repo)
-        => _repo = repo;
+    public GetSubmissionDetailHandler(ISubmissionRepository repo, IUserRepository userRepo)
+    {
+        _repo = repo;
+        _userRepo = userRepo;
+    }
 
     public async Task<SubmissionDetailDto> Handle(
         GetSubmissionDetailQuery query, CancellationToken ct)
@@ -51,6 +63,13 @@ public class GetSubmissionDetailHandler
             && submission.SubmitterId != query.RequesterId)
             throw new UnauthorizedAccessException("You are not the owner of this submission.");
 
+        var submitter = await _userRepo.GetByIdAsync(submission.SubmitterId, ct);
+        var submitterDto = submitter is null ? null : new SubmitterDto(
+            submitter.Id,
+            submitter.FullName,
+            submitter.PenName,
+            submitter.PersonalEmail);
+
         return new SubmissionDetailDto(
             submission.Id,
             submission.Title,
@@ -59,6 +78,7 @@ public class GetSubmissionDetailHandler
             submission.CoverImageUrl,
             submission.ManuscriptUrl,
             submission.SubmitterId,
+            submitterDto,
             submission.Status.ToString(),
             submission.FeedbackMessage,
             submission.EditorRecommendationMessage,

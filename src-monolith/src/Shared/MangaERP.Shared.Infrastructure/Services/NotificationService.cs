@@ -134,7 +134,7 @@ public class NotificationService : INotificationService
             NotifyType = "SubmissionApproved",
             RelatedEntityId = submissionId,
             RelatedEntityType = "Submission",
-            TargetUrl = $"/workspace/series/{seriesId}"
+            TargetUrl = $"/mangaka/series/{seriesId}"
         };
 
         await _notificationRepo.AddAsync(notification, ct);
@@ -167,7 +167,7 @@ public class NotificationService : INotificationService
             NotifyType = "SubmissionRejected",
             RelatedEntityId = submissionId,
             RelatedEntityType = "Submission",
-            TargetUrl = $"/workspace/submissions/{submissionId}"
+            TargetUrl = $"/mangaka/submissions"
         };
 
         await _notificationRepo.AddAsync(notification, ct);
