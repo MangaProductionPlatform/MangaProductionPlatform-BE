@@ -56,6 +56,12 @@ public class PublishingRepositories : IPublicationRecordRepository, INotificatio
             .OrderByDescending(n => n.CreatedAt)
             .ToListAsync(ct);
 
+    async System.Threading.Tasks.Task<IEnumerable<Notification>> INotificationRepository.GetAllByReceiverAsync(Guid receiverId, CancellationToken ct)
+        => await _db.Notifications
+            .Where(n => n.ReceiverId == receiverId)
+            .OrderByDescending(n => n.CreatedAt)
+            .ToListAsync(ct);
+
     async System.Threading.Tasks.Task INotificationRepository.AddAsync(Notification notification, CancellationToken ct)
         // Only stages the entity — caller is responsible for calling SaveChangesAsync.
         => await _db.Notifications.AddAsync(notification, ct);

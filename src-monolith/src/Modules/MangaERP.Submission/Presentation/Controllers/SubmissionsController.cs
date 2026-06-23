@@ -261,11 +261,11 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(ApproveSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
-    public async Task<IActionResult> Approve(Guid id, [FromBody] ApproveRequest request, CancellationToken ct)
+    public async Task<IActionResult> Approve(Guid id, CancellationToken ct)
     {
         try
         {
-            var command = new ApproveSubmissionCommand(id, GetUserId(), request.AssignedEditorId);
+            var command = new ApproveSubmissionCommand(id, GetUserId());
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
@@ -360,8 +360,6 @@ public record UpdateMetadataRequest(
     string? CoverImageUrl);
 
 public record FeedbackRequest(string Reason);
-
-public record ApproveRequest(Guid AssignedEditorId);
 
 public record RevisionPinRequest(
     string PageIdentifier,

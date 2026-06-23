@@ -18,6 +18,7 @@ public interface INotificationRepository
 {
     System.Threading.Tasks.Task<Notification?> GetByIdAsync(Guid id, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<Notification>> GetUnreadByReceiverAsync(Guid receiverId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<Notification>> GetAllByReceiverAsync(Guid receiverId, CancellationToken ct = default);
     System.Threading.Tasks.Task AddAsync(Notification notification, CancellationToken ct = default);
     System.Threading.Tasks.Task UpdateAsync(Notification notification, CancellationToken ct = default);
     System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default);

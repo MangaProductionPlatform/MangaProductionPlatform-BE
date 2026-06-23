@@ -78,13 +78,7 @@ public class RequestRevisionHandler
         await _repo.SaveChangesAsync(ct);
 
         // 5. Send notification with deep-link AFTER successful commit
-        var firstPin = newPins.FirstOrDefault();
-        string targetUrl = $"/workspace/submissions/{submission.Id}/canvas";
-        if (firstPin != null)
-        {
-            var encodedPage = Uri.EscapeDataString(firstPin.PageIdentifier);
-            targetUrl += $"?page={encodedPage}&pinId={firstPin.Id}";
-        }
+        string targetUrl = $"/mangaka/submissions";
 
         await _notificationService.NotifySubmissionRevisionAsync(
             receiverId: submission.SubmitterId,

@@ -19,8 +19,7 @@ namespace MangaERP.Submission.Application.Commands.ApproveSubmission;
 /// </summary>
 public record ApproveSubmissionCommand(
     Guid SubmissionId,
-    Guid ReviewerId,         // extracted from JWT by controller (EditorialBoard member)
-    Guid AssignedEditorId    // Tantou Editor được chỉ định phụ trách Series mới
+    Guid ReviewerId          // extracted from JWT by controller (EditorialBoard member)
 ) : IRequest<ApproveSubmissionResult>;
 
 public record ApproveSubmissionResult(
@@ -64,24 +63,34 @@ public class ApproveSubmissionHandler
         // ── Idempotency guard ─────────────────────────────────────────────────
         var existingSeries = await _seriesRepo.GetBySubmissionIdAsync(cmd.SubmissionId, ct);
         if (existingSeries is not null)
+        {
+            var submissionForSeries = await _submissionRepo.GetByIdAsync(cmd.SubmissionId, ct);
+            Guid assignedTeId = Guid.Empty;
+            if (submissionForSeries is not null)
+            {
+                var author = await _userRepo.GetByIdAsync(submissionForSeries.SubmitterId, ct);
+                assignedTeId = author?.ManagingTantouId ?? Guid.Empty;
+            }
             return new ApproveSubmissionResult(
                 cmd.SubmissionId,
                 existingSeries.Id,
-                cmd.AssignedEditorId,
+                assignedTeId,
                 "EB_Approved",
                 existingSeries.Status.ToString(),
                 existingSeries.CreatedAt);
+        }
 
         // ── Load & validate submission ────────────────────────────────────────
         var submission = await _submissionRepo.GetByIdAsync(cmd.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
-        // ── Validate AssignedEditorId is a real TantouEditor ──────────────────
-        var assignedEditor = await _userRepo.GetByIdAsync(cmd.AssignedEditorId, ct)
-            ?? throw new InvalidOperationException($"User {cmd.AssignedEditorId} not found.");
-        if (assignedEditor.Role != UserRole.TantouEditor)
-            throw new InvalidOperationException(
-                $"User {cmd.AssignedEditorId} is not a TantouEditor. Cannot assign as managing editor.");
+        // ── Load active editors outside ────────────────────────────────────────
+        var allTE = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
+        var activeTE = allTE.Where(u => u.AccountStatus == AccountStatus.Active).ToList();
+        if (!activeTE.Any())
+            throw new InvalidOperationException("Không có Tantou Editor nào đang hoạt động để gán.");
+
+        var activeTeIds = activeTE.Select(te => te.Id).ToList();
 
         // ── Domain validation BEFORE opening the transaction ──────────────────
         submission.Approve(cmd.ReviewerId);
@@ -97,6 +106,15 @@ public class ApproveSubmissionHandler
         {
             await using var tx = await db.Database.BeginTransactionAsync(ct);
 
+            // Query loads inside the transaction to get freshest data and prevent race conditions
+            var loads = await _userRepo.GetTantouEditorsLoadAsync(activeTeIds, ct);
+            var selectedTe = activeTE
+                .Select(te => new { Editor = te, Load = loads.GetValueOrDefault(te.Id, 0) })
+                .OrderBy(x => x.Load)
+                .ThenBy(x => x.Editor.CreatedAt)
+                .Select(x => x.Editor)
+                .First();
+
             // 1. Create MangaSeries linked to this submission and Mangaka
             var series = MangaSeries.Create(
                 authorId:      submission.SubmitterId,
@@ -109,7 +127,7 @@ public class ApproveSubmissionHandler
             // 2. Gán Tantou Editor cho Mangaka
             var mangaka = await _userRepo.GetByIdAsync(submission.SubmitterId, ct)
                 ?? throw new InvalidOperationException($"Mangaka {submission.SubmitterId} not found.");
-            mangaka.ManagingTantouId = cmd.AssignedEditorId;
+            mangaka.ManagingTantouId = selectedTe.Id;
 
             // 3. Persist all changes in the same transaction
             await _seriesRepo.AddAsync(series, ct);
@@ -121,7 +139,7 @@ public class ApproveSubmissionHandler
             result = new ApproveSubmissionResult(
                 submission.Id,
                 series.Id,
-                cmd.AssignedEditorId,
+                selectedTe.Id,
                 submission.Status.ToString(),
                 series.Status.ToString(),
                 submission.ReviewedAt!.Value);
@@ -147,7 +165,5 @@ public class ApproveSubmissionValidator : AbstractValidator<ApproveSubmissionCom
     {
         RuleFor(x => x.SubmissionId).NotEmpty();
         RuleFor(x => x.ReviewerId).NotEmpty();
-        RuleFor(x => x.AssignedEditorId).NotEmpty()
-            .WithMessage("Phải chỉ định Tantou Editor phụ trách Series.");
     }
 }
