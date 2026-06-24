@@ -69,6 +69,20 @@ public class UserRepository : IUserRepository
         }
         return result;
     }
+
+    public Task<bool> HasRbacRoleAsync(Guid userId, string roleName, CancellationToken ct = default)
+        => _db.Set<UserRole_Entity>()
+            .AnyAsync(ur => ur.UserId == userId && ur.Role.Name == roleName, ct);
+
+    public async Task<IEnumerable<string>> GetUserRoleNamesAsync(Guid userId, CancellationToken ct = default)
+    {
+        var roleNames = await _db.Set<UserRole_Entity>()
+            .Where(ur => ur.UserId == userId)
+            .Include(ur => ur.Role)
+            .Select(ur => ur.Role.Name)
+            .ToListAsync(ct);
+        return roleNames;
+    }
 }
 
 public class RefreshTokenRepository : IRefreshTokenRepository

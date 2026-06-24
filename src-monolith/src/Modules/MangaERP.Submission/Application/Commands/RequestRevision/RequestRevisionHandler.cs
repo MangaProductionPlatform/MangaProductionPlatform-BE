@@ -3,6 +3,7 @@ using MangaERP.Shared.Application.Ports;
 using MangaERP.Submission.Application.Ports;
 using MangaERP.Submission.Domain.Entities;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace MangaERP.Submission.Application.Commands.RequestRevision;
 
@@ -18,13 +19,18 @@ public record FeedbackPinInput(
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Editorial Board yêu cầu Mangaka chỉnh sửa kèm Visual Feedback Pins.
-/// Domain entity guard: chỉ chấp nhận khi trạng thái Pending_EB_Review.
+/// [ADMIN FORCE-REVISION] Override: Pending_EB_Review | Conflict_Escalated → Requires_Revision.
+/// Kèm Visual Feedback Pins.
 /// ReviewerId được controller trích từ JWT claim.
+///
+/// STATE CLEANUP: Nếu submission đang trong luồng bỏ phiếu dở dang,
+/// toàn bộ phiếu bầu trong CurrentRound sẽ bị XÓA trước khi chốt trạng thái.
+/// Đồng thời CurrentRound sẽ KHÔNG được tăng (khác với EIC resolve-conflict)
+/// vì Admin chưa hoàn thành vòng — Mangaka phải sửa và re-submit để vòng mới bắt đầu.
 /// </summary>
 public record RequestRevisionCommand(
     Guid SubmissionId,
-    Guid ReviewerId,         // extracted from JWT by controller (EditorialBoard member)
+    Guid ReviewerId,         // extracted from JWT by controller (Admin)
     string ActorRole,
     string FeedbackMessage,
     List<FeedbackPinInput> Pins  // Visual feedback pins trên canvas
@@ -35,7 +41,8 @@ public record RequestRevisionResult(
     string NewStatus,
     string FeedbackMessage,
     int PinCount,
-    DateTime ReviewedAt);
+    DateTime ReviewedAt,
+    int VotesClearedCount);   // informational: how many dangling votes were purged
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
@@ -43,57 +50,98 @@ public class RequestRevisionHandler
     : IRequestHandler<RequestRevisionCommand, RequestRevisionResult>
 {
     private readonly ISubmissionRepository _repo;
+    private readonly IDbContextProvider _dbContextProvider;
     private readonly INotificationService _notificationService;
 
-    public RequestRevisionHandler(ISubmissionRepository repo, INotificationService notificationService)
+    public RequestRevisionHandler(
+        ISubmissionRepository repo,
+        IDbContextProvider dbContextProvider,
+        INotificationService notificationService)
     {
         _repo = repo;
+        _dbContextProvider = dbContextProvider;
         _notificationService = notificationService;
     }
 
     public async Task<RequestRevisionResult> Handle(
         RequestRevisionCommand cmd, CancellationToken ct)
     {
-        var submission = await _repo.GetByIdAsync(cmd.SubmissionId, ct)
-            ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
+        var db = (DbContext)_dbContextProvider.GetDbContext();
+        var strategy = db.Database.CreateExecutionStrategy();
 
-        // 1. Archive existing active pins from previous revision rounds
-        var existingPins = await _repo.GetActivePinsBySubmissionIdAsync(cmd.SubmissionId, ct);
-        foreach (var pin in existingPins)
-            pin.Archive();
+        Guid submitterId = Guid.Empty;
+        int newPinCount = 0;
+        RequestRevisionResult? result = null;
 
-        // 2. Create new feedback pins
-        var newPins = cmd.Pins.Select(p => SubmissionFeedbackPin.Create(
-            submission.Id, p.PageIdentifier, p.CoordinateX, p.CoordinateY,
-            p.Comment, p.Category, cmd.ReviewerId
-        )).ToList();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        foreach (var pin in newPins)
-            await _repo.AddPinAsync(pin, ct);
+            // ── Load submission inside the transaction ────────────────────────
+            var submission = await _repo.GetByIdAsync(cmd.SubmissionId, ct)
+                ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
-        // 3. Domain state transition (guards ActorRole + Status)
-        submission.RequestRevision(cmd.ActorRole, cmd.ReviewerId, cmd.FeedbackMessage);
+            // ── State validation: Admin can only force-revision active review states ──
+            // Reject terminal states and Draft (nonsensical to request revision on Draft).
+            if (submission.Status != SubmissionStatus.Pending_EB_Review &&
+                submission.Status != SubmissionStatus.Conflict_Escalated)
+                throw new InvalidOperationException(
+                    $"Admin chỉ có thể force-revision khi bản thảo đang ở Pending_EB_Review hoặc Conflict_Escalated. " +
+                    $"Trạng thái hiện tại: {submission.Status}");
 
-        // 4. Persist all changes atomically
-        await _repo.SaveChangesAsync(ct);
+            // ── STATE CLEANUP: purge dangling in-progress votes ───────────────
+            var danglingVotes = (await _repo.GetVotesByRoundAsync(
+                cmd.SubmissionId, submission.CurrentRound, ct)).ToList();
+            int clearedCount = danglingVotes.Count;
 
-        // 5. Send notification with deep-link AFTER successful commit
-        string targetUrl = $"/mangaka/submissions";
+            if (clearedCount > 0)
+                await _repo.DeleteVotesByRoundAsync(cmd.SubmissionId, submission.CurrentRound, ct);
 
+            // ── Archive old feedback pins ────────────────────────────────────
+            var existingPins = await _repo.GetActivePinsBySubmissionIdAsync(cmd.SubmissionId, ct);
+            foreach (var pin in existingPins)
+                pin.Archive();
+
+            // ── Create new feedback pins ─────────────────────────────────────
+            var newPins = cmd.Pins.Select(p => SubmissionFeedbackPin.Create(
+                submission.Id, p.PageIdentifier, p.CoordinateX, p.CoordinateY,
+                p.Comment, p.Category, cmd.ReviewerId
+            )).ToList();
+
+            foreach (var pin in newPins)
+                await _repo.AddPinAsync(pin, ct);
+
+            // ── Domain state transition (guards ActorRole + Status) ──────────
+            // Note: Admin is passed as "EditorialBoard" role string to reuse the
+            // existing domain guard logic which checks ActorRole == "EditorialBoard".
+            submission.RequestRevision(cmd.ActorRole, cmd.ReviewerId, cmd.FeedbackMessage);
+
+            submitterId = submission.SubmitterId;
+            newPinCount = newPins.Count;
+
+            // ── Persist all changes atomically ───────────────────────────────
+            await _repo.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            result = new RequestRevisionResult(
+                submission.Id,
+                submission.Status.ToString(),
+                cmd.FeedbackMessage,
+                newPins.Count,
+                submission.ReviewedAt!.Value,
+                VotesClearedCount: clearedCount);
+        });
+
+        // Send notification AFTER successful commit (outside transaction)
         await _notificationService.NotifySubmissionRevisionAsync(
-            receiverId: submission.SubmitterId,
-            submissionId: submission.Id,
-            message: $"Editorial Board pinned {newPins.Count} area(s) needing adjustments on your manuscript.",
-            pinCount: newPins.Count,
-            targetUrl: targetUrl,
-            ct: ct);
+            receiverId:   submitterId,
+            submissionId: cmd.SubmissionId,
+            message:      $"[Admin] {newPinCount} feedback pin(s) added. {cmd.FeedbackMessage}",
+            pinCount:     newPinCount,
+            targetUrl:    "/mangaka/submissions",
+            ct:           ct);
 
-        return new RequestRevisionResult(
-            submission.Id,
-            submission.Status.ToString(),
-            cmd.FeedbackMessage,
-            newPins.Count,
-            submission.ReviewedAt!.Value);
+        return result!;
     }
 }
 

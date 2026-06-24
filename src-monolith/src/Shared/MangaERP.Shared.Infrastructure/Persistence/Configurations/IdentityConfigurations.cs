@@ -39,6 +39,43 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
     }
 }
 
+// ── RBAC: Roles table ─────────────────────────────────────────────────────────
+
+public class RoleEntityConfiguration : IEntityTypeConfiguration<Role_Entity>
+{
+    public void Configure(EntityTypeBuilder<Role_Entity> entity)
+    {
+        entity.ToTable("Roles");
+        entity.HasKey(e => e.Id);
+        entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+        entity.HasIndex(e => e.Name).IsUnique();
+        entity.Property(e => e.Description).HasMaxLength(500);
+    }
+}
+
+// ── RBAC: UserRoles join table ────────────────────────────────────────────────
+
+public class UserRoleEntityConfiguration : IEntityTypeConfiguration<UserRole_Entity>
+{
+    public void Configure(EntityTypeBuilder<UserRole_Entity> entity)
+    {
+        entity.ToTable("UserRoles");
+        entity.HasKey(e => new { e.UserId, e.RoleId });
+
+        entity.HasOne(e => e.User)
+            .WithMany(u => u.UserRoles)
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasOne(e => e.Role)
+            .WithMany(r => r.UserRoles)
+            .HasForeignKey(e => e.RoleId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        entity.HasIndex(e => new { e.UserId, e.RoleId }).IsUnique();
+    }
+}
+
 public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 {
     public void Configure(EntityTypeBuilder<RefreshToken> entity)

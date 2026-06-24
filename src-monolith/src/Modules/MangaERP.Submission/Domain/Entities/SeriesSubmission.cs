@@ -9,7 +9,8 @@ public enum SubmissionStatus
     Pending_EB_Review,
     Requires_Revision,
     EB_Rejected,
-    EB_Approved
+    EB_Approved,
+    Conflict_Escalated   // 1-1-1 vote deadlock — awaiting Editor-in-Chief arbitration
 }
 
 public class SeriesSubmission : AggregateRoot, ISoftDeletable
@@ -29,6 +30,12 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Voting round number — starts at 1, incremented by +1 each time REQ_REVISION
+    /// is issued by the Editor-in-Chief so the board can vote fresh on the resubmission.
+    /// </summary>
+    public int CurrentRound { get; private set; } = 1;
 
     private SeriesSubmission() { }
 
@@ -50,6 +57,7 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
             CoverImageUrl = coverImageUrl,
             ManuscriptUrl = manuscriptUrl,
             Status = SubmissionStatus.Draft,
+            CurrentRound = 1,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -156,5 +164,66 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
         FeedbackMessage = feedbackMessage;
         ReviewedByUserId = reviewerId;
         ReviewedAt = DateTime.UtcNow;
+        CurrentRound++; // Increment round to allow fresh voting on resubmission
+    }
+
+
+    // ── Collective voting transitions ─────────────────────────────────────────
+
+    /// <summary>
+    /// Chuyển trạng thái sang Conflict_Escalated khi 3 phiếu bầu cho 3 quyết định khác nhau.
+    /// </summary>
+    public void EscalateConflict()
+    {
+        if (Status != SubmissionStatus.Pending_EB_Review)
+            throw new InvalidStateTransitionException("Chỉ có thể leo thang tranh chấp khi bản thảo đang chờ duyệt.");
+        Status = SubmissionStatus.Conflict_Escalated;
+        ReviewedAt = DateTime.UtcNow;
+    }
+
+    // ── Editor-in-Chief arbitration ───────────────────────────────────────────
+
+    /// <summary>
+    /// EIC phê duyệt bản thảo đang tranh chấp: Conflict_Escalated → EB_Approved.
+    /// </summary>
+    public void ApproveByEIC(Guid eicId)
+    {
+        if (Status != SubmissionStatus.Conflict_Escalated)
+            throw new InvalidStateTransitionException("Chỉ có thể phê duyệt khi bản thảo đang ở trạng thái Conflict_Escalated.");
+        Status = SubmissionStatus.EB_Approved;
+        ReviewedByUserId = eicId;
+        ReviewedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// EIC từ chối bản thảo đang tranh chấp: Conflict_Escalated → EB_Rejected.
+    /// </summary>
+    public void RejectByEIC(Guid eicId, string feedbackMessage)
+    {
+        if (Status != SubmissionStatus.Conflict_Escalated)
+            throw new InvalidStateTransitionException("Chỉ có thể từ chối khi bản thảo đang ở trạng thái Conflict_Escalated.");
+        if (string.IsNullOrWhiteSpace(feedbackMessage))
+            throw new InvalidStateTransitionException("Lý do từ chối không được để trống.");
+        Status = SubmissionStatus.EB_Rejected;
+        FeedbackMessage = feedbackMessage;
+        ReviewedByUserId = eicId;
+        ReviewedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// EIC yêu cầu chỉnh sửa: Conflict_Escalated → Requires_Revision.
+    /// Tăng CurrentRound +1 để mở khóa cho vòng bỏ phiếu mới.
+    /// </summary>
+    public void RequestRevisionByEIC(Guid eicId, string feedbackMessage)
+    {
+        if (Status != SubmissionStatus.Conflict_Escalated)
+            throw new InvalidStateTransitionException("Chỉ có thể yêu cầu sửa đổi khi bản thảo đang ở trạng thái Conflict_Escalated.");
+        if (string.IsNullOrWhiteSpace(feedbackMessage))
+            throw new InvalidStateTransitionException("Lý do yêu cầu sửa đổi không được để trống.");
+        Status = SubmissionStatus.Requires_Revision;
+        FeedbackMessage = feedbackMessage;
+        ReviewedByUserId = eicId;
+        ReviewedAt = DateTime.UtcNow;
+        CurrentRound++;  // Unlock new voting round
     }
 }

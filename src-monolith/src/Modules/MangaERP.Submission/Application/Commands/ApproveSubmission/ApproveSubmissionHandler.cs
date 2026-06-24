@@ -13,13 +13,17 @@ namespace MangaERP.Submission.Application.Commands.ApproveSubmission;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Editorial Board duyệt submission: Pending_EB_Review → EB_Approved.
+/// [ADMIN FORCE-APPROVE] Override: Pending_EB_Review | Conflict_Escalated → EB_Approved.
 /// Đồng thời tạo MangaSeries và gán Tantou Editor phụ trách trong cùng một DB transaction.
 /// ReviewerId được controller trích từ JWT claim.
+///
+/// STATE CLEANUP: Nếu submission đang trong luồng bỏ phiếu dở dang
+/// (có phiếu bầu ở CurrentRound), toàn bộ phiếu bầu trong vòng hiện tại
+/// sẽ bị XÓA trước khi chốt trạng thái — tránh mâu thuẫn dữ liệu trong SubmissionVotes.
 /// </summary>
 public record ApproveSubmissionCommand(
     Guid SubmissionId,
-    Guid ReviewerId          // extracted from JWT by controller (EditorialBoard member)
+    Guid ReviewerId          // extracted from JWT by controller (Admin)
 ) : IRequest<ApproveSubmissionResult>;
 
 public record ApproveSubmissionResult(
@@ -28,7 +32,8 @@ public record ApproveSubmissionResult(
     Guid AssignedEditorId,
     string SubmissionStatus,
     string SeriesStatus,
-    DateTime ApprovedAt);
+    DateTime ApprovedAt,
+    int VotesClearedCount);   // informational: how many dangling votes were purged
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
@@ -77,14 +82,23 @@ public class ApproveSubmissionHandler
                 assignedTeId,
                 "EB_Approved",
                 existingSeries.Status.ToString(),
-                existingSeries.CreatedAt);
+                existingSeries.CreatedAt,
+                VotesClearedCount: 0);
         }
 
         // ── Load & validate submission ────────────────────────────────────────
         var submission = await _submissionRepo.GetByIdAsync(cmd.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
-        // ── Load active editors outside ────────────────────────────────────────
+        // State guard: Admin can force-approve from Pending_EB_Review or Conflict_Escalated only.
+        // All other terminal states should be rejected to prevent data corruption.
+        if (submission.Status != Domain.Entities.SubmissionStatus.Pending_EB_Review &&
+            submission.Status != Domain.Entities.SubmissionStatus.Conflict_Escalated)
+            throw new InvalidOperationException(
+                $"Admin chỉ có thể force-approve khi bản thảo đang ở Pending_EB_Review hoặc Conflict_Escalated. " +
+                $"Trạng thái hiện tại: {submission.Status}");
+
+        // ── Load active editors outside transaction ───────────────────────────
         var allTE = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
         var activeTE = allTE.Where(u => u.AccountStatus == AccountStatus.Active).ToList();
         if (!activeTE.Any())
@@ -92,21 +106,39 @@ public class ApproveSubmissionHandler
 
         var activeTeIds = activeTE.Select(te => te.Id).ToList();
 
-        // ── Domain validation BEFORE opening the transaction ──────────────────
-        submission.Approve(cmd.ReviewerId);
+        // ── Domain state transition BEFORE opening the transaction ────────────
+        // ApproveByEIC is used for both Conflict_Escalated and Pending_EB_Review override,
+        // because both need the same transition to EB_Approved.
+        if (submission.Status == Domain.Entities.SubmissionStatus.Conflict_Escalated)
+            submission.ApproveByEIC(cmd.ReviewerId);
+        else
+            submission.Approve(cmd.ReviewerId);
 
         // ── Atomic transaction via ExecutionStrategy ──────────────────────────
-        // NpgsqlRetryingExecutionStrategy (EnableRetryOnFailure) không cho phép
-        // BeginTransactionAsync trực tiếp. Phải wrap trong ExecutionStrategy.
         var strategy = db.Database.CreateExecutionStrategy();
 
         ApproveSubmissionResult? result = null;
+        int clearedVotesCount = 0;
 
         await strategy.ExecuteAsync(async () =>
         {
             await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-            // Query loads inside the transaction to get freshest data and prevent race conditions
+            // ── STATE CLEANUP: purge dangling in-progress votes ───────────────
+            // Count them first so we can report back how many were cleaned.
+            var danglingVotes = (await _submissionRepo.GetVotesByRoundAsync(
+                cmd.SubmissionId, submission.CurrentRound, ct)).ToList();
+            clearedVotesCount = danglingVotes.Count;
+
+            if (clearedVotesCount > 0)
+            {
+                // Remove in-progress votes for the current round so they don't
+                // contradict the force-approved terminal state.
+                await _submissionRepo.DeleteVotesByRoundAsync(
+                    cmd.SubmissionId, submission.CurrentRound, ct);
+            }
+
+            // Query loads inside the transaction to get freshest data
             var loads = await _userRepo.GetTantouEditorsLoadAsync(activeTeIds, ct);
             var selectedTe = activeTE
                 .Select(te => new { Editor = te, Load = loads.GetValueOrDefault(te.Id, 0) })
@@ -115,7 +147,7 @@ public class ApproveSubmissionHandler
                 .Select(x => x.Editor)
                 .First();
 
-            // 1. Create MangaSeries linked to this submission and Mangaka
+            // Create MangaSeries linked to this submission and Mangaka
             var series = MangaSeries.Create(
                 authorId:      submission.SubmitterId,
                 submissionId:  submission.Id,
@@ -124,12 +156,12 @@ public class ApproveSubmissionHandler
                 genre:         submission.Genre,
                 coverImageUrl: submission.CoverImageUrl);
 
-            // 2. Gán Tantou Editor cho Mangaka
+            // Assign Tantou Editor to Mangaka
             var mangaka = await _userRepo.GetByIdAsync(submission.SubmitterId, ct)
                 ?? throw new InvalidOperationException($"Mangaka {submission.SubmitterId} not found.");
             mangaka.ManagingTantouId = selectedTe.Id;
 
-            // 3. Persist all changes in the same transaction
+            // Persist all changes in the same transaction
             await _seriesRepo.AddAsync(series, ct);
             await _userRepo.UpdateAsync(mangaka, ct);
             await _submissionRepo.SaveChangesAsync(ct);
@@ -142,10 +174,11 @@ public class ApproveSubmissionHandler
                 selectedTe.Id,
                 submission.Status.ToString(),
                 series.Status.ToString(),
-                submission.ReviewedAt!.Value);
+                submission.ReviewedAt!.Value,
+                VotesClearedCount: clearedVotesCount);
         });
 
-        // Send notification AFTER successful commit (outside transaction)
+        // Send notification AFTER successful commit
         await _notificationService.NotifySubmissionApprovedAsync(
             receiverId:   submission.SubmitterId,
             submissionId: submission.Id,
