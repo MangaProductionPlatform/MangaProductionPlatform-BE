@@ -1,6 +1,7 @@
 using FluentValidation;
 using MangaERP.Submission.Application.Ports;
 using MangaERP.Submission.Domain.Entities;
+using MangaERP.Submission.Domain.Exceptions;
 using MediatR;
 
 namespace MangaERP.Submission.Application.Commands.CreateDraft;
@@ -35,6 +36,11 @@ public class CreateDraftSubmissionHandler
     public async Task<CreateDraftResult> Handle(
         CreateDraftSubmissionCommand cmd, CancellationToken ct)
     {
+        if (await _repo.HasActiveSubmissionAsync(cmd.SubmitterId, cmd.Title, ct))
+        {
+            throw new InvalidStateTransitionException("Bạn đang có một đề xuất bản thảo cùng tên đang hoạt động hoặc đang chờ duyệt.");
+        }
+
         var submission = SeriesSubmission.CreateDraft(
             submitterId:   cmd.SubmitterId,
             title:         cmd.Title,

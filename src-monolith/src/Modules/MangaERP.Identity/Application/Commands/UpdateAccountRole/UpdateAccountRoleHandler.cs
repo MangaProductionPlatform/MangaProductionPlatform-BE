@@ -20,13 +20,16 @@ public class UpdateAccountRoleHandler : IRequestHandler<UpdateAccountRoleCommand
 {
     private readonly IUserRepository _userRepo;
     private readonly IUsernameGenerator _usernameGenerator;
+    private readonly IEmailService _emailService;
 
     public UpdateAccountRoleHandler(
         IUserRepository userRepo,
-        IUsernameGenerator usernameGenerator)
+        IUsernameGenerator usernameGenerator,
+        IEmailService emailService)
     {
         _userRepo = userRepo;
         _usernameGenerator = usernameGenerator;
+        _emailService = emailService;
     }
 
     public async Task<UpdateAccountRoleResult> Handle(UpdateAccountRoleCommand request, CancellationToken cancellationToken)
@@ -43,6 +46,8 @@ public class UpdateAccountRoleHandler : IRequestHandler<UpdateAccountRoleCommand
         {
             // If role changes, generate new corporate username
             var newUsername = await _usernameGenerator.GenerateAsync(user.FullName ?? "user", request.Role, cancellationToken);
+            var oldStatus = user.AccountStatus;
+            
             user.Username = newUsername;
             user.Email = newUsername;
             user.Role = request.Role;
@@ -53,6 +58,16 @@ public class UpdateAccountRoleHandler : IRequestHandler<UpdateAccountRoleCommand
             }
             
             await _userRepo.UpdateAsync(user, cancellationToken);
+
+            // Send notification email if the account was already active
+            if (oldStatus == AccountStatus.Active && !string.IsNullOrWhiteSpace(user.PersonalEmail))
+            {
+                await _emailService.SendUsernameUpdatedEmailAsync(
+                    user.PersonalEmail,
+                    newUsername,
+                    user.FullName ?? "User",
+                    cancellationToken);
+            }
         }
 
         return new UpdateAccountRoleResult(user.Id, user.Username, user.Role.ToString());

@@ -45,6 +45,13 @@ public class ChapterRepository : IChapterRepository
 
     public System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default)
         => _db.SaveChangesAsync(ct);
+
+    public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetScheduledChaptersAsync(DateTime threshold, CancellationToken ct = default)
+        => await _db.Chapters
+            .Where(c => c.Status == ChapterStatus.Approved &&
+                        c.ScheduledPublishAt.HasValue &&
+                        c.ScheduledPublishAt.Value <= threshold)
+            .ToListAsync(ct);
 }
 
 public class PageTaskRepository : IPageTaskRepository

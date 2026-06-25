@@ -7,6 +7,7 @@ using MangaERP.Shared.Infrastructure.Services;
 using MangaERP.Submission.Application.Ports;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Studio.Application.Ports;
+using MangaERP.QA.Application.Ports;
 using MangaERP.Task.Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -21,25 +22,35 @@ public static class SharedInfrastructureExtensions
     {
         // ── DATABASE CONFIGURATION ──────────────────────────────────────────────────
         // [POSTGRESQL CONFIG] - Mặc định khi deploy (Hãy uncomment dòng này khi deploy)
-        
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(
                 config.GetConnectionString("DefaultConnection"),
                 npgsql => npgsql.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
-        
-/*
+
         // [SQL SERVER CONFIG] - Dùng để test local với SSMS
+        /*
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(
                 config.GetConnectionString("DefaultConnection"),
                 sqlServer => sqlServer.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
-*/
+        */
+
         // Allow all modules to access AppDbContext without a direct circular reference
         services.AddScoped<IDbContextProvider, AppDbContextProvider>();
 
         // Shared Repositories for modules
         services.AddScoped<ISubmissionRepository, SubmissionRepository>();
         services.AddScoped<ISeriesRepository, SeriesRepository>();
+
+        // QA module infrastructure
+        services.AddScoped<QARepositories>();
+        services.AddScoped<IBugPinRepository>(sp => sp.GetRequiredService<QARepositories>());
+        services.AddScoped<IQASessionRepository>(sp => sp.GetRequiredService<QARepositories>());
+
+        // Publishing module infrastructure
+        services.AddScoped<PublishingRepositories>();
+        services.AddScoped<IPublicationRecordRepository>(sp => sp.GetRequiredService<PublishingRepositories>());
+        services.AddScoped<INotificationRepository>(sp => sp.GetRequiredService<PublishingRepositories>());
 
         // Studio module infrastructure (here to avoid circular dependency)
         services.AddScoped<IStudioInvitationRepository, StudioInvitationRepository>();
@@ -50,7 +61,8 @@ public static class SharedInfrastructureExtensions
         services.AddScoped<IPageTaskRepository, PageTaskRepository>();
         services.AddScoped<IPreviewPageRepository, PreviewPageRepository>();
         services.AddScoped<IArtworkLayerRepository, ArtworkLayerRepository>();
-        services.AddScoped<INotificationRepository, NotificationRepository>();
+
+        // Shared Services
         services.AddScoped<INotificationService, NotificationService>();
 
         return services;

@@ -12,6 +12,7 @@ public interface IChapterRepository
     Task AddAsync(ChapterEntity chapter, CancellationToken ct = default);
     Task UpdateAsync(ChapterEntity chapter, CancellationToken ct = default);
     Task<int> SaveChangesAsync(CancellationToken ct = default);
+    Task<IEnumerable<ChapterEntity>> GetScheduledChaptersAsync(DateTime threshold, CancellationToken ct = default);
 }
 
 public interface IPageTaskRepository

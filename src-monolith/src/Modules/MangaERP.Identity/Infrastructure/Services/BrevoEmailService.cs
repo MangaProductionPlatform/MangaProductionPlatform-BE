@@ -87,6 +87,57 @@ public class BrevoEmailService : IEmailService
         LogFallback(username, fullName, activationLink);
     }
 
+    public async Task SendUsernameUpdatedEmailAsync(
+        string toEmail, string newUsername, string fullName, CancellationToken ct = default)
+    {
+        var apiKey     = _config["Brevo:ApiKey"];
+        var fromEmail  = _config["Smtp:FromAddress"] ?? "noreply@company.com";
+        var fromName   = _config["Smtp:FromName"]   ?? "MangaERP";
+
+        // ── Local Dev: No API key configured → log to console ─────────────────
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            _logger.LogWarning("Brevo:ApiKey is not set. Falling back to console logging.");
+            LogUsernameUpdateFallback(newUsername, fullName);
+            return;
+        }
+
+        // ── Production: Call Brevo REST API ───────────────────────────────────
+        try
+        {
+            var payload = new
+            {
+                sender      = new { name = fromName, email = fromEmail },
+                to          = new[] { new { email = toEmail, name = fullName } },
+                subject     = "📧 Thay đổi Email đăng nhập MangaERP của bạn",
+                htmlContent = BuildUsernameUpdateEmailHtml(fullName, newUsername),
+                textContent = $"Xin chào {fullName},\n\nEmail/Username đăng nhập mới của bạn là: {newUsername}\n\nBạn có thể đăng nhập bằng email này với mật khẩu hiện tại."
+            };
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, BrevoApiUrl);
+            request.Headers.Add("api-key", apiKey);
+            request.Content = JsonContent.Create(payload);
+
+            var response = await _httpClient.SendAsync(request, ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("[Brevo] Username update notification email sent to {Email}", toEmail);
+                return;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("[Brevo] API error {Status}: {Body}", response.StatusCode, errorBody);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Brevo] Failed to send username update notification. Falling back to console logging.");
+        }
+
+        // ── Fallback: Log info if Brevo call failed ────────────────────────────
+        LogUsernameUpdateFallback(newUsername, fullName);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private void LogFallback(string username, string fullName, string activationLink)
@@ -95,6 +146,15 @@ public class BrevoEmailService : IEmailService
         _logger.LogWarning("ACTIVATION LINK FALLBACK:");
         _logger.LogWarning("User: {Username} ({FullName})", username, fullName);
         _logger.LogWarning("Activation Link: {Link}", activationLink);
+        _logger.LogWarning("********************************************************************************");
+    }
+
+    private void LogUsernameUpdateFallback(string newUsername, string fullName)
+    {
+        _logger.LogWarning("********************************************************************************");
+        _logger.LogWarning("USERNAME UPDATE NOTIFICATION FALLBACK:");
+        _logger.LogWarning("User: {FullName}", fullName);
+        _logger.LogWarning("New Username/Email: {Username}", newUsername);
         _logger.LogWarning("********************************************************************************");
     }
 
@@ -131,6 +191,39 @@ public class BrevoEmailService : IEmailService
                         Lưu ý: Liên kết này có giá trị trong vòng 24 giờ. Nếu nút bấm trên không hoạt động, bạn có thể copy link sau dán vào trình duyệt: <br>
                         <a href="{activationLink}" style="color: #ff4e50; word-break: break-all;">{activationLink}</a>
                     </p>
+                </div>
+
+                <div style="background-color: #f1f1f1; padding: 20px; text-align: center; font-size: 12px; color: #999999; border-top: 1px solid #eaeaea;">
+                    <p style="margin: 0 0 5px 0;">Đây là email tự động từ hệ thống MangaC&P, vui lòng không phản hồi thư này.</p>
+                    <p style="margin: 0;">© 2026 MangaC&P. All rights reserved.</p>
+                </div>
+
+            </div>
+        </div>
+        """;
+
+    private static string BuildUsernameUpdateEmailHtml(string fullName, string newUsername)
+        => $"""
+        <div style="background-color: #f9f9f9; padding: 30px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; min-height: 100%;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                
+                <div style="background: linear-gradient(135deg, #2b5876, #4e4376); padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; letter-spacing: 1px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">
+                        MangaC&P
+                    </h1>
+                    <p style="color: #ffffff; margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Hệ thống Sáng tác & Xuất bản Manga</p>
+                </div>
+
+                <div style="padding: 40px 30px; color: #333333; line-height: 1.6;">
+                    <h2 style="margin-top: 0; color: #222222; font-size: 20px;">Chào {fullName},</h2>
+                    <p style="font-size: 15px;">Chúng tôi xin thông báo rằng thông tin tài khoản công ty của bạn vừa được cập nhật thay đổi bởi Quản trị viên.</p>
+                    
+                    <div style="background-color: #f5f5f5; border-left: 4px solid #2b5876; padding: 15px; margin: 20px 0; border-radius: 0 4px 4px 0;">
+                        <p style="margin: 0; font-size: 14px; color: #555555;">Email / Tên đăng nhập (Username) mới của bạn là:</p>
+                        <p style="margin: 5px 0 0 0; font-size: 16px; font-weight: bold; color: #2b5876;">{newUsername}</p>
+                    </div>
+
+                    <p style="font-size: 15px;">Bạn có thể sử dụng email này để đăng nhập vào hệ thống MangaC&P bằng **mật khẩu hiện tại** của bạn.</p>
                 </div>
 
                 <div style="background-color: #f1f1f1; padding: 20px; text-align: center; font-size: 12px; color: #999999; border-top: 1px solid #eaeaea;">

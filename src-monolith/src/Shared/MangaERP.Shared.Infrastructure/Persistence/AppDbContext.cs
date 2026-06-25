@@ -26,8 +26,14 @@ public class AppDbContext : DbContext
     public DbSet<RefreshToken>     RefreshTokens     => Set<RefreshToken>();
     public DbSet<InvitationToken>  InvitationTokens  => Set<InvitationToken>();
 
+    // ── RBAC ──────────────────────────────────────────────────
+    public DbSet<Role_Entity>      Roles             => Set<Role_Entity>();
+    public DbSet<UserRole_Entity>  UserRoles         => Set<UserRole_Entity>();
+
     // ── Submission ────────────────────────────────────────────
-    public DbSet<SeriesSubmission> SeriesSubmissions => Set<SeriesSubmission>();
+    public DbSet<SeriesSubmission> SeriesSubmissions     => Set<SeriesSubmission>();
+    public DbSet<SubmissionFeedbackPin> SubmissionFeedbackPins => Set<SubmissionFeedbackPin>();
+    public DbSet<SubmissionVote>   SubmissionVotes       => Set<SubmissionVote>();
 
     // ── Series ────────────────────────────────────────────────
     public DbSet<MangaSeries>      MangaSeries       => Set<MangaSeries>();

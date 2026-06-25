@@ -9,7 +9,7 @@
     <ProjectReference Include="..\..\Shared\MangaERP.Shared.Domain\MangaERP.Shared.Domain.csproj" />
     <ProjectReference Include="..\..\Shared\MangaERP.Shared.Application\MangaERP.Shared.Application.csproj" />
     <ProjectReference Include="..\MangaERP.Chapter\MangaERP.Chapter.csproj" />
-    <ProjectReference Include="..\MangaERP.Publishing\MangaERP.Publishing.csproj" />
+
     <ProjectReference Include="..\MangaERP.Series\MangaERP.Series.csproj" />
   </ItemGroup>
   <ItemGroup>

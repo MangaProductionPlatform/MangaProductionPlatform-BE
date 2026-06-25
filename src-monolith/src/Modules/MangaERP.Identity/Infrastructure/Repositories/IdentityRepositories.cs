@@ -3,6 +3,8 @@ using MangaERP.Identity.Domain.Entities;
 using MangaERP.Identity.Domain.Enums;
 using MangaERP.Shared.Application.Ports;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace MangaERP.Identity.Infrastructure.Repositories;
 
@@ -50,6 +52,36 @@ public class UserRepository : IUserRepository
     {
         _db.Set<User>().Remove(user);
         await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<Dictionary<Guid, int>> GetTantouEditorsLoadAsync(List<Guid> teIds, CancellationToken ct = default)
+    {
+        var counts = await _db.Set<User>()
+            .Where(u => u.ManagingTantouId.HasValue && teIds.Contains(u.ManagingTantouId.Value))
+            .GroupBy(u => u.ManagingTantouId!.Value)
+            .Select(g => new { TantouId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var result = teIds.ToDictionary(id => id, id => 0);
+        foreach (var c in counts)
+        {
+            result[c.TantouId] = c.Count;
+        }
+        return result;
+    }
+
+    public Task<bool> HasRbacRoleAsync(Guid userId, string roleName, CancellationToken ct = default)
+        => _db.Set<UserRole_Entity>()
+            .AnyAsync(ur => ur.UserId == userId && ur.Role.Name == roleName, ct);
+
+    public async Task<IEnumerable<string>> GetUserRoleNamesAsync(Guid userId, CancellationToken ct = default)
+    {
+        var roleNames = await _db.Set<UserRole_Entity>()
+            .Where(ur => ur.UserId == userId)
+            .Include(ur => ur.Role)
+            .Select(ur => ur.Role.Name)
+            .ToListAsync(ct);
+        return roleNames;
     }
 }
 

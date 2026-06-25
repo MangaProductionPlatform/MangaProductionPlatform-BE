@@ -1,5 +1,6 @@
 using FluentValidation;
 using MangaERP.Submission.Application.Ports;
+using MangaERP.Submission.Domain.Exceptions;
 using MediatR;
 
 namespace MangaERP.Submission.Application.Commands.UpdateDraftMetadata;
@@ -39,6 +40,14 @@ public class UpdateDraftMetadataHandler
 
         if (submission.SubmitterId != cmd.SubmitterId)
             throw new UnauthorizedAccessException("You are not the owner of this submission.");
+
+        if (!string.Equals(submission.Title, cmd.Title, StringComparison.OrdinalIgnoreCase))
+        {
+            if (await _repo.HasActiveSubmissionAsync(cmd.SubmitterId, cmd.Title, ct))
+            {
+                throw new InvalidStateTransitionException("Bạn đang có một đề xuất bản thảo cùng tên đang hoạt động hoặc đang chờ duyệt.");
+            }
+        }
 
         submission.UpdateDraftMetadata(
             cmd.Title, cmd.Description, cmd.Genre, cmd.CoverImageUrl);

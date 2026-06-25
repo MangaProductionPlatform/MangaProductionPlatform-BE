@@ -219,6 +219,29 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.ToTable("RefreshTokens", (string)null);
                 });
 
+            modelBuilder.Entity("MangaERP.Identity.Domain.Entities.Role_Entity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Roles", (string)null);
+                });
+
             modelBuilder.Entity("MangaERP.Identity.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -304,6 +327,27 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("MangaERP.Identity.Domain.Entities.UserRole_Entity", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex("UserId", "RoleId")
+                        .IsUnique();
+
+                    b.ToTable("UserRoles", (string)null);
+                });
+
             modelBuilder.Entity("MangaERP.Publishing.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -334,6 +378,10 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<string>("RelatedEntityType")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TargetUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -621,6 +669,9 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SubmissionId")
+                        .IsUnique();
+
                     b.ToTable("MangaSeries", (string)null);
                 });
 
@@ -693,6 +744,11 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("CurrentRound")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -737,6 +793,91 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("SeriesSubmissions", (string)null);
+                });
+
+            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionFeedbackPin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Comment")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<double>("CoordinateX")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<double>("CoordinateY")
+                        .HasColumnType("decimal(5,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("PageIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId", "IsArchived");
+
+                    b.ToTable("SubmissionFeedbackPins", (string)null);
+                });
+
+            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionVote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("EditorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RoundNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VoteType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("VotedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId", "RoundNumber");
+
+                    b.HasIndex("SubmissionId", "EditorId", "RoundNumber")
+                        .IsUnique();
+
+                    b.ToTable("SubmissionVotes", (string)null);
                 });
 
             modelBuilder.Entity("MangaERP.Task.Domain.Entities.ArtworkLayer", b =>
@@ -916,6 +1057,43 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Navigation("ManagingTantou");
                 });
 
+            modelBuilder.Entity("MangaERP.Identity.Domain.Entities.UserRole_Entity", b =>
+                {
+                    b.HasOne("MangaERP.Identity.Domain.Entities.Role_Entity", "Role")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MangaERP.Identity.Domain.Entities.User", "User")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionFeedbackPin", b =>
+                {
+                    b.HasOne("MangaERP.Submission.Domain.Entities.SeriesSubmission", null)
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionVote", b =>
+                {
+                    b.HasOne("MangaERP.Submission.Domain.Entities.SeriesSubmission", null)
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MangaERP.Chapter.Domain.Entities.Chapter", b =>
                 {
                     b.Navigation("PageTasks");
@@ -926,9 +1104,16 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Navigation("PreviewPage");
                 });
 
+            modelBuilder.Entity("MangaERP.Identity.Domain.Entities.Role_Entity", b =>
+                {
+                    b.Navigation("UserRoles");
+                });
+
             modelBuilder.Entity("MangaERP.Identity.Domain.Entities.User", b =>
                 {
                     b.Navigation("RefreshTokens");
+
+                    b.Navigation("UserRoles");
                 });
 #pragma warning restore 612, 618
         }

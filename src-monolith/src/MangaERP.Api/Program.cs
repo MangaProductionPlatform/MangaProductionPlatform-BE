@@ -6,12 +6,15 @@ using MangaERP.Series;
 using MangaERP.Studio;
 using MangaERP.Chapter;
 using MangaERP.Task;
+using MangaERP.QA;
+using MangaERP.Publishing;
 using MangaERP.Shared.Infrastructure;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using MangaERP.Shared.Infrastructure.Hubs;
 
 // ── Load .env for local development (ignored in Docker / Render / Railway) ────
 // DotNetEnv tự động inject vào System.Environment → ASP.NET Core config sẽ đọc được
@@ -57,7 +60,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials(); // Required for SignalR WebSocket transport
     });
 });
 
@@ -71,8 +75,8 @@ builder.Services.AddSeriesModule();
 builder.Services.AddStudioModule();
 builder.Services.AddChapterModule();
 builder.Services.AddTaskModule();
-// builder.Services.AddQaModule();
-// builder.Services.AddPublishingModule();
+builder.Services.AddQaModule();
+builder.Services.AddPublishingModule();
 // builder.Services.AddRankingModule();
 
 // ── JWT Authentication ─────────────────────────────────────────────────────────
@@ -96,7 +100,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // ── Controllers ────────────────────────────────────────────────────────────────
-builder.Services.AddControllers();
+// JsonStringEnumConverter: cho phép API nhận enum dưới dạng chuỗi ("Content", "Visual", "Typo")
+// thay vì chỉ số nguyên (0, 1, 2). Không breaking với client dùng số nguyên.
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -161,4 +173,5 @@ if (!app.Environment.IsProduction())
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 app.Run();

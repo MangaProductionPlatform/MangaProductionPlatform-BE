@@ -15,6 +15,15 @@ public interface IUserRepository
     Task AddAsync(User user, CancellationToken ct = default);
     Task UpdateAsync(User user, CancellationToken ct = default);
     Task DeleteAsync(User user, CancellationToken ct = default);
+    Task<System.Collections.Generic.Dictionary<Guid, int>> GetTantouEditorsLoadAsync(System.Collections.Generic.List<Guid> teIds, CancellationToken ct = default);
+
+    // ── RBAC role checking ────────────────────────────────────────────────────
+
+    /// <summary>Returns true if the user has a specific RBAC role name (e.g. "EDITORIAL_BOARD").</summary>
+    Task<bool> HasRbacRoleAsync(Guid userId, string roleName, CancellationToken ct = default);
+
+    /// <summary>Returns all RBAC role names assigned to a user.</summary>
+    Task<IEnumerable<string>> GetUserRoleNamesAsync(Guid userId, CancellationToken ct = default);
 }
 
 public interface IRefreshTokenRepository
@@ -44,6 +53,9 @@ public interface IEmailService
 {
     Task SendInvitationEmailAsync(string toEmail, string activationLink,
         string username, string fullName, CancellationToken ct = default);
+
+    Task SendUsernameUpdatedEmailAsync(string toEmail, string newUsername,
+        string fullName, CancellationToken ct = default);
 }
 
 public interface IUsernameGenerator
