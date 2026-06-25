@@ -39,7 +39,8 @@ public class ChaptersController : ControllerBase
                 request.Title,
                 request.ChapterNumber,
                 request.TotalPages,
-                request.AssignedEditorId);
+                request.AssignedEditorId,
+                request.CoverImageUrl);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -110,7 +111,8 @@ public class ChaptersController : ControllerBase
                 GetUserId(),
                 chapterId,
                 request.PageNumber,
-                request.AssignedAssistantId);
+                request.AssignedAssistantId,
+                request.Description);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -142,8 +144,9 @@ public record CreateChapterRequest(
     string Title,
     decimal ChapterNumber,
     int TotalPages,
-    Guid? AssignedEditorId);
+    Guid? AssignedEditorId,
+    string? CoverImageUrl);
 
 public record AddBasePageRequest(int PageNumber);
 
-public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId);
+public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description);

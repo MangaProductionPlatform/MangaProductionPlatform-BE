@@ -12,6 +12,7 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public decimal ChapterNumber { get; private set; }
     public int TotalPages { get; private set; }
     public ChapterStatus Status { get; private set; } = ChapterStatus.Draft;
+    public string? CoverImageUrl { get; private set; }
     public string? IssueType { get; private set; }
     public Guid? AssignedEditorId { get; private set; }
     public DateTime? ScheduledPublishAt { get; private set; }
@@ -24,11 +25,12 @@ public class Chapter : AggregateRoot, ISoftDeletable
     private Chapter() { }
 
     public static Chapter Create(Guid seriesId, string title, decimal chapterNumber,
-        int totalPages, Guid? assignedEditorId = null)
+        int totalPages, Guid? assignedEditorId = null, string? coverImageUrl = null)
     {
         if (totalPages <= 0) throw new ArgumentException("TotalPages must be > 0.");
         return new Chapter { SeriesId = seriesId, Title = title, ChapterNumber = chapterNumber,
             TotalPages = totalPages, AssignedEditorId = assignedEditorId,
+            CoverImageUrl = coverImageUrl,
             Status = ChapterStatus.Draft, CreatedAt = DateTime.UtcNow };
     }
 
@@ -82,6 +84,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public Guid ChapterId { get; set; }
     public int PageNumber { get; set; }
     public Guid? AssignedAssistantId { get; set; }
+    public string? Description { get; set; }
     public PageTaskStatus TaskStatus { get; set; } = PageTaskStatus.Pending;
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
@@ -105,12 +108,13 @@ public class PageTask : AggregateRoot, ISoftDeletable
         };
     }
 
-    public void Activate(Guid assistantId)
+    public void Activate(Guid assistantId, string? description = null)
     {
         if (TaskStatus != PageTaskStatus.Pending)
             throw new InvalidOperationException("Only Pending page tasks can be activated.");
 
         AssignedAssistantId = assistantId;
+        Description = description;
         TaskStatus = PageTaskStatus.Incomplete;
         UpdatedAt = DateTime.UtcNow;
     }
