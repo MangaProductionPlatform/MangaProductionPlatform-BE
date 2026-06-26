@@ -130,6 +130,22 @@ public class QasController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
+
+    /// <summary>
+    /// [TantouEditor, Mangaka] Get the QA Session of a chapter.
+    /// </summary>
+    [HttpGet("chapters/{chapterId:guid}/session")]
+    [Authorize(Roles = "TantouEditor,Mangaka")]
+    [ProducesResponseType(typeof(MangaERP.QA.Application.Queries.GetQASession.QASessionDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetSession(Guid chapterId, CancellationToken ct)
+    {
+        var query = new MangaERP.QA.Application.Queries.GetQASession.GetQASessionQuery(chapterId);
+        var result = await _mediator.Send(query, ct);
+
+        if (result == null) return NotFound(new { message = "QA Session not found." });
+        return Ok(result);
+    }
 }
 
 public record AddPinRequest(

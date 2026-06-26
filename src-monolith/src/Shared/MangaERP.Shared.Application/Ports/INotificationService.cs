@@ -30,4 +30,12 @@ public interface INotificationService
     Task NotifySubmissionRejectedAsync(
         Guid receiverId, Guid submissionId, string feedbackMessage,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Thông báo Mangaka rằng chương truyện đã được xuất bản thành công.
+    /// Bao gồm URL công khai của chương truyện.
+    /// </summary>
+    Task NotifyChapterPublishedAsync(
+        Guid mangakaId, Guid chapterId, string chapterTitle,
+        string publicationUrl, CancellationToken ct = default);
 }

@@ -30,5 +30,6 @@ public class FeedbackBatchSentHandler : INotificationHandler<FeedbackBatchSentNo
         };
 
         await _notificationRepo.AddAsync(dbNotification, cancellationToken);
+        await _notificationRepo.SaveChangesAsync(cancellationToken);
     }
 }

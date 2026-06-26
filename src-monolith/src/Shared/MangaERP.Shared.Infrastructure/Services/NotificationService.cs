@@ -186,4 +186,36 @@ public class NotificationService : INotificationService
                 createdAt = notification.CreatedAt
             }, ct);
     }
+
+    public async System.Threading.Tasks.Task NotifyChapterPublishedAsync(
+        Guid mangakaId, Guid chapterId, string chapterTitle,
+        string publicationUrl, CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId = mangakaId,
+            Title = "Chương truyện của bạn đã được xuất bản!",
+            Message = $"Chương \"{chapterTitle}\" đã chính thức được phát hành.",
+            NotifyType = "ChapterPublished",
+            RelatedEntityId = chapterId,
+            RelatedEntityType = "Chapter",
+            TargetUrl = publicationUrl
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(mangakaId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id = notification.Id,
+                title = notification.Title,
+                message = notification.Message,
+                notifyType = notification.NotifyType,
+                chapterId,
+                chapterTitle,
+                targetUrl = notification.TargetUrl,
+                createdAt = notification.CreatedAt
+            }, ct);
+    }
 }
