@@ -109,6 +109,19 @@ builder.Services.AddControllers()
             new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 builder.Services.AddSignalR();
+
+// ── SAM (Segment Anything Model) Service ──────────────────────────────────────
+// Typed HttpClient — base URL comes from "SamService:Url" in appsettings / env var.
+// Override SAM URL via env: SamService__Url=https://your-ngrok-url.ngrok-free.app
+var samUrl = builder.Configuration["SamService:Url"]
+    ?? throw new InvalidOperationException("SamService:Url is not configured.");
+builder.Services.AddHttpClient<MangaERP.Api.Services.SamServiceClient>(client =>
+{
+    client.BaseAddress = new Uri(samUrl);
+    // vit_b cold start on Colab T4 (first embedding) can take ~2 min.
+    // Predict calls are fast (~2-5s) but we use one shared timeout for simplicity.
+    client.Timeout = TimeSpan.FromSeconds(180);
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {

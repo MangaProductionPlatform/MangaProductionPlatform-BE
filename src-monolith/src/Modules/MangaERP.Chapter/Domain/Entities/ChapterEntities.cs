@@ -5,6 +5,9 @@ namespace MangaERP.Chapter.Domain.Entities;
 public enum ChapterStatus { Draft, ReadyForQA, Rejected, Approved, Published, Archived }
 public enum PageTaskStatus { Pending, Incomplete, Reviewing, RevisionAlert, Approved }
 
+/// <summary>Type of artwork work assigned to the assistant for this page region.</summary>
+public enum PageTaskType { General, Background, Shading, Inking, Effect, Coloring }
+
 public class Chapter : AggregateRoot, ISoftDeletable
 {
     public Guid SeriesId { get; private set; }
@@ -86,6 +89,10 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public Guid? AssignedAssistantId { get; set; }
     public string? Description { get; set; }
     public PageTaskStatus TaskStatus { get; set; } = PageTaskStatus.Pending;
+    /// <summary>SAM-generated mask polygon stored as JSON (array of [x,y] points).</summary>
+    public string? RegionMask { get; set; }
+    /// <summary>Type of artwork work for this region (Background, Shading, etc.).</summary>
+    public PageTaskType TaskType { get; set; } = PageTaskType.General;
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -150,6 +157,17 @@ public class PageTask : AggregateRoot, ISoftDeletable
     {
         return AssignedAssistantId == assistantId
             && (TaskStatus == PageTaskStatus.Incomplete || TaskStatus == PageTaskStatus.RevisionAlert);
+    }
+
+    /// <summary>
+    /// Sets the SAM segmentation region and work type for this page task.
+    /// Called after Mangaka selects a region on the canvas and assigns a task type.
+    /// </summary>
+    public void SetRegion(string regionMaskJson, PageTaskType taskType)
+    {
+        RegionMask = regionMaskJson;
+        TaskType   = taskType;
+        UpdatedAt  = DateTime.UtcNow;
     }
 }
 

@@ -2,6 +2,7 @@ using MediatR;
 using MangaERP.Chapter.Application.Commands.ActivatePageTask;
 using MangaERP.Chapter.Application.Commands.AddBasePage;
 using MangaERP.Chapter.Application.Commands.CreateChapter;
+using MangaERP.Chapter.Application.Commands.SetPageRegion;
 using MangaERP.Chapter.Application.Commands.SubmitForQA;
 using MangaERP.Chapter.Application.Queries.GetChapterDetail;
 using MangaERP.Chapter.Application.Queries.GetChaptersBySeries;
@@ -137,6 +138,34 @@ public class ChaptersController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    /// <summary>
+    /// Set the SAM region mask and work type for a page task.
+    /// Call this after Mangaka clicks a region on the canvas and picks task type.
+    /// </summary>
+    [HttpPost("{chapterId:guid}/pages/region")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(SetPageRegionResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> SetPageRegion(
+        Guid chapterId,
+        [FromBody] SetPageRegionRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new SetPageRegionCommand(
+                GetUserId(), chapterId,
+                request.PageNumber, request.RegionMask, request.TaskType);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
 
 public record CreateChapterRequest(
@@ -150,3 +179,10 @@ public record CreateChapterRequest(
 public record AddBasePageRequest(int PageNumber);
 
 public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description);
+
+/// <summary>
+/// Request to save a SAM region on a page task.
+/// RegionMask is a JSON string — array of [x,y] polygon points from ONNX Runtime Web.
+/// TaskType is one of: General, Background, Shading, Inking, Effect, Coloring.
+/// </summary>
+public record SetPageRegionRequest(int PageNumber, string RegionMask, string TaskType);
