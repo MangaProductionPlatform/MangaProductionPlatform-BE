@@ -15,14 +15,16 @@ public record ActivatePageTaskCommand(
     Guid MangakaId,
     Guid ChapterId,
     int PageNumber,
-    Guid AssignedAssistantId
+    Guid AssignedAssistantId,
+    string? Description = null
 ) : IRequest<ActivatePageTaskResult>;
 
 public record ActivatePageTaskResult(
     Guid PageTaskId,
     int PageNumber,
     Guid AssignedAssistantId,
-    string TaskStatus);
+    string TaskStatus,
+    string? Description);
 
 public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, ActivatePageTaskResult>
 {
@@ -70,7 +72,7 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
 
         await EnsureAssistantInStudioAsync(series.Id, cmd.AssignedAssistantId, ct);
 
-        pageTask.Activate(cmd.AssignedAssistantId);
+        pageTask.Activate(cmd.AssignedAssistantId, cmd.Description);
         await _pageTaskRepo.UpdateAsync(pageTask, ct);
         await _pageTaskRepo.SaveChangesAsync(ct);
 
@@ -81,7 +83,8 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
             pageTask.Id,
             pageTask.PageNumber,
             pageTask.AssignedAssistantId!.Value,
-            pageTask.TaskStatus.ToString());
+            pageTask.TaskStatus.ToString(),
+            pageTask.Description);
     }
 
     private async Task EnsureAssistantInStudioAsync(Guid seriesId, Guid assistantId, CancellationToken ct)
@@ -105,5 +108,6 @@ public class ActivatePageTaskValidator : AbstractValidator<ActivatePageTaskComma
         RuleFor(x => x.ChapterId).NotEmpty();
         RuleFor(x => x.PageNumber).GreaterThan(0);
         RuleFor(x => x.AssignedAssistantId).NotEmpty();
+        RuleFor(x => x.Description).MaximumLength(2000).When(x => x.Description != null);
     }
 }

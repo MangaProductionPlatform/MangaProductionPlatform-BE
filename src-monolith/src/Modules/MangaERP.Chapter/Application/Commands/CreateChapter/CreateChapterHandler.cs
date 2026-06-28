@@ -14,14 +14,16 @@ public record CreateChapterCommand(
     string Title,
     decimal ChapterNumber,
     int TotalPages,
-    Guid? AssignedEditorId
+    Guid? AssignedEditorId,
+    string? CoverImageUrl = null
 ) : IRequest<CreateChapterResult>;
 
 public record CreateChapterResult(
     Guid ChapterId,
     string Title,
     decimal ChapterNumber,
-    string Status);
+    string Status,
+    string? CoverImageUrl);
 
 public class CreateChapterHandler : IRequestHandler<CreateChapterCommand, CreateChapterResult>
 {
@@ -50,7 +52,8 @@ public class CreateChapterHandler : IRequestHandler<CreateChapterCommand, Create
             cmd.Title,
             cmd.ChapterNumber,
             cmd.TotalPages,
-            cmd.AssignedEditorId);
+            cmd.AssignedEditorId,
+            cmd.CoverImageUrl);
 
         await _chapterRepo.AddAsync(chapter, ct);
         await _chapterRepo.SaveChangesAsync(ct);
@@ -59,7 +62,8 @@ public class CreateChapterHandler : IRequestHandler<CreateChapterCommand, Create
             chapter.Id,
             chapter.Title,
             chapter.ChapterNumber,
-            chapter.Status.ToString());
+            chapter.Status.ToString(),
+            chapter.CoverImageUrl);
     }
 }
 
@@ -72,5 +76,6 @@ public class CreateChapterValidator : AbstractValidator<CreateChapterCommand>
         RuleFor(x => x.Title).NotEmpty().MaximumLength(256);
         RuleFor(x => x.ChapterNumber).GreaterThan(0);
         RuleFor(x => x.TotalPages).GreaterThan(0);
+        RuleFor(x => x.CoverImageUrl).MaximumLength(2048).When(x => x.CoverImageUrl != null);
     }
 }

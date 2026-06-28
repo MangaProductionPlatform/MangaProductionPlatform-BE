@@ -1,5 +1,5 @@
 using MediatR;
-using MangaERP.Chapter.Application.Commands;
+using MangaERP.Chapter.Application.Commands.SubmitForQA;
 using MangaERP.QA.Application.Ports;
 using MangaERP.QA.Domain.Entities;
 using System.Threading;

@@ -36,6 +36,7 @@ public class SchedulePublishHandler : IRequestHandler<SchedulePublishCommand, Sc
 
         chapter.SetPublishSchedule(request.IssueType, request.ScheduledPublishAt);
         await _chapterRepo.UpdateAsync(chapter, cancellationToken);
+        await _chapterRepo.SaveChangesAsync(cancellationToken);
 
         return new SchedulePublishResult(
             chapter.Id,

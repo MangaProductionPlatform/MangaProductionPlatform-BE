@@ -18,7 +18,9 @@ public record AssignedTaskDto(
     string TaskStatus,
     string? CurrentLayerType,
     int? CurrentLayerVersion,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    string? ChapterCoverImageUrl,
+    string? Description);
 
 public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IEnumerable<AssignedTaskDto>>
 {
@@ -58,7 +60,9 @@ public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IE
                 task.TaskStatus.ToString(),
                 layer?.LayerType,
                 layer?.Version,
-                task.UpdatedAt));
+                task.UpdatedAt,
+                chapter?.CoverImageUrl,
+                task.Description));
         }
 
         return result;

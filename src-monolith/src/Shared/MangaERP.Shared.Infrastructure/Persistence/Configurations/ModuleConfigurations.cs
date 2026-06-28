@@ -87,6 +87,7 @@ public class ChapterConfiguration : IEntityTypeConfiguration<ChapterEntity>
     {
         b.ToTable("Chapters"); b.HasKey(e => e.Id);
         b.Property(e => e.Title).IsRequired().HasMaxLength(256);
+        b.Property(e => e.CoverImageUrl).HasMaxLength(2048);
         b.Property(e => e.ChapterNumber).HasColumnType("decimal(5,2)");
         b.Property(e => e.Status).HasConversion(v => v.ToString(), v => Enum.Parse<ChapterStatus>(v)).HasMaxLength(50);
         b.Property(e => e.IssueType).HasMaxLength(50);
@@ -102,6 +103,7 @@ public class PageTaskConfiguration : IEntityTypeConfiguration<PageTask>
     {
         b.ToTable("PageTasks"); b.HasKey(e => e.Id);
         b.HasIndex(e => new { e.ChapterId, e.PageNumber }).IsUnique();
+        b.Property(e => e.Description).HasMaxLength(2000);
         b.Property(e => e.TaskStatus).HasConversion(v => v.ToString(),
             v => Enum.Parse<PageTaskStatus>(v)).HasMaxLength(50);
         b.HasOne(pt => pt.PreviewPage).WithOne(pp => pp.PageTask)
