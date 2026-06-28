@@ -153,6 +153,7 @@ public class ResolveConflictHandler : IRequestHandler<ResolveConflictCommand, Re
         var strategy = db.Database.CreateExecutionStrategy();
 
         Guid seriesId = Guid.Empty;
+        Guid selectedTeId = Guid.Empty;
 
         await strategy.ExecuteAsync(async () =>
         {
@@ -187,6 +188,7 @@ public class ResolveConflictHandler : IRequestHandler<ResolveConflictCommand, Re
             await _userRepo.UpdateAsync(mangaka, ct);
 
             seriesId = series.Id;
+            selectedTeId = selectedTe.Id;
 
             await tx.CommitAsync(ct);
         });
@@ -197,6 +199,15 @@ public class ResolveConflictHandler : IRequestHandler<ResolveConflictCommand, Re
             seriesId:     seriesId,
             seriesTitle:  submission.Title,
             ct:           ct);
+
+        // [Mốc 5] Notify Tantou Editor được gán phụ trách sau phán quyết của Tổng biên tập
+        var mangakaUser = await _userRepo.GetByIdAsync(submission.SubmitterId, ct);
+        await _notificationService.NotifyTantouEditorAssignedAsync(
+            tantouEditorId: selectedTeId,
+            submissionId:   submission.Id,
+            seriesTitle:    submission.Title,
+            authorName:     mangakaUser?.FullName ?? "Không rõ",
+            ct:             ct);
     }
 }
 
