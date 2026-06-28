@@ -22,4 +22,10 @@ public interface INotificationRepository
     System.Threading.Tasks.Task AddAsync(Notification notification, CancellationToken ct = default);
     System.Threading.Tasks.Task UpdateAsync(Notification notification, CancellationToken ct = default);
     System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Đánh dấu tất cả thông báo chưa đọc của một receiver là đã đọc trong một lần.
+    /// Trả về số lượng thông báo đã được cập nhật.
+    /// </summary>
+    System.Threading.Tasks.Task<int> MarkAllAsReadAsync(Guid receiverId, CancellationToken ct = default);
 }

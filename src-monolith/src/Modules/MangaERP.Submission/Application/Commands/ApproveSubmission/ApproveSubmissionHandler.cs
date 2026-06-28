@@ -119,6 +119,7 @@ public class ApproveSubmissionHandler
 
         ApproveSubmissionResult? result = null;
         int clearedVotesCount = 0;
+        Guid selectedTeId = Guid.Empty;
 
         await strategy.ExecuteAsync(async () =>
         {
@@ -176,6 +177,8 @@ public class ApproveSubmissionHandler
                 series.Status.ToString(),
                 submission.ReviewedAt!.Value,
                 VotesClearedCount: clearedVotesCount);
+
+            selectedTeId = selectedTe.Id;
         });
 
         // Send notification AFTER successful commit
@@ -185,6 +188,15 @@ public class ApproveSubmissionHandler
             seriesId:     result!.SeriesId,
             seriesTitle:  submission.Title,
             ct:           ct);
+
+        // [Mốc 3] Notify Tantou Editor được gán phụ trách tác phẩm mới
+        var mangaka = await _userRepo.GetByIdAsync(submission.SubmitterId, ct);
+        await _notificationService.NotifyTantouEditorAssignedAsync(
+            tantouEditorId: selectedTeId,
+            submissionId:   submission.Id,
+            seriesTitle:    submission.Title,
+            authorName:     mangaka?.FullName ?? "Không rõ",
+            ct:             ct);
 
         return result!;
     }

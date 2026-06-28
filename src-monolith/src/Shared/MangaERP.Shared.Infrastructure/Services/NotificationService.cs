@@ -218,4 +218,195 @@ public class NotificationService : INotificationService
                 createdAt = notification.CreatedAt
             }, ct);
     }
+
+    // ── SUBMISSION WORKFLOW NOTIFICATIONS (Giai đoạn 1) ──────────────────────
+
+    /// <summary>
+    /// [Mốc 1] Broadcast tới toàn bộ EDITORIAL_BOARD khi Mangaka Submit / Re-Submit.
+    /// Lưu in-app notification cho từng editor + push SignalR realtime.
+    /// </summary>
+    public async System.Threading.Tasks.Task NotifyNewSubmissionToEditorialBoardAsync(
+        Guid submissionId, string submissionTitle, string authorName,
+        CancellationToken ct = default)
+    {
+        var editorialBoardMembers = await _userRepo.GetByRoleAsync(UserRole.EditorialBoard, ct);
+        var members = editorialBoardMembers.ToList();
+        if (!members.Any()) return;
+
+        var title   = "Bản thảo mới chờ duyệt";
+        var message = $"Bản thảo mới: \"{submissionTitle}\" vừa được Tác giả {authorName} nộp lên hệ thống. " +
+                      "Mời hội đồng vào đánh giá và bỏ phiếu!";
+
+        foreach (var member in members)
+        {
+            var notification = new Notification
+            {
+                ReceiverId        = member.Id,
+                Title             = title,
+                Message           = message,
+                NotifyType        = "NewSubmissionPendingReview",
+                RelatedEntityId   = submissionId,
+                RelatedEntityType = "Submission",
+                TargetUrl         = "/editorial/queue"
+            };
+
+            await _notificationRepo.AddAsync(notification, ct);
+
+            await _hubContext.Clients.User(member.Id.ToString())
+                .SendAsync("ReceiveNotification", new
+                {
+                    id          = notification.Id,
+                    title       = notification.Title,
+                    message     = notification.Message,
+                    notifyType  = notification.NotifyType,
+                    submissionId,
+                    submissionTitle,
+                    authorName,
+                    targetUrl   = notification.TargetUrl,
+                    createdAt   = notification.CreatedAt
+                }, ct);
+        }
+
+        await _notificationRepo.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// [Mốc 2] Gửi In-app cho các EB members chưa vote khi có phiếu mới được cast (< 3 tổng).
+    /// Danh sách remainingEditorIds được tính toán bởi CastVoteHandler — không lộ thông tin cho Mangaka.
+    /// </summary>
+    public async System.Threading.Tasks.Task NotifyVoteCastToRemainingEditorsAsync(
+        Guid submissionId, string submissionTitle, string voterName,
+        int currentVoteCount, int totalRequired,
+        IEnumerable<Guid> remainingEditorIds, CancellationToken ct = default)
+    {
+        var remainingIds = remainingEditorIds.ToList();
+        if (!remainingIds.Any()) return;
+
+        var title   = "Phiếu bầu mới trên bản thảo";
+        var message = $"Bản thảo \"{submissionTitle}\" đã nhận được phiếu bầu từ {voterName}. " +
+                      $"Hệ thống đang chờ thêm các phiếu bầu còn lại (Hiện tại: {currentVoteCount}/{totalRequired}).";
+
+        foreach (var editorId in remainingIds)
+        {
+            var notification = new Notification
+            {
+                ReceiverId        = editorId,
+                Title             = title,
+                Message           = message,
+                NotifyType        = "SubmissionVoteCast",
+                RelatedEntityId   = submissionId,
+                RelatedEntityType = "Submission",
+                TargetUrl         = "/editorial/queue"
+            };
+
+            await _notificationRepo.AddAsync(notification, ct);
+
+            await _hubContext.Clients.User(editorId.ToString())
+                .SendAsync("ReceiveNotification", new
+                {
+                    id               = notification.Id,
+                    title            = notification.Title,
+                    message          = notification.Message,
+                    notifyType       = notification.NotifyType,
+                    submissionId,
+                    submissionTitle,
+                    voterName,
+                    currentVoteCount,
+                    totalRequired,
+                    targetUrl        = notification.TargetUrl,
+                    createdAt        = notification.CreatedAt
+                }, ct);
+        }
+
+        await _notificationRepo.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// [Mốc 4] Push khẩn cấp tới toàn bộ EDITOR_IN_CHIEF khi xảy ra tranh chấp 1-1-1.
+    /// KHÔNG gửi cho Mangaka — trên UI tác giả vẫn hiển thị "Đang chờ duyệt".
+    /// </summary>
+    public async System.Threading.Tasks.Task NotifyConflictEscalatedToEicAsync(
+        Guid submissionId, string submissionTitle, string authorName,
+        CancellationToken ct = default)
+    {
+        var eicMembers = await _userRepo.GetByRoleAsync(UserRole.EditorInChief, ct);
+        var members = eicMembers.ToList();
+        if (!members.Any()) return;
+
+        var title   = "⚠️ CẢNH BÁO TRANH CHẤP — Cần phân xử";
+        var message = $"CẢNH BÁO TRANH CHẤP: Bản thảo \"{submissionTitle}\" của Tác giả {authorName} " +
+                      "bất phân thắng bại (1-1-1) sau khi hội đồng bỏ phiếu. " +
+                      "Mời Tổng biên tập vào phân xử!";
+
+        foreach (var eic in members)
+        {
+            var notification = new Notification
+            {
+                ReceiverId        = eic.Id,
+                Title             = title,
+                Message           = message,
+                NotifyType        = "SubmissionConflictEscalated",
+                RelatedEntityId   = submissionId,
+                RelatedEntityType = "Submission",
+                TargetUrl         = $"/eic/conflict/{submissionId}"
+            };
+
+            await _notificationRepo.AddAsync(notification, ct);
+
+            await _hubContext.Clients.User(eic.Id.ToString())
+                .SendAsync("ReceiveNotification", new
+                {
+                    id          = notification.Id,
+                    title       = notification.Title,
+                    message     = notification.Message,
+                    notifyType  = notification.NotifyType,
+                    submissionId,
+                    submissionTitle,
+                    authorName,
+                    urgent      = true,
+                    targetUrl   = notification.TargetUrl,
+                    createdAt   = notification.CreatedAt
+                }, ct);
+        }
+
+        await _notificationRepo.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// [Mốc 3/5] Thông báo cho Tantou Editor được gán phụ trách tác phẩm mới sau khi Approve.
+    /// Gửi sau khi load-balancing chọn xong TE và MangaSeries đã được tạo.
+    /// </summary>
+    public async System.Threading.Tasks.Task NotifyTantouEditorAssignedAsync(
+        Guid tantouEditorId, Guid submissionId, string seriesTitle,
+        string authorName, CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId        = tantouEditorId,
+            Title             = "Bạn được chỉ định phụ trách tác phẩm mới",
+            Message           = $"Bạn được chỉ định phụ trách tác phẩm mới \"{seriesTitle}\" " +
+                                $"của Tác giả {authorName}. Vui lòng liên hệ để bắt đầu sản xuất.",
+            NotifyType        = "TantouEditorAssigned",
+            RelatedEntityId   = submissionId,
+            RelatedEntityType = "Submission",
+            TargetUrl         = "/te/dashboard"
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(tantouEditorId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id          = notification.Id,
+                title       = notification.Title,
+                message     = notification.Message,
+                notifyType  = notification.NotifyType,
+                submissionId,
+                seriesTitle,
+                authorName,
+                targetUrl   = notification.TargetUrl,
+                createdAt   = notification.CreatedAt
+            }, ct);
+    }
 }

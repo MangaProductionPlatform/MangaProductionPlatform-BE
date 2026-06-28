@@ -156,7 +156,9 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
 
             if (totalVotes < 3)
             {
-                // Not enough votes yet — keep status as-is
+                // Not enough votes yet — keep status as-is.
+                // Store submission ref so we can query remaining editors post-commit.
+                loadedSubmission = null; // Mốc 2 uses a separate path (postCommitAction == null)
                 result = new CastVoteResult(
                     submission.Id,
                     submission.Status.ToString(),
@@ -206,6 +208,7 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
                 {
                     // 1-1-1 deadlock → Conflict_Escalated
                     outcome = "CONFLICT_ESCALATED";
+                    postCommitAction = "CONFLICT";
                     submission.EscalateConflict();
                 }
 
@@ -232,20 +235,37 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
         else if (postCommitAction == "REJECT" && loadedSubmission != null)
         {
             await _notificationService.NotifySubmissionRejectedAsync(
-                receiverId: loadedSubmission.SubmitterId,
-                submissionId: loadedSubmission.Id,
+                receiverId:      loadedSubmission.SubmitterId,
+                submissionId:    loadedSubmission.Id,
                 feedbackMessage: loadedSubmission.FeedbackMessage ?? "Bị từ chối.",
-                ct: ct);
+                ct:              ct);
         }
         else if (postCommitAction == "REVISION" && loadedSubmission != null)
         {
             await _notificationService.NotifySubmissionRevisionAsync(
-                receiverId: loadedSubmission.SubmitterId,
+                receiverId:  loadedSubmission.SubmitterId,
                 submissionId: loadedSubmission.Id,
-                message: loadedSubmission.FeedbackMessage ?? "Yêu cầu chỉnh sửa.",
-                pinCount: 0,
-                targetUrl: "/mangaka/submissions",
-                ct: ct);
+                message:     loadedSubmission.FeedbackMessage ?? "Yêu cầu chỉnh sửa.",
+                pinCount:    0,
+                targetUrl:   "/mangaka/submissions",
+                ct:          ct);
+        }
+        else if (postCommitAction == "CONFLICT" && loadedSubmission != null)
+        {
+            // [Mốc 4] Tranh chấp 1-1-1 → notify toàn bộ Editor-in-Chief
+            var author = await _userRepo.GetByIdAsync(loadedSubmission.SubmitterId, ct);
+            await _notificationService.NotifyConflictEscalatedToEicAsync(
+                submissionId:    loadedSubmission.Id,
+                submissionTitle: loadedSubmission.Title,
+                authorName:      author?.FullName ?? "Không rõ",
+                ct:              ct);
+        }
+        else if (postCommitAction == null && result != null && result.TotalVotesInRound < 3
+                 && loadedSubmission == null)
+        {
+            // [Mốc 2] Chưa đủ 3 phiếu → notify các EB members chưa vote trong round này.
+            // Tính danh sách: lấy tất cả EB rồi trừ những người đã vote.
+            await NotifyRemainingEditorsAsync(cmd, result.TotalVotesInRound, ct);
         }
 
         return result!;
@@ -262,6 +282,7 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
         var strategy = db.Database.CreateExecutionStrategy();
 
         Guid seriesId = Guid.Empty;
+        Guid selectedTeId = Guid.Empty;
 
         await strategy.ExecuteAsync(async () =>
         {
@@ -296,6 +317,7 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
             await _userRepo.UpdateAsync(mangaka, ct);
 
             seriesId = series.Id;
+            selectedTeId = selectedTe.Id;
 
             await tx.CommitAsync(ct);
         });
@@ -306,6 +328,57 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
             seriesId:     seriesId,
             seriesTitle:  submission.Title,
             ct:           ct);
+
+        // [Mốc 3] Notify Tantou Editor được gán phụ trách
+        var mangakaUser = await _userRepo.GetByIdAsync(submission.SubmitterId, ct);
+        await _notificationService.NotifyTantouEditorAssignedAsync(
+            tantouEditorId: selectedTeId,
+            submissionId:   submission.Id,
+            seriesTitle:    submission.Title,
+            authorName:     mangakaUser?.FullName ?? "Không rõ",
+            ct:             ct);
+    }
+
+    /// <summary>
+    /// [Mốc 2] Helper: Tính danh sách EB chưa vote trong round hiện tại rồi gửi notify.
+    /// Chạy sau khi transaction commit xong — an toàn vì chỉ đọc dữ liệu.
+    /// </summary>
+    private async Task NotifyRemainingEditorsAsync(
+        CastVoteCommand cmd, int currentVoteCount, CancellationToken ct)
+    {
+        // Load voter name
+        var voter = await _userRepo.GetByIdAsync(cmd.EditorId, ct);
+        var voterName = voter?.FullName ?? "Một thành viên";
+
+        // Load submission to get round number and title
+        var submission = await _submissionRepo.GetByIdAsync(cmd.SubmissionId, ct);
+        if (submission is null) return;
+
+        // Load all EB members via UserRole enum
+        var allEbMembers = await _userRepo.GetByRoleAsync(
+            MangaERP.Identity.Domain.Enums.UserRole.EditorialBoard, ct);
+
+        // Load all votes already cast in the current round
+        var votesInRound = await _submissionRepo.GetVotesByRoundAsync(
+            cmd.SubmissionId, submission.CurrentRound, ct);
+        var votedEditorIds = votesInRound.Select(v => v.EditorId).ToHashSet();
+
+        // Remaining = all EB members who have NOT voted yet (and exclude the current voter)
+        var remainingIds = allEbMembers
+            .Where(u => !votedEditorIds.Contains(u.Id))
+            .Select(u => u.Id)
+            .ToList();
+
+        if (!remainingIds.Any()) return;
+
+        await _notificationService.NotifyVoteCastToRemainingEditorsAsync(
+            submissionId:       cmd.SubmissionId,
+            submissionTitle:    submission.Title,
+            voterName:          voterName,
+            currentVoteCount:   currentVoteCount,
+            totalRequired:      3,
+            remainingEditorIds: remainingIds,
+            ct:                 ct);
     }
 }
 
