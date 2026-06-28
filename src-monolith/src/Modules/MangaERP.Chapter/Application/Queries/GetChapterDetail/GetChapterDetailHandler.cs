@@ -15,14 +15,16 @@ public record ChapterDetailDto(
     int TotalPages,
     int ApprovedPages,
     double ProgressPercent,
-    IEnumerable<PageTaskDetailDto> Pages);
+    IEnumerable<PageTaskDetailDto> Pages,
+    string? CoverImageUrl);
 
 public record PageTaskDetailDto(
     Guid PageTaskId,
     int PageNumber,
     string TaskStatus,
     Guid? AssignedAssistantId,
-    string? PreviewCompositeUrl);
+    string? PreviewCompositeUrl,
+    string? Description);
 
 public class GetChapterDetailHandler : IRequestHandler<GetChapterDetailQuery, ChapterDetailDto>
 {
@@ -54,7 +56,8 @@ public class GetChapterDetailHandler : IRequestHandler<GetChapterDetailQuery, Ch
             page.PageNumber,
             page.TaskStatus.ToString(),
             page.AssignedAssistantId,
-            page.PreviewPage?.CompositeFileUrl)).ToList();
+            page.PreviewPage?.CompositeFileUrl,
+            page.Description)).ToList();
 
         var approved = await _pageTaskRepo.CountApprovedPagesAsync(chapter.Id, ct);
         var progress = chapter.TotalPages > 0
@@ -70,6 +73,7 @@ public class GetChapterDetailHandler : IRequestHandler<GetChapterDetailQuery, Ch
             chapter.TotalPages,
             approved,
             progress,
-            pageDtos);
+            pageDtos,
+            chapter.CoverImageUrl);
     }
 }

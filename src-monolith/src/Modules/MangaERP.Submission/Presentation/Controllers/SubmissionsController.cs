@@ -7,16 +7,20 @@ using MangaERP.Submission.Application.Commands.UpdateDraftMetadata;
 using MangaERP.Submission.Application.Commands.RejectSubmission;
 using MangaERP.Submission.Application.Commands.RequestRevision;
 using MangaERP.Submission.Application.Commands.ApproveSubmission;
+using MangaERP.Submission.Application.Commands.CastVote;
+using MangaERP.Submission.Application.Commands.ResolveConflict;
 using MangaERP.Submission.Application.Queries.GetMySubmissions;
 using MangaERP.Submission.Application.Queries.GetSubmissionDetail;
 using MangaERP.Submission.Application.Queries.GetSubmissionQueue;
 using MangaERP.Submission.Application.Queries.GetFeedbackPins;
+using MangaERP.Identity.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using MangaERP.Submission.Domain.Exceptions;
 using MangaERP.Submission.Domain.Entities;
 using FluentValidation;
+using MangaERP.Identity.Application.Ports;
 
 namespace MangaERP.Submission.Presentation.Controllers;
 
@@ -25,9 +29,13 @@ namespace MangaERP.Submission.Presentation.Controllers;
 public class SubmissionsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IUserRepository _userRepo;
 
-    public SubmissionsController(IMediator mediator)
-        => _mediator = mediator;
+    public SubmissionsController(IMediator mediator, IUserRepository userRepo)
+    {
+        _mediator = mediator;
+        _userRepo = userRepo;
+    }
 
     private Guid GetUserId()
     {
@@ -37,6 +45,24 @@ public class SubmissionsController : ControllerBase
 
     private string GetUserRole()
         => User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+
+    /// <summary>
+    /// Converts the legacy UserRole enum string from JWT claim to the canonical RBAC RoleNames constant.
+    /// This bridges the gap between single-role JWT and the RBAC system.
+    /// </summary>
+    private string GetRbacRoleName()
+    {
+        var jwtRole = GetUserRole();
+        return jwtRole switch
+        {
+            "EditorialBoard" => RoleNames.EditorialBoard,
+            "EditorInChief"  => RoleNames.EditorInChief,
+            "Admin"          => RoleNames.Admin,
+            "TantouEditor"   => RoleNames.TantouEditor,
+            "Mangaka"        => RoleNames.Mangaka,
+            _                => jwtRole
+        };
+    }
 
     // ── MANGAKA FLOWS ────────────────────────────────────────────────────────
 
@@ -186,17 +212,21 @@ public class SubmissionsController : ControllerBase
     // ── EDITORIAL BOARD VETTING FLOWS ────────────────────────────────────────
 
     /// <summary>
-    /// [EditorialBoard / Admin] Get the active vetting queue.
-    /// Editorial Board sees submissions with status Pending_EB_Review.
+    /// [EditorialBoard / EditorInChief / Admin] Get the active vetting queue.
+    /// - EB: only shows Pending_EB_Review submissions they have NOT yet voted on this round.
+    /// - EIC: Conflict_Escalated first (priority), then Pending_EB_Review.
+    /// - Admin: all Pending_EB_Review submissions.
+    /// Role is determined from RBAC via JWT claim.
     /// </summary>
     [HttpGet("queue")]
-    [Authorize(Roles = "EditorialBoard,Admin")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
     [ProducesResponseType(typeof(IEnumerable<SubmissionSummaryDto>), 200)]
     public async Task<IActionResult> GetQueue(CancellationToken ct)
     {
         try
         {
-            var query = new GetSubmissionQueueQuery(GetUserRole());
+            var rbacRole = GetRbacRoleName();
+            var query = new GetSubmissionQueueQuery(rbacRole, GetUserId());
             var result = await _mediator.Send(query, ct);
             return Ok(result);
         }
@@ -204,12 +234,15 @@ public class SubmissionsController : ControllerBase
         catch (Exception ex) { return StatusCode(500, new { error = "Internal error", message = ex.Message }); }
     }
 
+    // ── LEGACY SINGLE-VOTE ENDPOINTS (DEPRECATED — kept for Admin/backward compat) ──
+
     /// <summary>
-    /// [EditorialBoard] Request revision for a submission with visual feedback pins.
-    /// Pending_EB_Review → Requires_Revision + feedback pins on canvas.
+    /// [DEPRECATED] [EditorialBoard] Request revision for a submission with visual feedback pins.
+    /// Use POST /{id}/vote instead for normal EB voting.
+    /// Kept for Admin override scenarios.
     /// </summary>
     [HttpPost("{id:guid}/request-revision")]
-    [Authorize(Roles = "EditorialBoard")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(RequestRevisionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -231,11 +264,10 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [EditorialBoard] Reject a submission permanently.
-    /// Pending_EB_Review → EB_Rejected (permanently locked).
+    /// [DEPRECATED] [Admin only] Reject a submission permanently. Use POST /{id}/vote for EB members.
     /// </summary>
     [HttpPost("{id:guid}/reject")]
-    [Authorize(Roles = "EditorialBoard")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(RejectSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -253,11 +285,11 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [EditorialBoard] Approve a submission. Triggers series creation + TE assignment.
+    /// [DEPRECATED] [Admin only] Approve a submission directly. Use POST /{id}/vote for EB members.
     /// Pending_EB_Review → EB_Approved + MangaSeries created + Mangaka assigned to TE.
     /// </summary>
     [HttpPost("{id:guid}/approve")]
-    [Authorize(Roles = "EditorialBoard")]
+    [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ApproveSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -275,6 +307,75 @@ public class SubmissionsController : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi nghiệp vụ", message = ex.Message }); }
     }
 
+    // ── COLLECTIVE VOTING (NEW) ───────────────────────────────────────────────
+
+    /// <summary>
+    /// [EditorialBoard] Cast a collective vote on a submission.
+    /// Each EB member can vote once per round. After 3 votes, aggregation runs automatically:
+    /// - ≥2 same vote type → majority wins (apply immediately).
+    /// - 1-1-1 split → Conflict_Escalated (awaits Editor-in-Chief arbitration).
+    /// Payload: { "voteType": "APPROVE|REJECT|REQ_REVISION", "comment": "string", "feedbackPins": [...] }
+    /// </summary>
+    [HttpPost("{id:guid}/vote")]
+    [Authorize(Roles = "EditorialBoard")]
+    [ProducesResponseType(typeof(CastVoteResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> CastVote(Guid id, [FromBody] CastVoteRequest request, CancellationToken ct)
+    {
+        try
+        {
+            if (!Enum.TryParse<VoteType>(request.VoteType, ignoreCase: true, out var voteType))
+                return BadRequest(new { error = "voteType không hợp lệ. Giá trị hợp lệ: APPROVE, REJECT, REQ_REVISION" });
+
+            var pins = request.FeedbackPins?.Select(p => new FeedbackPinInput(
+                p.PageIdentifier, p.CoordinateX, p.CoordinateY, p.Comment, p.Category
+            )).ToList() ?? new List<FeedbackPinInput>();
+
+            var command = new CastVoteCommand(id, GetUserId(), voteType, request.Comment, pins);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi nghiệp vụ", message = ex.Message }); }
+    }
+
+    // ── EDITOR-IN-CHIEF ARBITRATION (NEW) ────────────────────────────────────
+
+    /// <summary>
+    /// [EditorInChief] Arbitrate a conflict-escalated submission.
+    /// Can only be called when submission.Status == Conflict_Escalated.
+    /// Payload: { "finalDecision": "APPROVE|REJECT|REQ_REVISION", "feedbackMessage": "string" }
+    /// If REQ_REVISION: CurrentRound increments and EB can vote fresh on the resubmission.
+    /// </summary>
+    [HttpPost("{id:guid}/resolve-conflict")]
+    [Authorize(Roles = "EditorInChief")]
+    [ProducesResponseType(typeof(ResolveConflictResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ResolveConflict(Guid id, [FromBody] ResolveConflictRequest request, CancellationToken ct)
+    {
+        try
+        {
+            if (!Enum.TryParse<VoteType>(request.FinalDecision, ignoreCase: true, out var decision))
+                return BadRequest(new { error = "finalDecision không hợp lệ. Giá trị hợp lệ: APPROVE, REJECT, REQ_REVISION" });
+
+            var command = new ResolveConflictCommand(id, GetUserId(), decision, request.FeedbackMessage);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi nghiệp vụ", message = ex.Message }); }
+    }
+
     // ── SHARED FLOWS ──────────────────────────────────────────────────────────
 
     /// <summary>
@@ -282,7 +383,7 @@ public class SubmissionsController : ControllerBase
     /// Mangakas can only view their own submissions. Staff can view all.
     /// </summary>
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,Admin")]
+    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,EditorInChief,Admin")]
     [ProducesResponseType(typeof(SubmissionDetailDto), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
@@ -305,7 +406,7 @@ public class SubmissionsController : ControllerBase
     /// Mangakas can only view pins on their own submissions.
     /// </summary>
     [HttpGet("{id:guid}/feedback-pins")]
-    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,Admin")]
+    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,EditorInChief,Admin")]
     [ProducesResponseType(typeof(IEnumerable<FeedbackPinDto>), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
@@ -325,7 +426,7 @@ public class SubmissionsController : ControllerBase
     /// [All Authorized Roles] Get all feedback pins including archived history.
     /// </summary>
     [HttpGet("{id:guid}/feedback-pins/history")]
-    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,Admin")]
+    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,EditorInChief,Admin")]
     [ProducesResponseType(typeof(IEnumerable<FeedbackPinDto>), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
@@ -371,3 +472,14 @@ public record RevisionPinRequest(
 public record RevisionWithPinsRequest(
     string Reason,
     List<RevisionPinRequest>? Pins);
+
+/// <summary>Request body for POST /{id}/vote</summary>
+public record CastVoteRequest(
+    string VoteType,
+    string? Comment,
+    List<RevisionPinRequest>? FeedbackPins);
+
+/// <summary>Request body for POST /{id}/resolve-conflict</summary>
+public record ResolveConflictRequest(
+    string FinalDecision,
+    string FeedbackMessage);

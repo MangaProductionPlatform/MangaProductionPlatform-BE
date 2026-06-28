@@ -4,6 +4,8 @@ using MangaERP.Chapter.Application.Ports;
 using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Publishing.Application.Ports;
 using MangaERP.Publishing.Domain.Entities;
+using MangaERP.Shared.Application.Ports;
+using MangaERP.Series.Application.Ports;
 
 namespace MangaERP.Publishing.Application.Commands;
 
@@ -23,13 +25,19 @@ public class PublishChapterHandler : IRequestHandler<PublishChapterCommand, Publ
 {
     private readonly IChapterRepository _chapterRepo;
     private readonly IPublicationRecordRepository _pubRecordRepo;
+    private readonly ISeriesRepository _seriesRepo;
+    private readonly INotificationService _notificationService;
 
     public PublishChapterHandler(
         IChapterRepository chapterRepo,
-        IPublicationRecordRepository pubRecordRepo)
+        IPublicationRecordRepository pubRecordRepo,
+        ISeriesRepository seriesRepo,
+        INotificationService notificationService)
     {
         _chapterRepo = chapterRepo;
         _pubRecordRepo = pubRecordRepo;
+        _seriesRepo = seriesRepo;
+        _notificationService = notificationService;
     }
 
     public async Task<PublishChapterResult> Handle(PublishChapterCommand request, CancellationToken cancellationToken)
@@ -90,6 +98,14 @@ public class PublishChapterHandler : IRequestHandler<PublishChapterCommand, Publ
         // 6. Cold storage archiving simulation (optional/async)
         // chapter.Archive();
         // await _chapterRepo.UpdateAsync(chapter, cancellationToken);
+
+        // 7. Notify Mangaka
+        var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, cancellationToken);
+        if (series is not null)
+        {
+            await _notificationService.NotifyChapterPublishedAsync(
+                series.AuthorId, chapter.Id, chapter.Title, pubUrl, cancellationToken);
+        }
 
         return new PublishChapterResult(
             chapter.Id,

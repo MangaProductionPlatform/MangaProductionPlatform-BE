@@ -20,6 +20,7 @@ public class SeriesSubmissionConfiguration : IEntityTypeConfiguration<SeriesSubm
         b.Property(e => e.Title).IsRequired().HasMaxLength(256);
         b.Property(e => e.ManuscriptUrl).IsRequired(false).HasMaxLength(2048);
         b.Property(e => e.Status).HasConversion(v => v.ToString(), v => Enum.Parse<SubmissionStatus>(v)).HasMaxLength(50);
+        b.Property(e => e.CurrentRound).HasDefaultValue(1);
         b.HasQueryFilter(e => !e.IsDeleted);
 
         // 1:N relationship with FeedbackPins
@@ -27,6 +28,29 @@ public class SeriesSubmissionConfiguration : IEntityTypeConfiguration<SeriesSubm
          .WithOne()
          .HasForeignKey(p => p.SubmissionId)
          .OnDelete(DeleteBehavior.Cascade);
+
+        // 1:N relationship with SubmissionVotes
+        b.HasMany<SubmissionVote>()
+         .WithOne()
+         .HasForeignKey(p => p.SubmissionId)
+         .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class SubmissionVoteConfiguration : IEntityTypeConfiguration<SubmissionVote>
+{
+    public void Configure(EntityTypeBuilder<SubmissionVote> b)
+    {
+        b.ToTable("SubmissionVotes"); b.HasKey(e => e.Id);
+        b.Property(e => e.VoteType)
+            .HasConversion(v => v.ToString(), v => Enum.Parse<VoteType>(v))
+            .HasMaxLength(50)
+            .IsRequired();
+        b.Property(e => e.Comment).HasMaxLength(2000);
+        b.Property(e => e.RoundNumber).HasDefaultValue(1);
+        // Composite index: ensures unique vote per editor per submission per round
+        b.HasIndex(e => new { e.SubmissionId, e.EditorId, e.RoundNumber }).IsUnique();
+        b.HasIndex(e => new { e.SubmissionId, e.RoundNumber });
     }
 }
 
@@ -63,6 +87,7 @@ public class ChapterConfiguration : IEntityTypeConfiguration<ChapterEntity>
     {
         b.ToTable("Chapters"); b.HasKey(e => e.Id);
         b.Property(e => e.Title).IsRequired().HasMaxLength(256);
+        b.Property(e => e.CoverImageUrl).HasMaxLength(2048);
         b.Property(e => e.ChapterNumber).HasColumnType("decimal(5,2)");
         b.Property(e => e.Status).HasConversion(v => v.ToString(), v => Enum.Parse<ChapterStatus>(v)).HasMaxLength(50);
         b.Property(e => e.IssueType).HasMaxLength(50);
@@ -78,8 +103,12 @@ public class PageTaskConfiguration : IEntityTypeConfiguration<PageTask>
     {
         b.ToTable("PageTasks"); b.HasKey(e => e.Id);
         b.HasIndex(e => new { e.ChapterId, e.PageNumber }).IsUnique();
+        b.Property(e => e.Description).HasMaxLength(2000);
         b.Property(e => e.TaskStatus).HasConversion(v => v.ToString(),
             v => Enum.Parse<PageTaskStatus>(v)).HasMaxLength(50);
+        b.Property(e => e.TaskType).HasConversion(v => v.ToString(),
+            v => Enum.Parse<PageTaskType>(v)).HasMaxLength(50).HasDefaultValue(PageTaskType.General);
+        b.Property(e => e.RegionMask).HasColumnType("text").IsRequired(false);
         b.HasOne(pt => pt.PreviewPage).WithOne(pp => pp.PageTask)
             .HasForeignKey<PreviewPage>(pp => pp.PageTaskId).OnDelete(DeleteBehavior.Cascade);
         b.HasQueryFilter(e => !e.IsDeleted);

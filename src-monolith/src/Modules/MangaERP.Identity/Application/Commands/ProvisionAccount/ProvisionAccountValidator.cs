@@ -11,7 +11,7 @@ public class ProvisionAccountValidator : AbstractValidator<ProvisionAccountComma
     private static readonly UserRole[] AllowedRoles =
     {
         UserRole.EditorialBoard, UserRole.TantouEditor,
-        UserRole.Mangaka, UserRole.Assistant
+        UserRole.Mangaka, UserRole.Assistant, UserRole.EditorInChief
     };
 
     public ProvisionAccountValidator()

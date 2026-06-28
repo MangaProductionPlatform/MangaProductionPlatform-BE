@@ -74,4 +74,11 @@ public class PublishingRepositories : IPublicationRecordRepository, INotificatio
 
     async System.Threading.Tasks.Task<int> INotificationRepository.SaveChangesAsync(CancellationToken ct)
         => await _db.SaveChangesAsync(ct);
+
+    async System.Threading.Tasks.Task<int> INotificationRepository.MarkAllAsReadAsync(
+        Guid receiverId, CancellationToken ct)
+        // ExecuteUpdateAsync: single bulk UPDATE SQL, không cần load entity vào memory
+        => await _db.Notifications
+            .Where(n => n.ReceiverId == receiverId && !n.IsRead)
+            .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true), ct);
 }

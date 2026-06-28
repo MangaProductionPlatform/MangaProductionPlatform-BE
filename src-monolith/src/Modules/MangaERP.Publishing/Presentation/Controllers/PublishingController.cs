@@ -71,6 +71,19 @@ public class PublishingController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
+
+    /// <summary>
+    /// [All roles] Get publication history for a series.
+    /// </summary>
+    [HttpGet("series/{seriesId}/history")]
+    [Authorize]
+    [ProducesResponseType(typeof(IEnumerable<MangaERP.Publishing.Application.Queries.GetPublicationHistory.PublicationRecordDto>), 200)]
+    public async Task<IActionResult> GetPublicationHistory(Guid seriesId, CancellationToken ct)
+    {
+        var query = new MangaERP.Publishing.Application.Queries.GetPublicationHistory.GetPublicationHistoryQuery(seriesId);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
 }
 
 public record ScheduleRequest(

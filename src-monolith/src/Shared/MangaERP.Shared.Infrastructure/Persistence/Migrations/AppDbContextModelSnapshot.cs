@@ -34,6 +34,10 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("ChapterNumber")
                         .HasColumnType("decimal(5,2)");
 
+                    b.Property<string>("CoverImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -92,16 +96,30 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
                     b.Property<int>("PageNumber")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RegionMask")
+                        .HasColumnType("text");
+
                     b.Property<string>("TaskStatus")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TaskType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("General");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -219,6 +237,29 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.ToTable("RefreshTokens", (string)null);
                 });
 
+            modelBuilder.Entity("MangaERP.Identity.Domain.Entities.Role_Entity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Roles", (string)null);
+                });
+
             modelBuilder.Entity("MangaERP.Identity.Domain.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -302,6 +343,27 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("MangaERP.Identity.Domain.Entities.UserRole_Entity", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex("UserId", "RoleId")
+                        .IsUnique();
+
+                    b.ToTable("UserRoles", (string)null);
                 });
 
             modelBuilder.Entity("MangaERP.Publishing.Domain.Entities.Notification", b =>
@@ -700,6 +762,11 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("CurrentRound")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -790,6 +857,45 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.HasIndex("SubmissionId", "IsArchived");
 
                     b.ToTable("SubmissionFeedbackPins", (string)null);
+                });
+
+            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionVote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("EditorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RoundNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VoteType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("VotedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SubmissionId", "RoundNumber");
+
+                    b.HasIndex("SubmissionId", "EditorId", "RoundNumber")
+                        .IsUnique();
+
+                    b.ToTable("SubmissionVotes", (string)null);
                 });
 
             modelBuilder.Entity("MangaERP.Task.Domain.Entities.ArtworkLayer", b =>
@@ -969,7 +1075,35 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Navigation("ManagingTantou");
                 });
 
+            modelBuilder.Entity("MangaERP.Identity.Domain.Entities.UserRole_Entity", b =>
+                {
+                    b.HasOne("MangaERP.Identity.Domain.Entities.Role_Entity", "Role")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MangaERP.Identity.Domain.Entities.User", "User")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionFeedbackPin", b =>
+                {
+                    b.HasOne("MangaERP.Submission.Domain.Entities.SeriesSubmission", null)
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionVote", b =>
                 {
                     b.HasOne("MangaERP.Submission.Domain.Entities.SeriesSubmission", null)
                         .WithMany()
@@ -988,9 +1122,16 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Navigation("PreviewPage");
                 });
 
+            modelBuilder.Entity("MangaERP.Identity.Domain.Entities.Role_Entity", b =>
+                {
+                    b.Navigation("UserRoles");
+                });
+
             modelBuilder.Entity("MangaERP.Identity.Domain.Entities.User", b =>
                 {
                     b.Navigation("RefreshTokens");
+
+                    b.Navigation("UserRoles");
                 });
 #pragma warning restore 612, 618
         }

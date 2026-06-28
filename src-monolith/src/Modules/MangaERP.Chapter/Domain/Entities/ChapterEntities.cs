@@ -5,6 +5,9 @@ namespace MangaERP.Chapter.Domain.Entities;
 public enum ChapterStatus { Draft, ReadyForQA, Rejected, Approved, Published, Archived }
 public enum PageTaskStatus { Pending, Incomplete, Reviewing, RevisionAlert, Approved }
 
+/// <summary>Type of artwork work assigned to the assistant for this page region.</summary>
+public enum PageTaskType { General, Background, Shading, Inking, Effect, Coloring }
+
 public class Chapter : AggregateRoot, ISoftDeletable
 {
     public Guid SeriesId { get; private set; }
@@ -12,6 +15,7 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public decimal ChapterNumber { get; private set; }
     public int TotalPages { get; private set; }
     public ChapterStatus Status { get; private set; } = ChapterStatus.Draft;
+    public string? CoverImageUrl { get; private set; }
     public string? IssueType { get; private set; }
     public Guid? AssignedEditorId { get; private set; }
     public DateTime? ScheduledPublishAt { get; private set; }
@@ -24,11 +28,12 @@ public class Chapter : AggregateRoot, ISoftDeletable
     private Chapter() { }
 
     public static Chapter Create(Guid seriesId, string title, decimal chapterNumber,
-        int totalPages, Guid? assignedEditorId = null)
+        int totalPages, Guid? assignedEditorId = null, string? coverImageUrl = null)
     {
         if (totalPages <= 0) throw new ArgumentException("TotalPages must be > 0.");
         return new Chapter { SeriesId = seriesId, Title = title, ChapterNumber = chapterNumber,
             TotalPages = totalPages, AssignedEditorId = assignedEditorId,
+            CoverImageUrl = coverImageUrl,
             Status = ChapterStatus.Draft, CreatedAt = DateTime.UtcNow };
     }
 
@@ -82,7 +87,12 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public Guid ChapterId { get; set; }
     public int PageNumber { get; set; }
     public Guid? AssignedAssistantId { get; set; }
+    public string? Description { get; set; }
     public PageTaskStatus TaskStatus { get; set; } = PageTaskStatus.Pending;
+    /// <summary>SAM-generated mask polygon stored as JSON (array of [x,y] points).</summary>
+    public string? RegionMask { get; set; }
+    /// <summary>Type of artwork work for this region (Background, Shading, etc.).</summary>
+    public PageTaskType TaskType { get; set; } = PageTaskType.General;
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -105,12 +115,13 @@ public class PageTask : AggregateRoot, ISoftDeletable
         };
     }
 
-    public void Activate(Guid assistantId)
+    public void Activate(Guid assistantId, string? description = null)
     {
         if (TaskStatus != PageTaskStatus.Pending)
             throw new InvalidOperationException("Only Pending page tasks can be activated.");
 
         AssignedAssistantId = assistantId;
+        Description = description;
         TaskStatus = PageTaskStatus.Incomplete;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -146,6 +157,17 @@ public class PageTask : AggregateRoot, ISoftDeletable
     {
         return AssignedAssistantId == assistantId
             && (TaskStatus == PageTaskStatus.Incomplete || TaskStatus == PageTaskStatus.RevisionAlert);
+    }
+
+    /// <summary>
+    /// Sets the SAM segmentation region and work type for this page task.
+    /// Called after Mangaka selects a region on the canvas and assigns a task type.
+    /// </summary>
+    public void SetRegion(string regionMaskJson, PageTaskType taskType)
+    {
+        RegionMask = regionMaskJson;
+        TaskType   = taskType;
+        UpdatedAt  = DateTime.UtcNow;
     }
 }
 

@@ -13,6 +13,13 @@ public interface ISubmissionRepository
     /// <summary>Lấy submission theo Id. Trả null nếu không tìm thấy.</summary>
     Task<SeriesSubmission?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
+    /// <summary>
+    /// Lấy submission theo Id với PESSIMISTIC ROW-LEVEL LOCK (SELECT FOR UPDATE).
+    /// Chỉ dùng trong transaction — đảm bảo tại một thời điểm chỉ có 1 luồng
+    /// đọc + ghi cho SubmissionId này, tránh race condition khi tính phiếu bầu.
+    /// </summary>
+    Task<SeriesSubmission?> GetByIdForUpdateAsync(Guid id, CancellationToken ct = default);
+
     /// <summary>Lấy tất cả submissions của một Mangaka (theo submitterId).</summary>
     Task<IEnumerable<SeriesSubmission>> GetBySubmitterIdAsync(Guid submitterId, CancellationToken ct = default);
 
@@ -20,6 +27,17 @@ public interface ISubmissionRepository
     /// Lấy queue cho Editorial Board: submissions đang Pending_EB_Review.
     /// </summary>
     Task<IEnumerable<SeriesSubmission>> GetRecommendedQueueAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy queue cho Editor-in-Chief: Conflict_Escalated đứng trước, sau đó Pending_EB_Review.
+    /// </summary>
+    Task<IEnumerable<SeriesSubmission>> GetEICQueueAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy danh sách submissions Pending_EB_Review mà user chưa vote trong vòng hiện tại.
+    /// Thực hiện hoàn toàn server-side (single query) — RoundNumber được so khớp với s.CurrentRound.
+    /// </summary>
+    Task<IEnumerable<SeriesSubmission>> GetPendingQueueNotVotedByAsync(Guid editorId, CancellationToken ct = default);
 
     /// <summary>
     /// Kiểm tra Mangaka đã có submission đang active chưa (Draft, Pending_EB_Review, Requires_Revision).
@@ -45,4 +63,28 @@ public interface ISubmissionRepository
 
     /// <summary>Thêm feedback pin mới vào DbContext (chưa save).</summary>
     Task AddPinAsync(SubmissionFeedbackPin pin, CancellationToken ct = default);
+
+    // ── Submission Votes ──────────────────────────────────────────────────────
+
+    /// <summary>Kiểm tra editor đã vote cho submission trong vòng cụ thể chưa.</summary>
+    Task<bool> HasVotedAsync(Guid submissionId, Guid editorId, int roundNumber, CancellationToken ct = default);
+
+    /// <summary>Lấy tất cả phiếu bầu của một submission trong vòng cụ thể.</summary>
+    Task<IEnumerable<SubmissionVote>> GetVotesByRoundAsync(Guid submissionId, int roundNumber, CancellationToken ct = default);
+
+    /// <summary>Thêm vote mới vào DbContext (chưa save).</summary>
+    Task AddVoteAsync(SubmissionVote vote, CancellationToken ct = default);
+
+    /// <summary>
+    /// [Admin force-action cleanup] Xóa tất cả phiếu bầu của một submission trong một vòng cụ thể.
+    /// Dùng khi Admin buộc phải override kết quả đang trong luồng bỏ phiếu dở dang.
+    /// Phải gọi trong cùng transaction với thay đổi trạng thái submission.
+    /// </summary>
+    Task DeleteVotesByRoundAsync(Guid submissionId, int roundNumber, CancellationToken ct = default);
+
+    /// <summary>
+    /// [Admin force-action cleanup] Xóa tất cả phiếu bầu của một submission (mọi vòng).
+    /// Dùng khi Admin buộc phải reject/approve hoàn toàn, đóng băng submission vĩnh viễn.
+    /// </summary>
+    Task DeleteAllVotesAsync(Guid submissionId, CancellationToken ct = default);
 }
