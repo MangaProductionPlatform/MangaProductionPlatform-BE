@@ -20,11 +20,14 @@ public static class SharedInfrastructureExtensions
     public static IServiceCollection AddSharedInfrastructure(
         this IServiceCollection services, IConfiguration config)
     {
+        var connectionString = config.GetConnectionString("DefaultConnection");
+        var parsedConnectionString = BuildPostgresConnectionString(connectionString);
+
         // ── DATABASE CONFIGURATION ──────────────────────────────────────────────────
         // [POSTGRESQL CONFIG] - Mặc định khi deploy (Hãy uncomment dòng này khi deploy)
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(
-                config.GetConnectionString("DefaultConnection"),
+                parsedConnectionString,
                 npgsql => npgsql.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
 
         // [SQL SERVER CONFIG] - Dùng để test local với SSMS
@@ -66,5 +69,34 @@ public static class SharedInfrastructureExtensions
         services.AddScoped<INotificationService, NotificationService>();
 
         return services;
+    }
+
+    private static string BuildPostgresConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
+        
+        // If it's already a standard ADO.NET string (contains "="), just return it
+        if (!connectionString.StartsWith("postgres://") && !connectionString.StartsWith("postgresql://"))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            // Parse Uri format: postgres://username:password@host:port/database
+            var uri = new Uri(connectionString);
+            var userInfo = uri.UserInfo.Split(':');
+            var username = userInfo.Length > 0 ? userInfo[0] : "";
+            var password = userInfo.Length > 1 ? userInfo[1] : "";
+            var database = uri.AbsolutePath.TrimStart('/');
+            var host = uri.Host;
+            var port = uri.Port > 0 ? uri.Port : 5432;
+            
+            return $"Host={host};Database={database};Username={username};Password={password};Port={port};SSL Mode=Require;Trust Server Certificate=true;";
+        }
+        catch
+        {
+            return connectionString; // fallback to original if parsing fails
+        }
     }
 }
