@@ -20,6 +20,7 @@ public class UsernameGeneratorService : IUsernameGenerator
         { UserRole.TantouEditor,   "tt"  },
         { UserRole.Mangaka,        "mgk" },
         { UserRole.Assistant,      "ast" },
+        { UserRole.EditorInChief,  "eic" },
         { UserRole.Reader,         "rdr" },
     };
 
