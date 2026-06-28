@@ -1,4 +1,6 @@
 using FluentValidation;
+using MangaERP.Identity.Application.Ports;
+using MangaERP.Shared.Application.Ports;
 using MangaERP.Submission.Application.Ports;
 using MediatR;
 
@@ -9,6 +11,7 @@ namespace MangaERP.Submission.Application.Commands.SubmitProposal;
 /// <summary>
 /// Mangaka nộp draft lần đầu: Draft → Pending.
 /// Yêu cầu ManuscriptUrl phải đã có trong entity trước khi gọi.
+/// Sau khi chuyển trạng thái thành công, bắn thông báo tới toàn bộ Editorial Board (Mốc 1).
 /// </summary>
 public record SubmitProposalCommand(
     Guid SubmissionId,
@@ -23,9 +26,18 @@ public class SubmitProposalHandler
     : IRequestHandler<SubmitProposalCommand, SubmitProposalResult>
 {
     private readonly ISubmissionRepository _repo;
+    private readonly IUserRepository _userRepo;
+    private readonly INotificationService _notificationService;
 
-    public SubmitProposalHandler(ISubmissionRepository repo)
-        => _repo = repo;
+    public SubmitProposalHandler(
+        ISubmissionRepository repo,
+        IUserRepository userRepo,
+        INotificationService notificationService)
+    {
+        _repo = repo;
+        _userRepo = userRepo;
+        _notificationService = notificationService;
+    }
 
     public async Task<SubmitProposalResult> Handle(
         SubmitProposalCommand cmd, CancellationToken ct)
@@ -40,6 +52,17 @@ public class SubmitProposalHandler
         submission.SubmitDraft();   // Domain: Draft → Pending; guards ManuscriptUrl
 
         await _repo.SaveChangesAsync(ct);
+
+        // [Mốc 1] Bắn thông báo cho Editorial Board SAU khi DB commit thành công.
+        // Lấy tên tác giả từ User entity để hiển thị trong thông báo.
+        var author = await _userRepo.GetByIdAsync(cmd.SubmitterId, ct);
+        var authorName = author?.FullName ?? "Không rõ";
+
+        await _notificationService.NotifyNewSubmissionToEditorialBoardAsync(
+            submissionId:    submission.Id,
+            submissionTitle: submission.Title,
+            authorName:      authorName,
+            ct:              ct);
 
         return new SubmitProposalResult(submission.Id, submission.Status.ToString());
     }

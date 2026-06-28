@@ -1,6 +1,7 @@
 using MediatR;
 using MangaERP.Publishing.Application.Queries.GetMyNotifications;
 using MangaERP.Publishing.Application.Commands.MarkNotificationRead;
+using MangaERP.Publishing.Application.Commands.MarkAllNotificationsRead;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -43,7 +44,7 @@ public class NotificationsController : ControllerBase
     }
 
     /// <summary>
-    /// [All roles] Mark a notification as read.
+    /// [All roles] Mark a single notification as read.
     /// </summary>
     [HttpPatch("{id:guid}/read")]
     [ProducesResponseType(200)]
@@ -58,5 +59,24 @@ public class NotificationsController : ControllerBase
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [All roles] Mark ALL unread notifications of the current user as read in one shot.
+    /// Useful for the "Mark all as read" button in the notification panel.
+    /// Returns the number of notifications that were updated.
+    /// </summary>
+    [HttpPatch("read-all")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> MarkAllRead(CancellationToken ct)
+    {
+        var updatedCount = await _mediator.Send(
+            new MarkAllNotificationsReadCommand(GetUserId()), ct);
+
+        return Ok(new
+        {
+            message = $"Đã đánh dấu đọc {updatedCount} thông báo.",
+            updatedCount
+        });
     }
 }
