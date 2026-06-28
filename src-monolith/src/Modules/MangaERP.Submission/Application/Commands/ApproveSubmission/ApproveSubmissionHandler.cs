@@ -7,6 +7,7 @@ using MangaERP.Shared.Application.Ports;
 using MangaERP.Submission.Application.Ports;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace MangaERP.Submission.Application.Commands.ApproveSubmission;
 
@@ -123,7 +124,10 @@ public class ApproveSubmissionHandler
 
         await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            // Serializable isolation: prevents two concurrent approvals from reading
+            // the same stale TE load data and assigning to the same editor.
+            // PostgreSQL will serialize conflicting transactions automatically.
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
             // ── STATE CLEANUP: purge dangling in-progress votes ───────────────
             // Count them first so we can report back how many were cleaned.

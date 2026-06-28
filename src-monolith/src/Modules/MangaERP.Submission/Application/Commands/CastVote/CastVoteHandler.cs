@@ -10,6 +10,7 @@ using MangaERP.Submission.Domain.Entities;
 using MangaERP.Submission.Domain.Exceptions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace MangaERP.Submission.Application.Commands.CastVote;
 
@@ -286,7 +287,9 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
 
         await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            // Serializable isolation: prevents two concurrent vote-completions from reading
+            // the same stale TE load data and assigning to the same editor.
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
             var allTE = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
             var activeTE = allTE.Where(u => u.AccountStatus == AccountStatus.Active).ToList();
