@@ -71,7 +71,7 @@ public static class SharedInfrastructureExtensions
         return services;
     }
 
-    private static string BuildPostgresConnectionString(string connectionString)
+    private static string? BuildPostgresConnectionString(string? connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
         
