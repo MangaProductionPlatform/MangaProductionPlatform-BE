@@ -4,6 +4,7 @@ using MangaERP.Task.Application.Commands.BulkReviewLayers;
 using MangaERP.Task.Application.Commands.SubmitArtworkLayer;
 using MangaERP.Task.Application.Queries.GetAssignedTasks;
 using MangaERP.Task.Application.Queries.GetChapterTasks;
+using MangaERP.Task.Application.Queries.GetLayerHistory;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -119,6 +120,28 @@ public class TasksController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpGet("layers/history")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(IEnumerable<LayerHistoryDto>), 200)]
+    public async Task<IActionResult> GetLayersHistory(
+        [FromQuery] Guid? seriesId,
+        [FromQuery] Guid? chapterId,
+        [FromQuery] Guid? pageTaskId,
+        [FromQuery] string? status,
+        CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetLayerHistoryQuery(
+                GetUserId(), seriesId, chapterId, pageTaskId, status);
+            
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 }
 
