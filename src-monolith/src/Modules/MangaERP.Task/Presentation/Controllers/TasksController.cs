@@ -1,5 +1,6 @@
 using MediatR;
 using MangaERP.Task.Application.Commands.ReviewLayer;
+using MangaERP.Task.Application.Commands.BulkReviewLayers;
 using MangaERP.Task.Application.Commands.SubmitArtworkLayer;
 using MangaERP.Task.Application.Queries.GetAssignedTasks;
 using MangaERP.Task.Application.Queries.GetChapterTasks;
@@ -98,6 +99,27 @@ public class TasksController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    [HttpPost("bulk-review")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(BulkReviewLayersResult), 200)]
+    public async Task<IActionResult> BulkReview(
+        [FromBody] BulkReviewLayersRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new BulkReviewLayersCommand(
+                GetUserId(),
+                request.Reviews.Select(r => new BulkReviewItem(r.PageTaskId, r.IsAccepted, r.RejectionNote)).ToList());
+
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
 
 public record SubmitArtworkLayerRequest(
@@ -106,3 +128,7 @@ public record SubmitArtworkLayerRequest(
     string? FileUrlOptimized);
 
 public record ReviewLayerRequest(bool IsAccepted, string? RejectionNote);
+
+public record BulkReviewItemRequest(Guid PageTaskId, bool IsAccepted, string? RejectionNote);
+
+public record BulkReviewLayersRequest(List<BulkReviewItemRequest> Reviews);
