@@ -79,33 +79,194 @@
 | **Dấu hiệu thiếu** | Trang hiển thị `EmptyBackendState` | Không có trang nào báo lỗi, nhưng user thật bị stuck |
 | **Ưu tiên** | 🔴 Làm trước | ⚪ Bắt buộc trước go-live |
 
+**Ký hiệu ưu tiên:** 🔴 Cần ngay | 🟡 Quan trọng | 🟢 Nên có | ⚪ Hạ tầng/go-live
+
 ---
 
-# PHẦN A — GAP: Frontend ↔ Backend
+## 👤 Phân Chia Ownership — Quy Tắc Bắt Buộc Khi Vibe Coding
 
-## A0. ✅ Quick Wins — BE đã có, chỉ cần FE kết nối (không cần code BE)
+> ⚠️ **Mỗi thành viên chỉ được commit vào các file thuộc mainflow mình phụ trách.**
+> Nếu cần sửa file của người khác, phải báo qua team chat và đợi confirm trước — tránh conflict khi cả nhóm vibe coding song song.
 
-> **Ưu tiên cao nhất.** 9 trang đang hiện `EmptyBackendState` dù API đã sẵn sàng.
+| Mainflow | Người phụ trách BE | Module / Thư mục thuộc phạm vi |
+|---|---|---|
+| **MF1** — Series Proposal & Vetting | **Bao** branch `bao`| `MangaERP.Submission`, `MangaERP.Series` (cancellation flow) |
+| **MF2** — Chapter Production & Task | **Nam** (branch `nam1`) | `MangaERP.Chapter`, `MangaERP.Task`, `MangaERP.Studio` |
+| **MF3** — QA & Publishing | **Bach** `bach-v2`| `MangaERP.QA`, `MangaERP.Publishing` |
+| **Core** (Identity, Admin, Ranking, Notifications) | **Chia sau** | `MangaERP.Identity`, `MangaERP.Ranking`, Shared services |
 
-| # | Trang FE | API cần gọi | Việc FE cần làm |
+**Quy tắc file cụ thể:**
+- Không ai được sửa `SharedInfrastructureExtensions.cs` hoặc `AppDbContext.cs` mà không báo cả nhóm trước (file shared dùng chung).
+- Migration EF Core: người nào thêm entity/column thì người đó tạo migration, không ai tự thêm migration cho module khác.
+- Controller của module nào thì chỉ người phụ trách module đó được sửa.
+
+---
+
+# 🔴 ƯU TIÊN CAO NHẤT — FE Cần Cập Nhật Luồng Auth (Cookie-based)
+
+> **Backend Identity đã thay đổi cơ chế lưu refreshToken.** FE hiện tại KHÔNG tương thích. Phải fix trước tất cả mọi thứ khác vì ảnh hưởng đến mọi API call sau khi login.
+
+## Vấn đề hiện tại
+
+Backend (`AuthController.cs`) trả về:
+- **`accessToken`** → trong response body ✅
+- **`refreshToken`** → trong **httpOnly cookie** (KHÔNG còn trong body) ❌
+
+FE hiện tại (`mangaErpService.ts` dòng 63) đang cố đọc `refreshToken` từ body:
+```typescript
+refreshToken: pick<string>(data, "refreshToken"), // ❌ sẽ trả về undefined
+```
+
+Và type `CurrentUser` (`mangaErp.ts` dòng 24) vẫn có field `refreshToken: string` — không còn ý nghĩa.
+
+Ngoài ra `httpClient.ts` **không có** `credentials: "include"` → browser sẽ KHÔNG tự gửi cookie khi gọi `/api/v1/auth/refresh` → silent refresh thất bại.
+
+## Việc FE cần làm (tất cả trong cùng 1 PR)
+
+### 1. `mangaErpService.ts` — Sửa hàm `login()`
+```typescript
+// Xóa dòng refreshToken khỏi return object
+// BE đã set httpOnly cookie tự động — FE không cần lưu
+return {
+  email,
+  userId: pick<string>(data, "userId"),
+  role:   normalizeRole(pick<string>(data, "role")),
+  accessToken: pick<string>(data, "accessToken"),
+  // refreshToken: KHÔNG lấy từ body nữa
+};
+```
+
+### 2. `mangaErp.ts` — Xóa field `refreshToken` khỏi type `CurrentUser`
+```typescript
+// Trước
+export type CurrentUser = { ...; refreshToken: string; ... }
+// Sau
+export type CurrentUser = { ...; /* refreshToken đã xóa */ ... }
+```
+
+### 3. `httpClient.ts` — Thêm `credentials: "include"` vào mọi request
+```typescript
+const response = await fetch(`${SERVICE_BASE_URLS[service]}${path}`, {
+  ...init,
+  headers,
+  credentials: "include", // ← Bắt buộc để browser gửi httpOnly cookie
+});
+```
+
+### 4. `mangaErpService.ts` — Thêm hàm `refresh()` và `logout()` đúng
+```typescript
+async refresh(): Promise<{ accessToken: string }> {
+  // Không cần body — browser tự gửi cookie nhờ credentials: "include"
+  return request<{ accessToken: string }>("identity", "/api/v1/auth/refresh", {
+    method: "POST",
+  });
+},
+
+async logout(): Promise<void> {
+  await request<void>("identity", "/api/v1/auth/logout", { method: "POST" });
+  // Cookie bị xóa ở BE; FE xóa localStorage
+  clearAuthSession();
+},
+```
+
+### 5. `authSession.ts` — Xóa thêm `refreshToken` khỏi localStorage nếu có
+```typescript
+export function clearAuthSession() {
+  localStorage.removeItem("currentUser");
+  // refreshToken không còn trong localStorage, nhưng clear cho an toàn
+}
+```
+
+### 6. `LoginPage.tsx` — Không lưu `refreshToken` vào localStorage nữa
+```typescript
+// Chỉ lưu { email, userId, role, accessToken }
+localStorage.setItem("currentUser", JSON.stringify(account));
+```
+
+## Tóm tắt tác động
+
+| File | Thay đổi | Người làm |
+|---|---|---|
+| `mangaErpService.ts` | Xóa `refreshToken` khỏi `login()`, thêm `refresh()` + `logout()` | _(chưa assign)_ |
+| `mangaErp.ts` | Xóa field `refreshToken` khỏi type `CurrentUser` | _(chưa assign)_ |
+| `httpClient.ts` | Thêm `credentials: "include"` | _(chưa assign)_ |
+| `authSession.ts` | Đảm bảo không clear gì liên quan cookie | _(chưa assign)_ |
+| `LoginPage.tsx` | Không lưu `refreshToken` vào localStorage | _(chưa assign)_ |
+
+---
+
+# PHẦN A — GAP: Frontend ↔ Backend (Đủ để Demo)
+
+> Mục tiêu: Xóa hết các trang đang hiển thị `EmptyBackendState`.
+
+---
+
+## MF1 — Series Proposal & Vetting `👤 _(chưa assign)_` (Duyệt Đề Xuất Truyện)
+
+### A — Quick Wins (BE đã có, FE chỉ cần gọi đúng)
+
+| Trang FE | API đã có | Việc FE cần làm |
+|---|---|---|
+| Board Voting Center | `GET /api/v1/submissions/queue` | Hợp nhất route `/app/board/voting-center` → `SeriesProposalsPage.tsx` |
+| Board Dashboard | `POST /api/v1/submissions/{id}/vote`<br>`POST /api/v1/submissions/{id}/resolve-conflict` | Wire API vote và resolve vào component |
+
+### A — API thiếu cần viết mới
+
+| Method | Route | Trang FE chờ | Ưu tiên |
 |---|---|---|---|
-| 1 | `AdminNotificationsPage` | `GET /api/v1/notifications` | Xóa `EmptyBackendState`, thêm call vào `mangaErpService.ts` |
-| 2 | `BoardNotificationsPage` | `PATCH /api/v1/notifications/{id}/read` | Như trên |
-| 3 | `editors/NotificationsPage` | `PATCH /api/v1/notifications/read-all` | Như trên + kết nối SignalR `/hubs/notifications` |
-| 4 | Board Voting Center | `GET /api/v1/submissions/queue` | Hợp nhất route `/app/board/voting-center` → `SeriesProposalsPage.tsx` |
-| 5 | Board Dashboard (MF1) | `POST /api/v1/submissions/{id}/vote`, `.../resolve-conflict` | Wire API vào component |
-| 6 | Editor Dashboard (Tantou) | `GET /api/v1/series` (filter `ManagingTantouId` từ JWT) | Thay mock data bằng API thật |
-| 7 | `SeriesMonitoringPage.tsx` (Editor) | `GET /api/v1/chapters?seriesId=...` | Như trên |
-| 8 | `ReviewQueuePage.tsx` (Editor/QA) | `GET /api/v1/qa/chapters/{id}/pins`, `.../session` | Thêm QA service calls, dựng canvas ghim lỗi |
-| 9 | Assistant pages | `GET /api/v1/tasks/assigned`, `POST /api/v1/tasks/{id}/submit-layer` | Đã đủ — chỉ cần FE wire vào |
-
-**⚠️ Riêng trang `AdminSeriesMonitoringPage.tsx`:** BE cần bổ sung quyền Admin xem toàn bộ + query param `?status=Active|Cancelled|Hiatus`.
+| GET | `/api/v1/series/cancellation-queue` | `CancellationReviewPage.tsx` | 🟡 |
+| GET | `/api/v1/board/reports` | `ReportsPage.tsx` (Board EB/EIC) | 🟡 |
 
 ---
 
-## A1. 🔨 API thật sự thiếu — cần viết mới để trang FE hết trắng
+## MF2 — Chapter Production & Task Assignment `👤 Nam`
 
-### A1.1 Admin APIs
+### A — Quick Wins (BE đã có, FE chỉ cần gọi đúng)
+
+| Trang FE | API đã có | Việc FE cần làm |
+|---|---|---|
+| Editor Dashboard (Tantou) | `GET /api/v1/series` (filter `ManagingTantouId` từ JWT)<br>`GET /api/v1/chapters?seriesId=...` | Thay mock data bằng API thật |
+| `SeriesMonitoringPage.tsx` (Editor) | `GET /api/v1/series` | Như trên |
+| Assistant Pages | `GET /api/v1/tasks/assigned`<br>`POST /api/v1/tasks/{id}/submit-layer` | Đã đủ — chỉ cần FE wire vào |
+
+> ⚠️ **Riêng `AdminSeriesMonitoringPage.tsx`:** BE bổ sung thêm quyền Admin xem toàn bộ (không filter userId) + query param `?status=Active|Cancelled|Hiatus`.
+
+### A — API thiếu cần viết mới
+
+| Method | Route | Trang FE chờ | Ưu tiên |
+|---|---|---|---|
+| GET | `/api/v1/chapters/my-queue` | `ReviewQueuePage.tsx` (Tantou Editor) | 🔴 |
+| GET | `/api/v1/assistant/tasks/income` | `AssistantIncomePage.tsx` | 🟢 |
+
+---
+
+## MF3 — Quality Assurance & Publishing `👤 _(chưa assign)_`
+
+### A — Quick Wins (BE đã có, FE chỉ cần gọi đúng)
+
+| Trang FE | API đã có | Việc FE cần làm |
+|---|---|---|
+| `ReviewQueuePage.tsx` (Editor/QA) | `GET /api/v1/qa/chapters/{id}/pins`<br>`GET /api/v1/qa/chapters/{id}/session`<br>`POST /api/v1/qa/chapters/{id}/pins`<br>`POST /api/v1/qa/chapters/{id}/send-feedback` | Thêm QA calls vào service layer, dựng canvas ghim lỗi |
+
+### A — API thiếu cần viết mới
+
+| Method | Route | Trang FE chờ | Ưu tiên |
+|---|---|---|---|
+| GET | `/api/v1/publishing/chapters/my-queue` | `PublishingQueuePage.tsx` (Tantou Editor) | 🔴 |
+| GET | `/api/v1/publishing/schedule` | `PublishingSchedulePage.tsx` | 🟡 |
+
+---
+
+## Core — Admin, Notifications & Ranking `👤 Chia sau`
+
+### A — Quick Wins (BE đã có, FE chỉ cần gọi đúng)
+
+| Trang FE | API đã có | Việc FE cần làm |
+|---|---|---|
+| `AdminNotificationsPage`<br>`BoardNotificationsPage`<br>`editors/NotificationsPage` | `GET /api/v1/notifications`<br>`PATCH /api/v1/notifications/{id}/read`<br>`PATCH /api/v1/notifications/read-all` | Xóa `EmptyBackendState`, thêm call vào `mangaErpService.ts`, render thật; sau đó kết nối SignalR `/hubs/notifications` |
+
+### A — API thiếu cần viết mới
+
 | Method | Route | Trang FE chờ | Ưu tiên |
 |---|---|---|---|
 | GET | `/api/v1/admin/dashboard` | `AdminDashboardPage.tsx` | 🔴 |
@@ -113,27 +274,10 @@
 | GET | `/api/v1/admin/reports` | `AdminReportsAnalyticsPage.tsx` | 🟡 |
 | GET | `/api/v1/admin/roles` | `AdminRolesPage.tsx` | 🟢 |
 
-### A1.2 TE/Editor Queue APIs
-| Method | Route | Trang FE chờ | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/chapters/my-queue` | `ReviewQueuePage.tsx` | 🔴 |
-| GET | `/api/v1/publishing/chapters/my-queue` | `PublishingQueuePage.tsx` | 🔴 |
-| GET | `/api/v1/publishing/schedule` | `PublishingSchedulePage.tsx` | 🟡 |
-
-### A1.3 Board & Cancellation APIs
-| Method | Route | Trang FE chờ | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/series/cancellation-queue` | `CancellationReviewPage.tsx` | 🟡 |
-| GET | `/api/v1/board/reports` | `ReportsPage.tsx` (Board) | 🟡 |
-
-### A1.4 Assistant Income API
-| Method | Route | Trang FE chờ | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/assistant/tasks/income` | `AssistantIncomePage.tsx` | 🟢 |
-
-### A1.5 Ranking Module — khối lượng lớn nhất, toàn bộ cần viết mới
+### A — Ranking Module (Khối lượng lớn nhất — toàn bộ cần viết mới)
 
 > Hiện chỉ có Domain entities (`VoteData`, `RankingSnapshot`). Chưa có Application / Infrastructure / Controller.
+> Trang FE chờ: `/ranking`, `RankingAnalyticsPage.tsx`, `RankingReportsPage.tsx`
 
 | Method | Route | Vai trò | Mô tả |
 |---|---|---|---|
@@ -144,7 +288,7 @@
 | GET | `/api/v1/ranking/import/{period}` | Admin, EB | Xem phiếu thô đã import |
 | DELETE | `/api/v1/ranking/import/{period}` | Admin | Xóa phiếu thô trước khi compile |
 
-**Checklist backend Ranking (Phương án A — thủ công):**
+**Checklist BE Ranking (Phương án A — thủ công):**
 - [ ] Infrastructure: `IVoteDataRepository`, `IRankingSnapshotRepository`, EF mapping, migration
 - [ ] Application: `ImportVoteDataCommand`, `CompileRankingCommand`, `GetRankingBoardQuery`
 - [ ] Presentation: `RankingController.cs`
@@ -153,100 +297,132 @@
 
 # PHẦN B — GAP: System Completeness (Production-Ready)
 
-> Không có trang FE nào báo lỗi vì mục này, nhưng **người dùng thật sẽ bị stuck ngay tuần đầu**.
+> Mục tiêu: Người dùng thật không bị kẹt, không mất dữ liệu, không lỗi bất ngờ.
 
-## B1. 🔐 Identity & User Management
+---
+
+## MF1 — Series Proposal & Vetting `👤 _(chưa assign)_`
+
+### B — Luồng Cancellation (Thiếu hoàn toàn — có method `Cancel()` nhưng sai phân quyền)
+
+> ⚠️ Quyết định hủy truyện thuộc **EB/EIC**, không phải Admin.
+
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
+|---|---|---|---|---|
+| POST | `/api/v1/series/{id}/request-cancellation` | Mangaka | Luồng hủy đứt ngay bước đầu — Mangaka không gửi được | 🟡 |
+| POST | `/api/v1/series/{id}/approve-cancellation` | EIC, EB | EIC/EB không duyệt được yêu cầu hủy | 🟡 |
+| POST | `/api/v1/series/{id}/reject-cancellation` | EIC, EB | Series kẹt ở trạng thái chờ hủy | 🟡 |
+
+### B — Vòng đời Submission
+
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
+|---|---|---|---|---|
+| DELETE | `/api/v1/submissions/{id}` | Mangaka | Tạo nhầm Draft không xóa được | 🟢 |
+| GET | `/api/v1/submissions/{id}/votes` | EB, EIC, Admin | Không xem được ai vote gì — thiếu minh bạch | 🟢 |
+
+---
+
+## MF2 — Chapter Production & Task Assignment `👤 Nam`
+
+### B — Quản lý Series & Studio
+
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
+|---|---|---|---|---|
+| PUT | `/api/v1/series/{id}` | Mangaka | Không sửa được metadata sau khi approved | 🟡 |
+| POST | `/api/v1/series/{id}/set-hiatus` | Mangaka, Admin | Không có trạng thái tạm nghỉ | 🟢 |
+| POST | `/api/v1/series/{id}/reactivate` | Mangaka, Admin | Không khôi phục từ Hiatus được | 🟢 |
+| GET | `/api/v1/studios/{seriesId}/members` | Mangaka, TE | Không biết ai đang trong studio | 🟢 |
+| DELETE | `/api/v1/studios/{seriesId}/members/{assistantId}` | Mangaka | Không khai trừ được assistant | 🟢 |
+| POST | `/api/v1/studios/invitations/{id}/cancel` | Mangaka | Gửi nhầm lời mời không thu hồi được | 🟢 |
+
+### B — Quản lý Chapter & Trang vẽ
+
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
+|---|---|---|---|---|
+| PUT | `/api/v1/chapters/{id}` | Mangaka | Nhập sai tiêu đề/trang không sửa được | 🟢 |
+| DELETE | `/api/v1/chapters/{id}` | Mangaka | Chapter rác tồn tại vĩnh viễn | 🟢 |
+| GET | `/api/v1/chapters/{id}/pages` | Mangaka, TE | Không quản lý danh sách trang vẽ của chapter | 🟡 |
+| PATCH | `/api/v1/chapters/{id}/pages/{pageNum}/reassign` | Mangaka | Không đổi assistant cho trang cụ thể | 🟢 |
+
+### B — Task & Layer
+
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
+|---|---|---|---|---|
+| GET | `/api/v1/tasks/{pageTaskId}` | Mangaka, Assistant | Không xem được chi tiết 1 task | 🟡 |
+| PATCH | `/api/v1/tasks/{pageTaskId}/deadline` | Mangaka | Không cập nhật được deadline khi tiến độ thay đổi | 🟢 |
+
+---
+
+## MF3 — Quality Assurance & Publishing `👤 _(chưa assign)_`
+
+### B — QA History & Pins
+
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
+|---|---|---|---|---|
+| GET | `/api/v1/qa/chapters/{id}/history` | TE, Mangaka, Admin | Không truy vết lịch sử QA — bao nhiêu lần, sửa gì | 🟢 |
+| POST | `/api/v1/qa/chapters/{id}/reopen` | TE | Không mở lại được QA nếu phát hiện sót lỗi | 🟢 |
+| PATCH | `/api/v1/qa/pins/{pinId}` | TE | Không sửa được nội dung pin tạo nhầm | 🟢 |
+| DELETE | `/api/v1/qa/pins/{pinId}` | TE | Không xóa được pin tạo nhầm | 🟢 |
+
+### B — Publishing Schedule
+
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
+|---|---|---|---|---|
+| GET | `/api/v1/publishing/chapters/{id}` | EB, Admin, TE | Không xem được chi tiết trạng thái phát hành | 🟢 |
+| PATCH | `/api/v1/publishing/schedule/{id}` | EB | Lên lịch sai ngày không sửa được | 🟢 |
+| DELETE | `/api/v1/publishing/schedule/{id}` | EB | Lên lịch nhầm phải nhờ Admin can thiệp DB | 🟢 |
+
+---
+
+## Core — Identity, Notifications & Infrastructure `👤 Chia sau`
+
+### B — Identity & Tài Khoản
 
 | Method | Route | Vấn đề nếu thiếu | Ưu tiên |
 |---|---|---|---|
 | GET | `/api/v1/users/me` | FE không biết tên/avatar/role sau login — phải giải mã JWT thủ công | 🔴 |
-| PUT | `/api/v1/users/me/change-password` | Không tự đổi được mật khẩu | 🟢 |
-| POST | `/api/v1/auth/forgot-password` | Quên mật khẩu → không vào lại được | 🟢 |
+| PUT | `/api/v1/users/me/change-password` | Không tự đổi được mật khẩu — phải nhờ Admin reset | 🟢 |
+| POST | `/api/v1/auth/forgot-password` | Quên mật khẩu → không có cách vào lại tài khoản | 🟢 |
 | POST | `/api/v1/auth/reset-password` | Đi kèm forgot-password | 🟢 |
-| PUT | `/api/v1/users/me/avatar` | Mọi user dùng avatar mặc định | 🟢 |
+| PUT | `/api/v1/users/me/avatar` | Mọi user dùng avatar mặc định, không cá nhân hóa | 🟢 |
 
-> `POST /auth/logout` và `POST /auth/refresh` **đã có** — bỏ qua các tài liệu cũ ghi là "thiếu".
+> `POST /auth/logout` và `POST /auth/refresh` **đã có** — bỏ qua tài liệu cũ ghi là "thiếu".
 
-## B2. 📝 CRUD Vòng Đời Đầy Đủ
-
-### Series
-| Method | Route | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|
-| PUT | `/api/v1/series/{id}` | Mangaka không sửa được metadata | 🟡 |
-| POST | `/api/v1/series/{id}/request-cancellation` | Luồng Cancellation đứt ngay bước đầu | 🟡 |
-| POST | `/api/v1/series/{id}/approve-cancellation` | EIC/EB không phê duyệt được | 🟡 |
-| POST | `/api/v1/series/{id}/reject-cancellation` | Series kẹt ở trạng thái chờ | 🟡 |
-| POST | `/api/v1/series/{id}/set-hiatus` | Không có trạng thái tạm nghỉ | 🟢 |
-| POST | `/api/v1/series/{id}/reactivate` | Không khôi phục từ Hiatus được | 🟢 |
-
-> ⚠️ **Nghiệp vụ Cancellation:** Quyết định hủy thuộc EB/EIC, không phải Admin. `MangaSeries.Cancel()` đã có nhưng sai phân quyền và thiếu workflow request→approve/reject.
-
-### Chapter & Task
-| Method | Route | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|
-| PUT | `/api/v1/chapters/{id}` | Nhập sai không sửa được | 🟢 |
-| DELETE | `/api/v1/chapters/{id}` | Chapter rác tồn tại vĩnh viễn | 🟢 |
-| DELETE | `/api/v1/submissions/{id}` | Draft nhầm không xóa được | 🟢 |
-| GET | `/api/v1/chapters/{id}/pages` | Không quản lý được danh sách trang | 🟡 |
-| PATCH | `/api/v1/chapters/{id}/pages/{pageNum}/reassign` | Không đổi người vẽ trang được | 🟢 |
-| PATCH | `/api/v1/tasks/{pageTaskId}/deadline` | Không cập nhật deadline | 🟢 |
-
-### Publishing Schedule
-| Method | Route | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|
-| PATCH | `/api/v1/publishing/schedule/{id}` | Lên lịch sai không sửa được | 🟢 |
-| DELETE | `/api/v1/publishing/schedule/{id}` | Lên lịch nhầm phải nhờ Admin can DB | 🟢 |
-
-### Studio & Notifications
-| Method | Route | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/studios/{seriesId}/members` | Không biết ai trong studio | 🟢 |
-| DELETE | `/api/v1/studios/{seriesId}/members/{assistantId}` | Không khai trừ được assistant | 🟢 |
-| POST | `/api/v1/studios/invitations/{id}/cancel` | Gửi nhầm lời mời không thu hồi được | 🟢 |
-| DELETE | `/api/v1/notifications/{id}` | Không dọn thông báo cũ | 🟢 |
-| DELETE | `/api/v1/notifications` | Xóa hàng loạt thông báo đã đọc | 🟢 |
-| GET | `/api/v1/notifications/unread-count` | Không có badge số chưa đọc trên navbar | 🟡 |
-
-## B3. 🔍 History & Transparency
+### B — Notifications
 
 | Method | Route | Vấn đề nếu thiếu | Ưu tiên |
 |---|---|---|---|
-| GET | `/api/v1/submissions/{id}/votes` | EB/EIC không xem được ai vote gì | 🟢 |
-| GET | `/api/v1/qa/chapters/{id}/history` | Không truy vết lịch sử QA | 🟢 |
-| POST | `/api/v1/qa/chapters/{id}/reopen` | Không mở lại QA nếu sót lỗi | 🟢 |
-| PATCH | `/api/v1/qa/pins/{pinId}` | Không sửa pin tạo nhầm | 🟢 |
-| DELETE | `/api/v1/qa/pins/{pinId}` | Không xóa pin tạo nhầm | 🟢 |
-| GET | `/api/v1/tasks/{pageTaskId}` | Không xem chi tiết task | 🟡 |
-| ~~GET~~ | ~~`/api/v1/tasks/{pageTaskId}/layers`~~ | ~~Không xem lịch sử layer~~ | ✅ **Đã có** (PR #19 nam1) — nhưng có Bug #2 cần fix |
-| GET | `/api/v1/publishing/chapters/{id}` | Không xem chi tiết trạng thái phát hành | 🟢 |
+| GET | `/api/v1/notifications/unread-count` | Không có badge số chưa đọc trên Navbar | 🟡 |
+| DELETE | `/api/v1/notifications/{id}` | Không dọn được thông báo đơn lẻ | 🟢 |
+| DELETE | `/api/v1/notifications` | Không xóa hàng loạt thông báo đã đọc | 🟢 |
 
-## B4. 🔧 Infrastructure & Services
+### B — Infrastructure & Services (Bắt buộc trước go-live)
 
-| Service | Tình trạng | Hậu quả nếu thiếu | Ưu tiên |
+| Service | Tình trạng hiện tại | Hậu quả nếu thiếu | Ưu tiên |
 |---|---|---|---|
-| **SignalR Hub** | Logic có nhưng Hub chưa đăng ký endpoint | Notification chỉ thấy khi refresh trang | ⚪ |
+| **SignalR Hub** | Logic có nhưng Hub chưa đăng ký endpoint | Notification chỉ thấy khi refresh trang, không real-time | ⚪ |
 | **Scheduled Publisher Job** | Lưu DB nhưng không có job trigger | Chapter lên lịch không bao giờ tự phát hành | ⚪ |
-| **File Storage (S3/Blob)** | FE nhập URL thủ công | Không upload được ảnh, bản thảo, layer | ⚪ |
-| **Email Service** | Chỉ log console | Email kích hoạt & reset password không đến được user | ⚪ |
-| **Global Exception Handler** | Mỗi controller tự try-catch | FE nhận HTML error thay vì JSON → app crash | ⚪ |
-| **Audit Log** | Không có | Không điều tra được sự cố | ⚪ |
-| **Rate Limiter** | Không có | Dễ spam login/vote | ⚪ |
-| **Health Check** | Không có `GET /health` | Monitoring không biết service còn sống | ⚪ |
+| **File Storage (S3/Blob)** | FE tự nhập URL thủ công | Không upload được ảnh bìa, bản thảo, layer vẽ | ⚪ |
+| **Email Service** | Chỉ log ra console | Email kích hoạt & reset password không đến được user | ⚪ |
+| **Global Exception Handler** | Mỗi controller tự try-catch riêng | FE nhận HTML error page thay vì JSON → app crash phía client | ⚪ |
+| **Audit Log** | Không có | Không điều tra được sự cố — ai làm gì, lúc mấy giờ | ⚪ |
+| **Rate Limiter** | Không có | Dễ bị spam login/vote — lỗ hổng bảo mật | ⚪ |
+| **Health Check** | Không có `GET /health` | Deployment/monitoring không biết service có đang sống | ⚪ |
 
 ---
 
 # 📅 Lộ Trình Triển Khai
 
-| Phase | Nội dung | GAP | Thời gian ước tính |
+| Phase | Nội dung | Luồng | Ưu tiên |
 |---|---|---|---|
-| **Phase 0 — Quick Wins** | Kết nối 9 trang FE đang gọi sai (không cần code BE mới) | A0 | 1–2 ngày |
-| **Phase 1 — Unblock Core Demo** | `GET /users/me`, `chapters/my-queue`, `publishing/my-queue`, Admin Dashboard, `notifications/unread-count` | A1 + B1 | 3–4 ngày |
-| **Phase 2 — Ranking Module** | Toàn bộ Infrastructure + Application + Controller (Phương án A) | A1.5 | 5–7 ngày |
-| **Phase 3 — Cancellation Flow** | request/approve/reject-cancellation đúng phân quyền EB/EIC | A1.3 + B2 | 2–3 ngày |
-| **Phase 4 — CRUD Hoàn Chỉnh** | PUT/DELETE series, chapter, schedule, studio, QA pins, notifications | B2 | 3–5 ngày |
-| **Phase 5 — Identity & Security** | change-password, forgot/reset-password, avatar | B1 | 2 ngày |
-| **Phase 6 — History & Transparency** | submission votes, QA history/reopen, task layers | B3 | 2–3 ngày |
-| **Phase 7 — Production Infrastructure** | SignalR, Scheduled Publisher, File Storage, Email thật, Exception Handler, Audit Log, Rate Limiter, Health Check | B4 | 7–10 ngày |
+| **Phase 0 — Quick Wins** | FE kết nối các trang đang gọi sai (Notifications, Board Voting, Editor Dashboard, Assistant pages, QA Canvas) — không cần code BE | MF1 + MF2 + MF3 + Core | 🔴 ROI cao nhất |
+| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me`; viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard | Core + MF2 + MF3 | 🔴 |
+| **Phase 2 — Ranking Module** | Toàn bộ Infrastructure + Application + Controller Ranking (Phương án A thủ công) | Core | 🟡 Khối lượng lớn nhất |
+| **Phase 3 — Cancellation Flow** | request/approve/reject-cancellation đúng phân quyền EB/EIC; cancellation-queue; board/reports | MF1 | 🟡 |
+| **Phase 4 — CRUD Hoàn Chỉnh** | PUT/DELETE series, chapter; Studio members; Reassign trang; Task deadline; QA pins; Publishing schedule | MF1 + MF2 + MF3 | 🟡–🟢 |
+| **Phase 5 — Identity & Notifications** | change-password, forgot/reset-password, avatar; notifications unread-count, delete | Core | 🟢 |
+| **Phase 6 — History & Transparency** | submissions/{id}/votes; QA history/reopen; tasks/{id} detail; publishing/{id} detail | MF1 + MF2 + MF3 | 🟢 |
+| **Phase 7 — Production Infrastructure** | SignalR Hub, Scheduled Publisher Job, File Storage thật, Email SMTP, Global Exception Handler, Audit Log, Rate Limiter, Health Check | Infra | ⚪ Bắt buộc trước go-live |
 
 ---
 
@@ -258,26 +434,27 @@
 
 ---
 
-## 📊 Tổng Kết
+## 📊 Tổng Kết Số Liệu
 
 | Hạng mục | Số lượng |
 |---|---|
 | ✅ API BE đã có, FE chưa gọi đúng | 9 trang |
-| 🔨 API cần viết mới (GAP A — để demo) | ~20 endpoints |
-| 🔨 API cần viết mới (GAP B — production) | ~27 endpoints (trừ 1 đã xong) |
+| 🔨 API cần viết mới (GAP A — để demo) | ~13 endpoints |
+| 🔨 API cần viết mới (GAP B — production) | ~27 endpoints |
 | 🔧 Service/Infrastructure thiếu | 8 items |
-| 🆕 API mới hoàn thành (PR #19) | 3 endpoints |
-| 🐛 Bugs cần fix từ code review | 2 nghiêm trọng, 1 minor, 1 performance |
+| 🆕 API mới hoàn thành (PR #19 nam1) | 3 endpoints |
+| 🐛 Bugs cần fix từ code review | 2 nghiêm trọng, 1 minor UX, 1 performance |
 
-> **Rule of thumb:** Phase 0–2 = đủ để demo. Phase 3–7 = đủ để deploy thật.
+> **Rule of thumb:** Phase 0–2 = đủ để demo. Phase 3–7 = đủ để deploy production thật.
 
 ---
 
-## 📋 Checklist Bugs Cần Fix (Team Action Items)
+## 📋 Checklist Bugs (Team Action Items)
 
 | # | File | Mức độ | Người fix | Trạng thái |
 |---|---|---|---|---|
 | Bug #1 | `BulkReviewLayersHandler.cs` — thiếu `_pageTaskRepo.SaveChangesAsync` | 🔴 Nghiêm trọng | _(chưa assign)_ | ⬜ Chưa fix |
 | Bug #2 | `GetLayerHistoryHandler.cs` — status suy luận từ `RejectionNote` sai | 🔴 Nghiêm trọng | _(chưa assign)_ | ⬜ Chưa fix |
-| Issue #3 | `GetLayerHistoryHandler.cs` — `?status=Pending` trả `[]` không rõ lý do | 🟡 Minor UX | _(chưa assign)_ | ⬜ Chưa fix |
+| Issue #3 | `GetLayerHistoryHandler.cs` — `?status=Pending` trả `[]` không báo lỗi | 🟡 Minor UX | _(chưa assign)_ | ⬜ Chưa fix |
 | Minor #4 | `BulkActivatePageTasksHandler.cs` — N+1 queries khi giao nhiều trang | 🟢 Performance | _(chưa assign)_ | ⬜ Có thể để sau |
+

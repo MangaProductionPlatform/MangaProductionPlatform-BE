@@ -5,6 +5,7 @@ using MangaERP.Identity.Application.Commands.RefreshToken;
 using MangaERP.Identity.Application.Commands.ActivateAccount;
 using MangaERP.Shared.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 
