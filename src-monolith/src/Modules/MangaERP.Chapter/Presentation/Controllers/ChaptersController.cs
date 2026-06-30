@@ -1,5 +1,6 @@
 using MediatR;
 using MangaERP.Chapter.Application.Commands.ActivatePageTask;
+using MangaERP.Chapter.Application.Commands.BulkActivatePageTasks;
 using MangaERP.Chapter.Application.Commands.AddBasePage;
 using MangaERP.Chapter.Application.Commands.CreateChapter;
 using MangaERP.Chapter.Application.Commands.SetPageRegion;
@@ -123,6 +124,31 @@ public class ChaptersController : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
+    [HttpPost("{chapterId:guid}/pages/bulk-activate")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(BulkActivatePageTasksResult), 200)]
+    public async Task<IActionResult> BulkActivatePageTasks(
+        Guid chapterId,
+        [FromBody] BulkActivatePageTasksRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new BulkActivatePageTasksCommand(
+                GetUserId(),
+                chapterId,
+                request.PageNumbers,
+                request.AssignedAssistantId,
+                request.Description);
+
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
     [HttpPost("{chapterId:guid}/submit-for-qa")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(SubmitChapterForQAResult), 200)]
@@ -179,6 +205,8 @@ public record CreateChapterRequest(
 public record AddBasePageRequest(int PageNumber);
 
 public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description);
+
+public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedAssistantId, string? Description);
 
 /// <summary>
 /// Request to save a SAM region on a page task.
