@@ -247,7 +247,7 @@ public class NotificationService : INotificationService
                 NotifyType        = "NewSubmissionPendingReview",
                 RelatedEntityId   = submissionId,
                 RelatedEntityType = "Submission",
-                TargetUrl         = "/editorial/queue"
+                TargetUrl         = "/app/board/submissions"
             };
 
             await _notificationRepo.AddAsync(notification, ct);
@@ -296,7 +296,7 @@ public class NotificationService : INotificationService
                 NotifyType        = "SubmissionVoteCast",
                 RelatedEntityId   = submissionId,
                 RelatedEntityType = "Submission",
-                TargetUrl         = "/editorial/queue"
+                TargetUrl         = "/app/board/submissions"
             };
 
             await _notificationRepo.AddAsync(notification, ct);
@@ -348,7 +348,7 @@ public class NotificationService : INotificationService
                 NotifyType        = "SubmissionConflictEscalated",
                 RelatedEntityId   = submissionId,
                 RelatedEntityType = "Submission",
-                TargetUrl         = $"/eic/conflict/{submissionId}"
+                TargetUrl         = $"/app/board/submissions?filter=conflict&id={submissionId}"
             };
 
             await _notificationRepo.AddAsync(notification, ct);
@@ -389,7 +389,7 @@ public class NotificationService : INotificationService
             NotifyType        = "TantouEditorAssigned",
             RelatedEntityId   = submissionId,
             RelatedEntityType = "Submission",
-            TargetUrl         = "/te/dashboard"
+            TargetUrl         = "/app/editor/dashboard"
         };
 
         await _notificationRepo.AddAsync(notification, ct);
