@@ -6,7 +6,15 @@ namespace MangaERP.Identity.Application.Commands.Login;
 
 public record LoginCommand(string Email, string Password) : IRequest<LoginResult>;
 
-public record LoginResult(string AccessToken, string RefreshToken, string Role, Guid UserId);
+/// <summary>
+/// Returned by LoginHandler.
+/// AccessToken, Role, UserId → JSON response body.
+/// NewRefreshToken → controller sets as httpOnly cookie; NEVER in body.
+/// </summary>
+public record LoginResult(string AccessToken, string Role, Guid UserId)
+{
+    public string NewRefreshToken { get; init; } = string.Empty;
+}
 
 public class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
 {
@@ -39,6 +47,9 @@ public class LoginHandler : IRequestHandler<LoginCommand, LoginResult>
         var refreshToken = _tokenService.GenerateRefreshToken(user.Id);
         await _refreshRepo.AddAsync(refreshToken, cancellationToken);
 
-        return new LoginResult(accessToken, refreshToken.Token, user.Role.ToString(), user.Id);
+        return new LoginResult(accessToken, user.Role.ToString(), user.Id)
+        {
+            NewRefreshToken = refreshToken.Token
+        };
     }
 }
