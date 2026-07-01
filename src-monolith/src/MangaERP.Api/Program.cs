@@ -15,6 +15,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MangaERP.Shared.Infrastructure.Hubs;
+using Polly;
+using Polly.Extensions.Http;
 
 // ── Load .env for local development (ignored in Docker / Render / Railway) ────
 // DotNetEnv tự động inject vào System.Environment → ASP.NET Core config sẽ đọc được
@@ -79,6 +81,11 @@ builder.Services.AddQaModule();
 builder.Services.AddPublishingModule();
 // builder.Services.AddRankingModule();
 
+// ── Api-level MediatR Handlers (cross-module queries) ────────────────────────
+// GetAdminDashboardHandler cần inject từ nhiều module → đặt ở Composition Root (Api)
+builder.Services.AddMediatR(cfg =>
+    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+
 // ── JWT Authentication ─────────────────────────────────────────────────────────
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is not configured. Set it via Railway environment variables.");
@@ -121,7 +128,9 @@ builder.Services.AddHttpClient<MangaERP.Api.Services.SamServiceClient>(client =>
     // vit_b cold start on Colab T4 (first embedding) can take ~2 min.
     // Predict calls are fast (~2-5s) but we use one shared timeout for simplicity.
     client.Timeout = TimeSpan.FromSeconds(180);
-});
+})
+.AddPolicyHandler(GetRetryPolicy())
+.AddPolicyHandler(GetCircuitBreakerPolicy());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -188,3 +197,25 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.Run();
+
+#pragma warning disable CA1050 // Declare types in namespaces
+public partial class Program
+{
+    public static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy() =>
+        HttpPolicyExtensions
+            .HandleTransientHttpError() // 5xx, 408
+            .WaitAndRetryAsync(2, i => TimeSpan.FromSeconds(2 * i),
+                onRetry: (outcome, delay, attempt, ctx) =>
+                    Console.WriteLine($"[SAM] Retry {attempt} sau {delay.TotalSeconds}s — lý do: {outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()}"));
+
+    public static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy() =>
+        HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .CircuitBreakerAsync(
+                handledEventsAllowedBeforeBreaking: 4, // 4 lần fail liên tiếp
+                durationOfBreak: TimeSpan.FromMinutes(2), // tạm ngưng 2 phút rồi thử lại
+                onBreak: (outcome, duration) =>
+                    Console.WriteLine($"[SAM] Circuit OPEN — tạm ngưng gọi SAM {duration.TotalSeconds}s"),
+                onReset: () => Console.WriteLine("[SAM] Circuit CLOSED — SAM service đã phục hồi"));
+}
+#pragma warning restore CA1050

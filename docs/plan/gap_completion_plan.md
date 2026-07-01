@@ -11,6 +11,7 @@
 |---|---|---|---|
 | 2026-06-30 | PR #18 `bach-v2` | `SharedInfrastructureExtensions`: hỗ trợ URI format cho PostgreSQL connection string khi deploy | Không ảnh hưởng local dev |
 | 2026-06-30 | PR #19 `nam1` | **3 features mới** (xem chi tiết bên dưới) — merge vào main | ✅ Đã pull về local |
+| 2026-07-01 | `bao` | **9 endpoints mới** Phase 1 + Phase 3 MF1 (xem chi tiết bên dưới) — build ✅ 0 errors | ⏳ Chưa push — đang review |
 
 ### ✅ Hoàn thành trong PR #19 `nam1`
 
@@ -21,6 +22,27 @@
 | Xem lịch sử phiên bản layer | `GET /api/v1/tasks/{pageTaskId}/layers` | `GetLayerHistoryHandler.cs` | ✅ Đã merge |
 
 > **Tác động lên plan:** Mục B3 — `GET /api/v1/tasks/{pageTaskId}/layers` đã hoàn thành.
+
+### ✅ Hoàn thành ngày 2026-07-01 — Branch `bao`
+
+| Feature | API | File chính | Trạng thái |
+|---|---|---|---|
+| Admin Dashboard (User + Submission + Series stats, incl. EiC) | `GET /api/v1/admin/dashboard` | `AdminDashboardController.cs` + `GetAdminDashboardHandler.cs` | ✅ Build OK |
+| Board Reports (rolling 30 ngày) | `GET /api/v1/board/reports` | `BoardController.cs` + `GetBoardReportsHandler.cs` | ✅ Build OK |
+| Xem tất cả series + filter status | `GET /api/v1/series?status=` | `GetAllSeriesHandler.cs` | ✅ Build OK |
+| Cancellation queue cho EB/EiC | `GET /api/v1/series/cancellation-queue` | `GetCancellationQueueHandler.cs` | ✅ Build OK |
+| Mangaka gửi yêu cầu hủy series | `POST /api/v1/series/{id}/request-cancellation` | `RequestCancellationHandler.cs` + Validator | ✅ Build OK |
+| EB/EiC duyệt yêu cầu hủy | `POST /api/v1/series/{id}/approve-cancellation` | `ApproveCancellationHandler.cs` | ✅ Build OK |
+| EB/EiC từ chối yêu cầu hủy | `POST /api/v1/series/{id}/reject-cancellation` | `RejectCancellationHandler.cs` + Validator | ✅ Build OK |
+| Mangaka xóa Draft submission | `DELETE /api/v1/submissions/{id}` | `DeleteDraftHandler.cs` + Validator | ✅ Build OK |
+| EB/EiC/Admin xem phiếu bầu | `GET /api/v1/submissions/{id}/votes` | `GetSubmissionVotesHandler.cs` | ✅ Build OK |
+
+**Domain mới:** `MangaSeries` — thêm `CancellationRequestStatus` enum + 7 fields + 3 domain methods (`RequestCancellation`, `ApproveCancellation`, `RejectCancellation`)
+**EF Migration:** `AddCancellationFieldsToSeries` — cần chạy `dotnet ef database update` trước khi test
+**Audit Log:** `GET /api/v1/admin/dashboard` ghi `SystemAuditLog` vào DB (guardrail 1.2)
+**Kiến trúc:** Cross-module stats queries (Dashboard/BoardReports) dùng `IMediator.Send()` thay vì inject repository trực tiếp (guardrail 0.3 + 7.5)
+
+> **Tác động lên plan:** Phase 1 (Admin Dashboard) + Phase 3 (Cancellation Flow) + một phần Phase 6 (votes, delete draft) đã hoàn thành.
 
 ---
 
@@ -35,7 +57,7 @@
 - **Vấn đề:** Chỉ gọi `_layerRepo.SaveChangesAsync(ct)` nhưng **thiếu** `_pageTaskRepo.SaveChangesAsync(ct)`. Trạng thái `pageTask.Accept()` / `pageTask.RequestRevision()` có thể không được persist vào DB nếu hai repo dùng DbContext riêng.
 - **Hậu quả:** Mangaka duyệt layer nhưng task status không thay đổi trong DB → FE hiển thị sai trạng thái.
 - **Fix:** Thêm `await _pageTaskRepo.SaveChangesAsync(ct);` sau dòng `_layerRepo.SaveChangesAsync`.
-- **Người fix:** _(chưa assign)_
+- **Người fix:** Nam
 - **Trạng thái:** 🔴 Chưa fix
 
 ### Bug #2 — `GetLayerHistoryHandler.cs` xác định Status sai logic [NGHIÊM TRỌNG]
@@ -44,7 +66,7 @@
 - **Dòng:** ~103
 - **Vấn đề:** `string statusStr = layer.RejectionNote == null ? "Accepted" : "Rejected"` — suy luận status từ `RejectionNote` thay vì dùng field/enum thật trên entity. Nếu layer có `RejectionNote` cũ nhưng sau đó được Accept → hiển thị sai là "Rejected".
 - **Fix:** Dùng field `Status` hoặc enum có sẵn trên entity `ArtworkLayer` thay vì suy luận từ `RejectionNote`.
-- **Người fix:** _(chưa assign)_
+- **Người fix:** Nam
 - **Trạng thái:** 🔴 Chưa fix
 
 ### Issue #3 — `GetLayerHistoryHandler.cs` filter `?status=Pending` trả về rỗng không rõ lý do [UX]
@@ -55,7 +77,7 @@
 - **Fix (2 lựa chọn):**
   - Bỏ `"Pending"` khỏi `ValidStatuses` trong Validator, trả `400 Bad Request` nếu FE gửi lên.
   - Hoặc: Hỗ trợ Pending thật sự bằng cách không filter `ReviewedAt != null` khi status là Pending.
-- **Người fix:** _(chưa assign)_
+- **Người fix:** Nam
 - **Trạng thái:** 🟡 Minor — nhưng nên fix trước khi FE tích hợp
 
 ### Minor #4 — `BulkActivatePageTasksHandler.cs` N+1 queries [PERFORMANCE]
@@ -64,7 +86,7 @@
 - **Dòng:** ~59–65
 - **Vấn đề:** Loop gọi `GetByChapterAndPageNumberAsync` từng trang một → 20 pages = 20 queries DB.
 - **Fix:** Thêm method `GetByChapterAndPageNumbersAsync(chapterId, pageNumbers[])` vào `IPageTaskRepository` để lấy toàn bộ trong 1 query.
-- **Người fix:** _(chưa assign)_
+- **Người fix:** Nam
 - **Trạng thái:** 🟢 Có thể để sau, ưu tiên thấp hơn Bug #1 và #2
 
 ---
@@ -189,11 +211,11 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 | File | Thay đổi | Người làm |
 |---|---|---|
-| `mangaErpService.ts` | Xóa `refreshToken` khỏi `login()`, thêm `refresh()` + `logout()` | _(chưa assign)_ |
-| `mangaErp.ts` | Xóa field `refreshToken` khỏi type `CurrentUser` | _(chưa assign)_ |
-| `httpClient.ts` | Thêm `credentials: "include"` | _(chưa assign)_ |
-| `authSession.ts` | Đảm bảo không clear gì liên quan cookie | _(chưa assign)_ |
-| `LoginPage.tsx` | Không lưu `refreshToken` vào localStorage | _(chưa assign)_ |
+| `mangaErpService.ts` | Xóa `refreshToken` khỏi `login()`, thêm `refresh()` + `logout()` | Nam |
+| `mangaErp.ts` | Xóa field `refreshToken` khỏi type `CurrentUser` | Nam |
+| `httpClient.ts` | Thêm `credentials: "include"` | Nam |
+| `authSession.ts` | Đảm bảo không clear gì liên quan cookie | Nam |
+| `LoginPage.tsx` | Không lưu `refreshToken` vào localStorage | Nam |
 
 ---
 
@@ -203,7 +225,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ---
 
-## MF1 — Series Proposal & Vetting `👤 _(chưa assign)_` (Duyệt Đề Xuất Truyện)
+## MF1 — Series Proposal & Vetting `👤 Bao` (Duyệt Đề Xuất Truyện)
 
 ### A — Quick Wins (BE đã có, FE chỉ cần gọi đúng)
 
@@ -214,10 +236,10 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### A — API thiếu cần viết mới
 
-| Method | Route | Trang FE chờ | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/series/cancellation-queue` | `CancellationReviewPage.tsx` | 🟡 |
-| GET | `/api/v1/board/reports` | `ReportsPage.tsx` (Board EB/EIC) | 🟡 |
+| Method | Route | Trang FE chờ | Ưu tiên | Trạng thái |
+|---|---|---|---|---|
+| GET | `/api/v1/series/cancellation-queue` | `CancellationReviewPage.tsx` | 🟡 | ✅ Đã làm (2026-07-01) |
+| GET | `/api/v1/board/reports` | `ReportsPage.tsx` (Board EB/EIC) | 🟡 | ✅ Đã làm (2026-07-01) |
 
 ---
 
@@ -242,7 +264,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ---
 
-## MF3 — Quality Assurance & Publishing `👤 _(chưa assign)_`
+## MF3 — Quality Assurance & Publishing `👤 Bach`
 
 ### A — Quick Wins (BE đã có, FE chỉ cần gọi đúng)
 
@@ -270,12 +292,12 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### A — API thiếu cần viết mới
 
-| Method | Route | Trang FE chờ | Ưu tiên | Người làm BE |
-|---|---|---|---|---|
-| GET | `/api/v1/admin/dashboard` | `AdminDashboardPage.tsx` | 🔴 | **Bao** (Core - Phần 3) |
-| GET | `/api/v1/admin/workflow-stats` | `AdminWorkflowMonitoringPage.tsx` | 🟡 | **Bao** (Core - Phần 3) |
-| GET | `/api/v1/admin/reports` | `AdminReportsAnalyticsPage.tsx` | 🟡 | **Bao** (Core - Phần 3) |
-| GET | `/api/v1/admin/roles` | `AdminRolesPage.tsx` | 🟢 | **Bao** (Core - Phần 3) |
+| Method | Route | Trang FE chờ | Ưu tiên | Người làm BE | Trạng thái |
+|---|---|---|---|---|---|
+| GET | `/api/v1/admin/dashboard` | `AdminDashboardPage.tsx` | 🔴 | **Bao** (Core - Phần 3) | ✅ Đã làm (2026-07-01) |
+| GET | `/api/v1/admin/workflow-stats` | `AdminWorkflowMonitoringPage.tsx` | 🟡 | **Bao** (Core - Phần 3) | ⬜ Chưa làm |
+| GET | `/api/v1/admin/reports` | `AdminReportsAnalyticsPage.tsx` | 🟡 | **Bao** (Core - Phần 3) | ⬜ Chưa làm |
+| GET | `/api/v1/admin/roles` | `AdminRolesPage.tsx` | 🟢 | **Bao** (Core - Phần 3) | ⬜ Chưa làm |
 
 ### A — Ranking Module (Khối lượng lớn nhất — toàn bộ cần viết mới)
 
@@ -305,24 +327,24 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ---
 
-## MF1 — Series Proposal & Vetting `👤 _(chưa assign)_`
+## MF1 — Series Proposal & Vetting `👤 Bao`
 
 ### B — Luồng Cancellation (Thiếu hoàn toàn — có method `Cancel()` nhưng sai phân quyền)
 
 > ⚠️ Quyết định hủy truyện thuộc **EB/EIC**, không phải Admin.
 
-| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|---|
-| POST | `/api/v1/series/{id}/request-cancellation` | Mangaka | Luồng hủy đứt ngay bước đầu — Mangaka không gửi được | 🟡 |
-| POST | `/api/v1/series/{id}/approve-cancellation` | EIC, EB | EIC/EB không duyệt được yêu cầu hủy | 🟡 |
-| POST | `/api/v1/series/{id}/reject-cancellation` | EIC, EB | Series kẹt ở trạng thái chờ hủy | 🟡 |
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|---|
+| POST | `/api/v1/series/{id}/request-cancellation` | Mangaka | Luồng hủy đứt ngay bước đầu — Mangaka không gửi được | 🟡 | ✅ Đã làm (2026-07-01) |
+| POST | `/api/v1/series/{id}/approve-cancellation` | EIC, EB | EIC/EB không duyệt được yêu cầu hủy | 🟡 | ✅ Đã làm (2026-07-01) |
+| POST | `/api/v1/series/{id}/reject-cancellation` | EIC, EB | Series kẹt ở trạng thái chờ hủy | 🟡 | ✅ Đã làm (2026-07-01) |
 
 ### B — Vòng đời Submission
 
-| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|---|
-| DELETE | `/api/v1/submissions/{id}` | Mangaka | Tạo nhầm Draft không xóa được | 🟢 |
-| GET | `/api/v1/submissions/{id}/votes` | EB, EIC, Admin | Không xem được ai vote gì — thiếu minh bạch | 🟢 |
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|---|
+| DELETE | `/api/v1/submissions/{id}` | Mangaka | Tạo nhầm Draft không xóa được | 🟢 | ✅ Đã làm (2026-07-01) |
+| GET | `/api/v1/submissions/{id}/votes` | EB, EIC, Admin | Không xem được ai vote gì — thiếu minh bạch | 🟢 | ✅ Đã làm (2026-07-01) |
 
 ---
 
@@ -357,7 +379,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ---
 
-## MF3 — Quality Assurance & Publishing `👤 _(chưa assign)_`
+## MF3 — Quality Assurance & Publishing `👤 Bach`
 
 ### B — QA History & Pins
 
@@ -417,16 +439,16 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 # 📅 Lộ Trình Triển Khai
 
-| Phase | Nội dung | Luồng | Ưu tiên |
-|---|---|---|---|
-| **Phase 0 — Quick Wins** | FE kết nối các trang đang gọi sai (Notifications, Board Voting, Editor Dashboard, Assistant pages, QA Canvas) — không cần code BE | MF1 + MF2 + MF3 + Core | 🔴 ROI cao nhất |
-| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me` (**Nam**); viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard (**Bao**) | Core + MF2 + MF3 | 🔴 |
-| **Phase 2 — Ranking Module** | Toàn bộ Infrastructure + Application + Controller Ranking (Phương án A thủ công) (**Bach**) | Core | 🟡 Khối lượng lớn nhất |
-| **Phase 3 — Cancellation Flow** | request/approve/reject-cancellation đúng phân quyền EB/EIC; cancellation-queue; board/reports | MF1 | 🟡 |
-| **Phase 4 — CRUD Hoàn Chỉnh** | PUT/DELETE series, chapter; Studio members; Reassign trang; Task deadline; QA pins; Publishing schedule | MF1 + MF2 + MF3 | 🟡–🟢 |
-| **Phase 5 — Identity & Notifications** | change-password, forgot/reset-password, avatar; notifications unread-count, delete (**Nam**) | Core | 🟢 |
-| **Phase 6 — History & Transparency** | submissions/{id}/votes; QA history/reopen; tasks/{id} detail; publishing/{id} detail | MF1 + MF2 + MF3 | 🟢 |
-| **Phase 7 — Production Infrastructure** | SignalR Hub, Email SMTP, Rate Limiter (**Nam**) <br> Scheduled Publisher Job, Health Check (**Bach**) <br> File Storage thật, Global Exception Handler, Audit Log (**Bao**) | Infra | ⚪ Bắt buộc trước go-live |
+| Phase | Nội dung | Luồng | Ưu tiên | Trạng thái |
+|---|---|---|---|---|
+| **Phase 0 — Quick Wins** | FE kết nối các trang đang gọi sai (Notifications, Board Voting, Editor Dashboard, Assistant pages, QA Canvas) — không cần code BE | MF1 + MF2 + MF3 + Core | 🔴 ROI cao nhất | ⬜ FE việc |
+| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me` (**Nam**); viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard (**Bao**) | Core + MF2 + MF3 | 🔴 | 🔄 Một phần: Admin Dashboard ✅ done Bao. Bugs #1 #2 + queue TE ⬜ chưa |
+| **Phase 2 — Ranking Module** | Toàn bộ Infrastructure + Application + Controller Ranking (Phương án A thủ công) (**Bach**) | Core | 🟡 Khối lượng lớn nhất | ⬜ Chưa bắt đầu |
+| **Phase 3 — Cancellation Flow** | request/approve/reject-cancellation đúng phân quyền EB/EIC; cancellation-queue; board/reports | MF1 | 🟡 | ✅ Hoàn thành (2026-07-01, Bao) |
+| **Phase 4 — CRUD Hoàn Chỉnh** | PUT/DELETE series, chapter; Studio members; Reassign trang; Task deadline; QA pins; Publishing schedule | MF1 + MF2 + MF3 | 🟡–🟢 | ⬜ Chưa bắt đầu |
+| **Phase 5 — Identity & Notifications** | change-password, forgot/reset-password, avatar; notifications unread-count, delete (**Nam**) | Core | 🟢 | ⬜ Chưa bắt đầu |
+| **Phase 6 — History & Transparency** | submissions/{id}/votes; QA history/reopen; tasks/{id} detail; publishing/{id} detail | MF1 + MF2 + MF3 | 🟢 | 🔄 Một phần: votes + delete draft ✅ done Bao. Phần còn lại ⬜ |
+| **Phase 7 — Production Infrastructure** | SignalR Hub, Email SMTP, Rate Limiter (**Nam**) <br> Scheduled Publisher Job, Health Check (**Bach**) <br> File Storage thật, Global Exception Handler, Audit Log (**Bao**) | Infra | ⚪ Bắt buộc trước go-live | 🔄 Một phần: Audit Log cho Admin Dashboard ✅. Còn lại ⬜ |
 
 ---
 
@@ -443,11 +465,13 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | Hạng mục | Số lượng |
 |---|---|
 | ✅ API BE đã có, FE chưa gọi đúng | 9 trang |
-| 🔨 API cần viết mới (GAP A — để demo) | ~13 endpoints |
-| 🔨 API cần viết mới (GAP B — production) | ~27 endpoints |
-| 🔧 Service/Infrastructure thiếu | 8 items |
+| 🔨 API cần viết mới (GAP A — để demo) | ~13 endpoints (còn ~11 sau khi Bao hoàn thành) |
+| 🔨 API cần viết mới (GAP B — production) | ~27 endpoints (còn ~22 sau khi Bao hoàn thành) |
+| 🔧 Service/Infrastructure thiếu | 8 items (Audit Log partially done) |
 | 🆕 API mới hoàn thành (PR #19 nam1) | 3 endpoints |
+| 🆕 API mới hoàn thành (2026-07-01 Bao) | **9 endpoints** (Phase 1 Admin Dashboard + Phase 3 Cancellation + Phase 6 partial) |
 | 🐛 Bugs cần fix từ code review | 2 nghiêm trọng, 1 minor UX, 1 performance |
+| ⚠️ Tech Debt (Bao, note lại) | Pagination cho `GET /api/v1/series` + `GET /api/v1/admin/dashboard` dùng COUNT aggregate thay GetAll |
 
 > **Rule of thumb:** Phase 0–2 = đủ để demo. Phase 3–7 = đủ để deploy production thật.
 
@@ -457,8 +481,8 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 | # | File | Mức độ | Người fix | Trạng thái |
 |---|---|---|---|---|
-| Bug #1 | `BulkReviewLayersHandler.cs` — thiếu `_pageTaskRepo.SaveChangesAsync` | 🔴 Nghiêm trọng | _(chưa assign)_ | ⬜ Chưa fix |
-| Bug #2 | `GetLayerHistoryHandler.cs` — status suy luận từ `RejectionNote` sai | 🔴 Nghiêm trọng | _(chưa assign)_ | ⬜ Chưa fix |
-| Issue #3 | `GetLayerHistoryHandler.cs` — `?status=Pending` trả `[]` không báo lỗi | 🟡 Minor UX | _(chưa assign)_ | ⬜ Chưa fix |
-| Minor #4 | `BulkActivatePageTasksHandler.cs` — N+1 queries khi giao nhiều trang | 🟢 Performance | _(chưa assign)_ | ⬜ Có thể để sau |
+| Bug #1 | `BulkReviewLayersHandler.cs` — thiếu `_pageTaskRepo.SaveChangesAsync` | 🔴 Nghiêm trọng | Nam | ⬜ Chưa fix |
+| Bug #2 | `GetLayerHistoryHandler.cs` — status suy luận từ `RejectionNote` sai | 🔴 Nghiêm trọng | Nam | ⬜ Chưa fix |
+| Issue #3 | `GetLayerHistoryHandler.cs` — `?status=Pending` trả `[]` không báo lỗi | 🟡 Minor UX | Nam | ⬜ Chưa fix |
+| Minor #4 | `BulkActivatePageTasksHandler.cs` — N+1 queries khi giao nhiều trang | 🟢 Performance | Nam | ⬜ Có thể để sau |
 

@@ -13,6 +13,9 @@ public interface ISubmissionRepository
     /// <summary>Lấy submission theo Id. Trả null nếu không tìm thấy.</summary>
     Task<SeriesSubmission?> GetByIdAsync(Guid id, CancellationToken ct = default);
 
+    /// <summary>Lấy TẤT CẢ submissions — dùng cho Admin Dashboard stats (in-memory aggregation).</summary>
+    Task<IEnumerable<SeriesSubmission>> GetAllAsync(CancellationToken ct = default);
+
     /// <summary>
     /// Lấy submission theo Id với PESSIMISTIC ROW-LEVEL LOCK (SELECT FOR UPDATE).
     /// Chỉ dùng trong transaction — đảm bảo tại một thời điểm chỉ có 1 luồng
