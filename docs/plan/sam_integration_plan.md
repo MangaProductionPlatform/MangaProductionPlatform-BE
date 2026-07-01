@@ -6,19 +6,23 @@
 
 ## ✅ Đã hoàn thành (không cần làm lại)
 
-| Hạng mục | File |
-|----------|------|
+| Hạng mục | File / Trạng thái |
+|----------|-------------------|
 | SAM models (EmbeddingResponse, PredictRequest, MaskResponse) | `src/MangaERP.Api/Models/Sam/SamModels.cs` |
 | SAM HTTP client (.NET gọi Python) | `src/MangaERP.Api/Services/SamServiceClient.cs` |
 | API Controller (2 endpoint) | `src/MangaERP.Api/Controllers/SegmentationController.cs` |
 | Đăng ký DI + timeout 180s | `src/MangaERP.Api/Program.cs` |
 | Config placeholder | `src/MangaERP.Api/appsettings.json` |
 | Unit tests (4 test cases) | `tests/MangaERP.Api.Tests/SamServiceTests.cs` |
-| Build pass (0 errors) | ✅ Confirmed |
+| **Resilience & Polly Retry + Circuit Breaker** | ✅ Hoàn thành (2 retries, circuit breaker 4 fails/2 phút) |
+| **Dynamic URL & Key Config (DB SystemConfigs)** | ✅ Hoàn thành (Bảng SystemConfigs + dynamic HttpClient resolving) |
+| **PATCH /api/v1/admin/sam-config (Audit Log)** | ✅ Hoàn thành (Admin update config động không restart app) |
+| **GET /api/segmentation/health** | ✅ Hoàn thành (Check health + xử lý Circuit Open/Timeout) |
+| Build & Tests pass (29 tests) | ✅ Confirmed Pass 100% |
 
 ---
 
-## 📋 Việc cần làm — theo thứ tự
+## 📋 Việc cần làm tiếp theo (Theo Phase đã điều chỉnh)
 
 ---
 

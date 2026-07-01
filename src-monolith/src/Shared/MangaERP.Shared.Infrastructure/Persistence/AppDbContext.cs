@@ -9,6 +9,7 @@ using MangaERP.Series.Domain.Entities;
 using MangaERP.Studio.Domain.Entities;
 using MangaERP.Submission.Domain.Entities;
 using MangaERP.Task.Domain.Entities;
+using MangaERP.Shared.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace MangaERP.Shared.Infrastructure.Persistence;
@@ -20,6 +21,9 @@ namespace MangaERP.Shared.Infrastructure.Persistence;
 public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+
+    // ── System / Configurations ──────────────────────────────
+    public DbSet<SystemConfig>     SystemConfigs     => Set<SystemConfig>();
 
     // ── Identity ─────────────────────────────────────────────
     public DbSet<User>             Users             => Set<User>();

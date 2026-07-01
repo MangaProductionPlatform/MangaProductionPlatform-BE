@@ -16,6 +16,10 @@ public class SubmissionRepository : ISubmissionRepository
     public async System.Threading.Tasks.Task<SeriesSubmission?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await _db.SeriesSubmissions.FirstOrDefaultAsync(s => s.Id == id, ct);
 
+    /// <summary>Lấy TẤT CẢ submissions — dùng cho Admin Dashboard stats.</summary>
+    public async System.Threading.Tasks.Task<IEnumerable<SeriesSubmission>> GetAllAsync(CancellationToken ct = default)
+        => await _db.SeriesSubmissions.ToListAsync(ct);
+
     /// <summary>
     /// Pessimistic row-level lock — translates to:
     ///   SELECT ... FROM "SeriesSubmissions" WHERE "Id" = {id} FOR UPDATE

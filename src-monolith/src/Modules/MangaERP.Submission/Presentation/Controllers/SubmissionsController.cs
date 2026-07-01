@@ -9,10 +9,12 @@ using MangaERP.Submission.Application.Commands.RequestRevision;
 using MangaERP.Submission.Application.Commands.ApproveSubmission;
 using MangaERP.Submission.Application.Commands.CastVote;
 using MangaERP.Submission.Application.Commands.ResolveConflict;
+using MangaERP.Submission.Application.Commands.DeleteDraft;
 using MangaERP.Submission.Application.Queries.GetMySubmissions;
 using MangaERP.Submission.Application.Queries.GetSubmissionDetail;
 using MangaERP.Submission.Application.Queries.GetSubmissionQueue;
 using MangaERP.Submission.Application.Queries.GetFeedbackPins;
+using MangaERP.Submission.Application.Queries.GetSubmissionVotes;
 using MangaERP.Identity.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -207,6 +209,50 @@ public class SubmissionsController : ControllerBase
             return Ok(result);
         }
         catch (Exception ex) { return StatusCode(500, new { error = "Internal error", message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [Mangaka] Xóa mềm (soft delete) một Draft submission của mình.
+    /// Chỉ được phép khi status == Draft.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(DeleteDraftResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> DeleteDraft(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var command = new DeleteDraftCommand(id, GetUserId());
+            var result  = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)        { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex)   { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [EditorialBoard, EditorInChief, Admin] Xem kết quả phiếu bầu của một submission.
+    /// </summary>
+    /// <remarks>GET /api/v1/submissions/{id}/votes?round=1 (bỏ round = lấy vòng hiện tại)</remarks>
+    [HttpGet("{id:guid}/votes")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+    [ProducesResponseType(typeof(SubmissionVotesDto), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetVotes(Guid id, [FromQuery] int? round, CancellationToken ct)
+    {
+        try
+        {
+            var query  = new GetSubmissionVotesQuery(id, GetUserId(), GetUserRole(), round);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)        { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 
     // ── EDITORIAL BOARD VETTING FLOWS ────────────────────────────────────────
