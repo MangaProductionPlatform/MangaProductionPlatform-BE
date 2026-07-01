@@ -93,7 +93,9 @@
 | **MF1** — Series Proposal & Vetting | **Bao** branch `bao`| `MangaERP.Submission`, `MangaERP.Series` (cancellation flow) |
 | **MF2** — Chapter Production & Task | **Nam** (branch `nam1`) | `MangaERP.Chapter`, `MangaERP.Task`, `MangaERP.Studio` |
 | **MF3** — QA & Publishing | **Bach** `bach-v2`| `MangaERP.QA`, `MangaERP.Publishing` |
-| **Core** (Identity, Admin, Ranking, Notifications) | **Chia sau** | `MangaERP.Identity`, `MangaERP.Ranking`, Shared services |
+| **Core - Phần 1** (Identity, Security & Notifications) | **Nam** (branch `nam1`) | `MangaERP.Identity` (Auth/Profile, Notifications, SignalR, Email, RateLimiter) |
+| **Core - Phần 2** (Ranking & Background Jobs) | **Bach** (branch `bach-v2`) | `MangaERP.Ranking`, Quartz/Hangfire Scheduled Publisher Job |
+| **Core - Phần 3** (Admin Portal & Global Infrastructure) | **Bao** (branch `bao`) | `MangaERP.Identity` (Admin endpoints), S3 Storage, Middlewares (Exception, Audit) |
 
 **Quy tắc file cụ thể:**
 - Không ai được sửa `SharedInfrastructureExtensions.cs` hoặc `AppDbContext.cs` mà không báo cả nhóm trước (file shared dùng chung).
@@ -257,9 +259,10 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ---
 
-## Core — Admin, Notifications & Ranking `👤 Chia sau`
+## Core — Admin, Notifications & Ranking (Chia theo Owner)
 
 ### A — Quick Wins (BE đã có, FE chỉ cần gọi đúng)
+> **Người phụ trách:** **Nam** (Core - Phần 1) tích hợp SignalR; cả team wire API vào các dashboard tương ứng.
 
 | Trang FE | API đã có | Việc FE cần làm |
 |---|---|---|
@@ -267,17 +270,18 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### A — API thiếu cần viết mới
 
-| Method | Route | Trang FE chờ | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/admin/dashboard` | `AdminDashboardPage.tsx` | 🔴 |
-| GET | `/api/v1/admin/workflow-stats` | `AdminWorkflowMonitoringPage.tsx` | 🟡 |
-| GET | `/api/v1/admin/reports` | `AdminReportsAnalyticsPage.tsx` | 🟡 |
-| GET | `/api/v1/admin/roles` | `AdminRolesPage.tsx` | 🟢 |
+| Method | Route | Trang FE chờ | Ưu tiên | Người làm BE |
+|---|---|---|---|---|
+| GET | `/api/v1/admin/dashboard` | `AdminDashboardPage.tsx` | 🔴 | **Bao** (Core - Phần 3) |
+| GET | `/api/v1/admin/workflow-stats` | `AdminWorkflowMonitoringPage.tsx` | 🟡 | **Bao** (Core - Phần 3) |
+| GET | `/api/v1/admin/reports` | `AdminReportsAnalyticsPage.tsx` | 🟡 | **Bao** (Core - Phần 3) |
+| GET | `/api/v1/admin/roles` | `AdminRolesPage.tsx` | 🟢 | **Bao** (Core - Phần 3) |
 
 ### A — Ranking Module (Khối lượng lớn nhất — toàn bộ cần viết mới)
 
 > Hiện chỉ có Domain entities (`VoteData`, `RankingSnapshot`). Chưa có Application / Infrastructure / Controller.
 > Trang FE chờ: `/ranking`, `RankingAnalyticsPage.tsx`, `RankingReportsPage.tsx`
+> **Người phụ trách:** **Bach** (Core - Phần 2)
 
 | Method | Route | Vai trò | Mô tả |
 |---|---|---|---|
@@ -289,9 +293,9 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | DELETE | `/api/v1/ranking/import/{period}` | Admin | Xóa phiếu thô trước khi compile |
 
 **Checklist BE Ranking (Phương án A — thủ công):**
-- [ ] Infrastructure: `IVoteDataRepository`, `IRankingSnapshotRepository`, EF mapping, migration
-- [ ] Application: `ImportVoteDataCommand`, `CompileRankingCommand`, `GetRankingBoardQuery`
-- [ ] Presentation: `RankingController.cs`
+- [ ] Infrastructure: `IVoteDataRepository`, `IRankingSnapshotRepository`, EF mapping, migration (**Bach**)
+- [ ] Application: `ImportVoteDataCommand`, `CompileRankingCommand`, `GetRankingBoardQuery` (**Bach**)
+- [ ] Presentation: `RankingController.cs` (**Bach**)
 
 ---
 
@@ -374,9 +378,9 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ---
 
-## Core — Identity, Notifications & Infrastructure `👤 Chia sau`
+## Core — Identity, Notifications & Infrastructure (Chia theo Owner)
 
-### B — Identity & Tài Khoản
+### B — Identity & Tài Khoản (Người làm: **Nam** — Core - Phần 1)
 
 | Method | Route | Vấn đề nếu thiếu | Ưu tiên |
 |---|---|---|---|
@@ -388,7 +392,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 > `POST /auth/logout` và `POST /auth/refresh` **đã có** — bỏ qua tài liệu cũ ghi là "thiếu".
 
-### B — Notifications
+### B — Notifications (Người làm: **Nam** — Core - Phần 1)
 
 | Method | Route | Vấn đề nếu thiếu | Ưu tiên |
 |---|---|---|---|
@@ -398,16 +402,16 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### B — Infrastructure & Services (Bắt buộc trước go-live)
 
-| Service | Tình trạng hiện tại | Hậu quả nếu thiếu | Ưu tiên |
-|---|---|---|---|
-| **SignalR Hub** | Logic có nhưng Hub chưa đăng ký endpoint | Notification chỉ thấy khi refresh trang, không real-time | ⚪ |
-| **Scheduled Publisher Job** | Lưu DB nhưng không có job trigger | Chapter lên lịch không bao giờ tự phát hành | ⚪ |
-| **File Storage (S3/Blob)** | FE tự nhập URL thủ công | Không upload được ảnh bìa, bản thảo, layer vẽ | ⚪ |
-| **Email Service** | Chỉ log ra console | Email kích hoạt & reset password không đến được user | ⚪ |
-| **Global Exception Handler** | Mỗi controller tự try-catch riêng | FE nhận HTML error page thay vì JSON → app crash phía client | ⚪ |
-| **Audit Log** | Không có | Không điều tra được sự cố — ai làm gì, lúc mấy giờ | ⚪ |
-| **Rate Limiter** | Không có | Dễ bị spam login/vote — lỗ hổng bảo mật | ⚪ |
-| **Health Check** | Không có `GET /health` | Deployment/monitoring không biết service có đang sống | ⚪ |
+| Service | Tình trạng hiện tại | Hậu quả nếu thiếu | Ưu tiên | Người làm BE |
+|---|---|---|---|---|
+| **SignalR Hub** | Logic có nhưng Hub chưa đăng ký endpoint | Notification chỉ thấy khi refresh trang, không real-time | ⚪ | **Nam** (Core - Phần 1) |
+| **Scheduled Publisher Job** | Lưu DB nhưng không có job trigger | Chapter lên lịch không bao giờ tự phát hành | ⚪ | **Bach** (Core - Phần 2) |
+| **File Storage (S3/Blob)** | FE tự nhập URL thủ công | Không upload được ảnh bìa, bản thảo, layer vẽ | ⚪ | **Bao** (Core - Phần 3) |
+| **Email Service** | Chỉ log ra console | Email kích hoạt & reset password không đến được user | ⚪ | **Nam** (Core - Phần 1) |
+| **Global Exception Handler** | Mỗi controller tự try-catch riêng | FE nhận HTML error page thay vì JSON → app crash phía client | ⚪ | **Bao** (Core - Phần 3) |
+| **Audit Log** | Không có | Không điều tra được sự cố — ai làm gì, lúc mấy giờ | ⚪ | **Bao** (Core - Phần 3) |
+| **Rate Limiter** | Không có | Dễ bị spam login/vote — lỗ hổng bảo mật | ⚪ | **Nam** (Core - Phần 1) |
+| **Health Check** | Không có `GET /health` | Deployment/monitoring không biết service có đang sống | ⚪ | **Bach** (Core - Phần 2) |
 
 ---
 
@@ -416,13 +420,13 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | Phase | Nội dung | Luồng | Ưu tiên |
 |---|---|---|---|
 | **Phase 0 — Quick Wins** | FE kết nối các trang đang gọi sai (Notifications, Board Voting, Editor Dashboard, Assistant pages, QA Canvas) — không cần code BE | MF1 + MF2 + MF3 + Core | 🔴 ROI cao nhất |
-| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me`; viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard | Core + MF2 + MF3 | 🔴 |
-| **Phase 2 — Ranking Module** | Toàn bộ Infrastructure + Application + Controller Ranking (Phương án A thủ công) | Core | 🟡 Khối lượng lớn nhất |
+| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me` (**Nam**); viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard (**Bao**) | Core + MF2 + MF3 | 🔴 |
+| **Phase 2 — Ranking Module** | Toàn bộ Infrastructure + Application + Controller Ranking (Phương án A thủ công) (**Bach**) | Core | 🟡 Khối lượng lớn nhất |
 | **Phase 3 — Cancellation Flow** | request/approve/reject-cancellation đúng phân quyền EB/EIC; cancellation-queue; board/reports | MF1 | 🟡 |
 | **Phase 4 — CRUD Hoàn Chỉnh** | PUT/DELETE series, chapter; Studio members; Reassign trang; Task deadline; QA pins; Publishing schedule | MF1 + MF2 + MF3 | 🟡–🟢 |
-| **Phase 5 — Identity & Notifications** | change-password, forgot/reset-password, avatar; notifications unread-count, delete | Core | 🟢 |
+| **Phase 5 — Identity & Notifications** | change-password, forgot/reset-password, avatar; notifications unread-count, delete (**Nam**) | Core | 🟢 |
 | **Phase 6 — History & Transparency** | submissions/{id}/votes; QA history/reopen; tasks/{id} detail; publishing/{id} detail | MF1 + MF2 + MF3 | 🟢 |
-| **Phase 7 — Production Infrastructure** | SignalR Hub, Scheduled Publisher Job, File Storage thật, Email SMTP, Global Exception Handler, Audit Log, Rate Limiter, Health Check | Infra | ⚪ Bắt buộc trước go-live |
+| **Phase 7 — Production Infrastructure** | SignalR Hub, Email SMTP, Rate Limiter (**Nam**) <br> Scheduled Publisher Job, Health Check (**Bach**) <br> File Storage thật, Global Exception Handler, Audit Log (**Bao**) | Infra | ⚪ Bắt buộc trước go-live |
 
 ---
 
