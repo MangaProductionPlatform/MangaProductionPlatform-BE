@@ -20,6 +20,7 @@
     <ProjectReference Include="..\Modules\MangaERP.Publishing\MangaERP.Publishing.csproj" />
     <ProjectReference Include="..\Modules\MangaERP.Ranking\MangaERP.Ranking.csproj" />
     <ProjectReference Include="..\Modules\MangaERP.Studio\MangaERP.Studio.csproj" />
+    <ProjectReference Include="..\Modules\MangaERP.Segmentation\MangaERP.Segmentation.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
