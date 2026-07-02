@@ -19,6 +19,14 @@ public class SegmentationTask : Entity
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>
+    /// Kích thước ảnh gốc — được lưu tại thời điểm upload (đọc từ image header).
+    /// Tránh đọc lại file mỗi lần query (N+1).
+    /// Nullable để tương thích dữ liệu cũ tạo trước khi có cột này.
+    /// </summary>
+    public int? OriginalWidth { get; set; }
+    public int? OriginalHeight { get; set; }
+
     public bool CanTransitionTo(SegmentationTaskStatus newStatus)
     {
         return (Status, newStatus) switch

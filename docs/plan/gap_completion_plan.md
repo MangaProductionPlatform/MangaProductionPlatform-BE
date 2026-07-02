@@ -10,10 +10,12 @@
 | Ngày | PR / Người | Nội dung | Ghi chú |
 |---|---|---|---|
 | 2026-06-30 | PR #18 `bach-v2` | `SharedInfrastructureExtensions`: hỗ trợ URI format cho PostgreSQL connection string khi deploy | Không ảnh hưởng local dev |
-| 2026-06-30 | PR #19 `nam1` | **3 features mới** (xem chi tiết bên dưới) — merge vào main | ✅ Đã pull về local |
-| 2026-07-01 | `bao` | **9 endpoints mới** Phase 1 + Phase 3 MF1 (xem chi tiết bên dưới) — build ✅ 0 errors | ⏳ Chưa push — đang review |
+| 2026-06-30 | PR #19 `nam1` | **3 features mới** (xem chi tiết bên dưới) — merge vào main | ✅ Đã merge vào main |
+| 2026-07-01 | PR #25 `bao` | **9 endpoints mới** Phase 1 + Phase 3 MF1 (xem chi tiết bên dưới) — build ✅ 0 errors | ✅ Đã merge vào main |
+| 2026-07-02 | PR #26 `nam1` | **Đổi assistant, thành viên studio, deadline, xem layer của Chapter** | ✅ Đã merge vào main |
+| 2026-07-02 | PR #27 `bach-v2` | **QA Queue, phân công Fix Task, báo lỗi sửa xong, Hủy lịch xuất bản (MF3)** | ✅ Đã merge vào main |
 
-### ✅ Hoàn thành trong PR #19 `nam1`
+### ✅ Hoàn thành trong PR #19 / PR #26 `nam1`
 
 | Feature | API | File | Trạng thái |
 |---|---|---|---|
@@ -23,19 +25,19 @@
 
 > **Tác động lên plan:** Mục B3 — `GET /api/v1/tasks/{pageTaskId}/layers` đã hoàn thành.
 
-### ✅ Hoàn thành ngày 2026-07-01 — Branch `bao`
+### ✅ Hoàn thành ngày 2026-07-01 — Branch `bao` (PR #25)
 
 | Feature | API | File chính | Trạng thái |
 |---|---|---|---|
-| Admin Dashboard (User + Submission + Series stats, incl. EiC) | `GET /api/v1/admin/dashboard` | `AdminDashboardController.cs` + `GetAdminDashboardHandler.cs` | ✅ Build OK |
-| Board Reports (rolling 30 ngày) | `GET /api/v1/board/reports` | `BoardController.cs` + `GetBoardReportsHandler.cs` | ✅ Build OK |
-| Xem tất cả series + filter status | `GET /api/v1/series?status=` | `GetAllSeriesHandler.cs` | ✅ Build OK |
-| Cancellation queue cho EB/EiC | `GET /api/v1/series/cancellation-queue` | `GetCancellationQueueHandler.cs` | ✅ Build OK |
-| Mangaka gửi yêu cầu hủy series | `POST /api/v1/series/{id}/request-cancellation` | `RequestCancellationHandler.cs` + Validator | ✅ Build OK |
-| EB/EiC duyệt yêu cầu hủy | `POST /api/v1/series/{id}/approve-cancellation` | `ApproveCancellationHandler.cs` | ✅ Build OK |
-| EB/EiC từ chối yêu cầu hủy | `POST /api/v1/series/{id}/reject-cancellation` | `RejectCancellationHandler.cs` + Validator | ✅ Build OK |
-| Mangaka xóa Draft submission | `DELETE /api/v1/submissions/{id}` | `DeleteDraftHandler.cs` + Validator | ✅ Build OK |
-| EB/EiC/Admin xem phiếu bầu | `GET /api/v1/submissions/{id}/votes` | `GetSubmissionVotesHandler.cs` | ✅ Build OK |
+| Admin Dashboard (User + Submission + Series stats, incl. EiC) | `GET /api/v1/admin/dashboard` | `AdminDashboardController.cs` + `GetAdminDashboardHandler.cs` | ✅ Đã merge |
+| Board Reports (rolling 30 ngày) | `GET /api/v1/board/reports` | `BoardController.cs` + `GetBoardReportsHandler.cs` | ✅ Đã merge |
+| Xem tất cả series + filter status | `GET /api/v1/series?status=` | `GetAllSeriesHandler.cs` | ✅ Đã merge |
+| Cancellation queue cho EB/EiC | `GET /api/v1/series/cancellation-queue` | `GetCancellationQueueHandler.cs` | ✅ Đã merge |
+| Mangaka gửi yêu cầu hủy series | `POST /api/v1/series/{id}/request-cancellation` | `RequestCancellationHandler.cs` + Validator | ✅ Đã merge |
+| EB/EiC duyệt yêu cầu hủy | `POST /api/v1/series/{id}/approve-cancellation` | `ApproveCancellationHandler.cs` | ✅ Đã merge |
+| EB/EiC từ chối yêu cầu hủy | `POST /api/v1/series/{id}/reject-cancellation` | `RejectCancellationHandler.cs` + Validator | ✅ Đã merge |
+| Mangaka xóa Draft submission | `DELETE /api/v1/submissions/{id}` | `DeleteDraftHandler.cs` + Validator | ✅ Đã merge |
+| EB/EiC/Admin xem phiếu bầu | `GET /api/v1/submissions/{id}/votes` | `GetSubmissionVotesHandler.cs` | ✅ Đã merge |
 
 **Domain mới:** `MangaSeries` — thêm `CancellationRequestStatus` enum + 7 fields + 3 domain methods (`RequestCancellation`, `ApproveCancellation`, `RejectCancellation`)
 **EF Migration:** `AddCancellationFieldsToSeries` — cần chạy `dotnet ef database update` trước khi test
@@ -48,46 +50,27 @@
 
 ## 🐛 Bugs Cần Fix — Phát Hiện Từ Code Review PR #19
 
-> ⚠️ **Assign cho đúng người trước khi làm phase tiếp theo.**
+> ⚠️ **Đã hoàn thành sửa toàn bộ bug này.**
 
 ### Bug #1 — `BulkReviewLayersHandler.cs` thiếu `SaveChangesAsync` cho PageTask [NGHIÊM TRỌNG]
-
 - **File:** `MangaERP.Task/Application/Commands/BulkReviewLayers/BulkReviewLayersHandler.cs`
-- **Dòng:** ~113
-- **Vấn đề:** Chỉ gọi `_layerRepo.SaveChangesAsync(ct)` nhưng **thiếu** `_pageTaskRepo.SaveChangesAsync(ct)`. Trạng thái `pageTask.Accept()` / `pageTask.RequestRevision()` có thể không được persist vào DB nếu hai repo dùng DbContext riêng.
-- **Hậu quả:** Mangaka duyệt layer nhưng task status không thay đổi trong DB → FE hiển thị sai trạng thái.
-- **Fix:** Thêm `await _pageTaskRepo.SaveChangesAsync(ct);` sau dòng `_layerRepo.SaveChangesAsync`.
 - **Người fix:** Nam
-- **Trạng thái:** 🔴 Chưa fix
+- **Trạng thái:** ✅ Đã fix
 
 ### Bug #2 — `GetLayerHistoryHandler.cs` xác định Status sai logic [NGHIÊM TRỌNG]
-
 - **File:** `MangaERP.Task/Application/Queries/GetLayerHistory/GetLayerHistoryHandler.cs`
-- **Dòng:** ~103
-- **Vấn đề:** `string statusStr = layer.RejectionNote == null ? "Accepted" : "Rejected"` — suy luận status từ `RejectionNote` thay vì dùng field/enum thật trên entity. Nếu layer có `RejectionNote` cũ nhưng sau đó được Accept → hiển thị sai là "Rejected".
-- **Fix:** Dùng field `Status` hoặc enum có sẵn trên entity `ArtworkLayer` thay vì suy luận từ `RejectionNote`.
 - **Người fix:** Nam
-- **Trạng thái:** 🔴 Chưa fix
+- **Trạng thái:** ✅ Đã fix
 
 ### Issue #3 — `GetLayerHistoryHandler.cs` filter `?status=Pending` trả về rỗng không rõ lý do [UX]
-
 - **File:** `MangaERP.Task/Application/Queries/GetLayerHistory/GetLayerHistoryHandler.cs`
-- **Dòng:** ~113–114
-- **Vấn đề:** `ValidStatuses` bao gồm `"Pending"` nhưng handler lại skip toàn bộ Pending layers (vì `ReviewedAt == null`) → FE gọi `?status=Pending` luôn nhận `[]` mà không có thông báo lỗi.
-- **Fix (2 lựa chọn):**
-  - Bỏ `"Pending"` khỏi `ValidStatuses` trong Validator, trả `400 Bad Request` nếu FE gửi lên.
-  - Hoặc: Hỗ trợ Pending thật sự bằng cách không filter `ReviewedAt != null` khi status là Pending.
 - **Người fix:** Nam
-- **Trạng thái:** 🟡 Minor — nhưng nên fix trước khi FE tích hợp
+- **Trạng thái:** ✅ Đã fix
 
 ### Minor #4 — `BulkActivatePageTasksHandler.cs` N+1 queries [PERFORMANCE]
-
 - **File:** `MangaERP.Chapter/Application/Commands/BulkActivatePageTasks/BulkActivatePageTasksHandler.cs`
-- **Dòng:** ~59–65
-- **Vấn đề:** Loop gọi `GetByChapterAndPageNumberAsync` từng trang một → 20 pages = 20 queries DB.
-- **Fix:** Thêm method `GetByChapterAndPageNumbersAsync(chapterId, pageNumbers[])` vào `IPageTaskRepository` để lấy toàn bộ trong 1 query.
 - **Người fix:** Nam
-- **Trạng thái:** 🟢 Có thể để sau, ưu tiên thấp hơn Bug #1 và #2
+- **Trạng thái:** ✅ Đã fix
 
 ---
 
@@ -257,10 +240,10 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### A — API thiếu cần viết mới
 
-| Method | Route | Trang FE chờ | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/chapters/my-queue` | `ReviewQueuePage.tsx` (Tantou Editor) | 🔴 |
-| GET | `/api/v1/assistant/tasks/income` | `AssistantIncomePage.tsx` | 🟢 |
+| Method | Route | Trang FE chờ | Ưu tiên | Trạng thái |
+|---|---|---|---|---|
+| GET | `/api/v1/chapters/my-queue` | `ReviewQueuePage.tsx` (Tantou Editor) | 🔴 | ⬜ Chưa làm |
+| GET | `/api/v1/assistant/tasks/income` | `AssistantIncomePage.tsx` | 🟢 | ⬜ Chưa làm |
 
 ---
 
@@ -274,11 +257,11 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### A — API thiếu cần viết mới
 
-| Method | Route | Trang FE chờ | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/publishing/chapters/my-queue` | `PublishingQueuePage.tsx` (Tantou Editor) | 🔴 |
-| GET | `/api/v1/publishing/schedule` | `PublishingSchedulePage.tsx` | 🟡 |
-| GET | `/api/v1/qa/queue` | `ReviewQueuePage.tsx` (QA Queue cho Editor nhận Chapter) | 🔴 |
+| Method | Route | Trang FE chờ | Ưu tiên | Trạng thái |
+|---|---|---|---|---|
+| GET | `/api/v1/publishing/chapters/my-queue` | `PublishingQueuePage.tsx` (Tantou Editor) | 🔴 | ⬜ Chưa làm |
+| GET | `/api/v1/publishing/schedule` | `PublishingSchedulePage.tsx` | 🟡 | ⬜ Chưa làm |
+| GET | `/api/v1/qa/queue` | `ReviewQueuePage.tsx` (QA Queue cho Editor nhận Chapter) | 🔴 | ✅ Đã làm (trong `bach-v2`) |
 
 ---
 
@@ -355,30 +338,30 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### B — Quản lý Series & Studio
 
-| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|---|
-| PUT | `/api/v1/series/{id}` | Mangaka | Không sửa được metadata sau khi approved | 🟡 |
-| POST | `/api/v1/series/{id}/set-hiatus` | Mangaka, Admin | Không có trạng thái tạm nghỉ | 🟢 |
-| POST | `/api/v1/series/{id}/reactivate` | Mangaka, Admin | Không khôi phục từ Hiatus được | 🟢 |
-| GET | `/api/v1/studios/{seriesId}/members` | Mangaka, TE | Không biết ai đang trong studio | 🟢 |
-| DELETE | `/api/v1/studios/{seriesId}/members/{assistantId}` | Mangaka | Không khai trừ được assistant | 🟢 |
-| POST | `/api/v1/studios/invitations/{id}/cancel` | Mangaka | Gửi nhầm lời mời không thu hồi được | 🟢 |
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|---|
+| PUT | `/api/v1/series/{id}` | Mangaka | Không sửa được metadata sau khi approved | 🟡 | ⬜ Chưa làm |
+| POST | `/api/v1/series/{id}/set-hiatus` | Mangaka, Admin | Không có trạng thái tạm nghỉ | 🟢 | ⬜ Chưa làm |
+| POST | `/api/v1/series/{id}/reactivate` | Mangaka, Admin | Không khôi phục từ Hiatus được | 🟢 | ⬜ Chưa làm |
+| GET | `/api/v1/studios/{seriesId}/members` | Mangaka, TE | Không biết ai đang trong studio | 🟢 | ✅ Đã làm (trong `nam1`) |
+| DELETE | `/api/v1/studios/{seriesId}/members/{assistantId}` | Mangaka | Không khai trừ được assistant | 🟢 | ⬜ Chưa làm |
+| POST | `/api/v1/studios/invitations/{id}/cancel` | Mangaka | Gửi nhầm lời mời không thu hồi được | 🟢 | ✅ Đã làm (trong `nam1`) |
 
 ### B — Quản lý Chapter & Trang vẽ
 
-| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|---|
-| PUT | `/api/v1/chapters/{id}` | Mangaka | Nhập sai tiêu đề/trang không sửa được | 🟢 |
-| DELETE | `/api/v1/chapters/{id}` | Mangaka | Chapter rác tồn tại vĩnh viễn | 🟢 |
-| GET | `/api/v1/chapters/{id}/pages` | Mangaka, TE | Không quản lý danh sách trang vẽ của chapter | 🟡 |
-| PATCH | `/api/v1/chapters/{id}/pages/{pageNum}/reassign` | Mangaka | Không đổi assistant cho trang cụ thể | 🟢 |
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|---|
+| PUT | `/api/v1/chapters/{id}` | Mangaka | Nhập sai tiêu đề/trang không sửa được | 🟢 | ⬜ Chưa làm |
+| DELETE | `/api/v1/chapters/{id}` | Mangaka | Chapter rác tồn tại vĩnh viễn | 🟢 | ⬜ Chưa làm |
+| GET | `/api/v1/chapters/{id}/pages` | Mangaka, TE | Không quản lý danh sách trang vẽ của chapter | 🟡 | ✅ Đã làm (trong `nam1` & fixed auth bug) |
+| PATCH | `/api/v1/chapters/{id}/pages/{pageNum}/reassign` | Mangaka | Không đổi assistant cho trang cụ thể | 🟢 | ✅ Đã làm (trong `nam1` - `PUT /reassign`) |
 
 ### B — Task & Layer
 
-| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|---|
-| GET | `/api/v1/tasks/{pageTaskId}` | Mangaka, Assistant | Không xem được chi tiết 1 task | 🟡 |
-| PATCH | `/api/v1/tasks/{pageTaskId}/deadline` | Mangaka | Không cập nhật được deadline khi tiến độ thay đổi | 🟢 |
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|---|
+| GET | `/api/v1/tasks/{pageTaskId}` | Mangaka, Assistant | Không xem được chi tiết 1 task | 🟡 | ✅ Đã làm (trong `nam1`) |
+| PATCH | `/api/v1/tasks/{pageTaskId}/deadline` | Mangaka | Không cập nhật được deadline khi tiến độ thay đổi | 🟢 | ✅ Đã làm (trong `nam1` - `PUT /deadline`) |
 
 ---
 
@@ -386,22 +369,22 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### B — QA History & Pins
 
-| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|---|
-| GET | `/api/v1/qa/chapters/{id}/history` | TE, Mangaka, Admin | Không truy vết lịch sử QA — bao nhiêu lần, sửa gì | 🟢 |
-| POST | `/api/v1/qa/chapters/{id}/reopen` | TE | Không mở lại được QA nếu phát hiện sót lỗi | 🟢 |
-| PATCH | `/api/v1/qa/pins/{pinId}` | TE | Không sửa được nội dung pin tạo nhầm | 🟢 |
-| DELETE | `/api/v1/qa/pins/{pinId}` | TE | Không xóa được pin tạo nhầm | 🟢 |
-| POST | `/api/v1/qa/pins/{pinId}/fixed` | Mangaka/Assistant | Không có nút báo cáo đã sửa lỗi (Bug pin status lifecycle) | 🟡 |
-| POST | `/api/v1/qa/pins/{pinId}/assign-fix` | Mangaka | Không có API phân công Fix Task cho Assistant | 🟡 |
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|---|
+| GET | `/api/v1/qa/chapters/{id}/history` | TE, Mangaka, Admin | Không truy vết lịch sử QA — bao nhiêu lần, sửa gì | 🟢 | ⬜ Chưa làm |
+| POST | `/api/v1/qa/chapters/{id}/reopen` | TE | Không mở lại được QA nếu phát hiện sót lỗi | 🟢 | ⬜ Chưa làm |
+| PATCH | `/api/v1/qa/pins/{pinId}` | TE | Không sửa được nội dung pin tạo nhầm | 🟢 | ⬜ Chưa làm |
+| DELETE | `/api/v1/qa/pins/{pinId}` | TE | Không xóa được pin tạo nhầm | 🟢 | ⬜ Chưa làm |
+| POST | `/api/v1/qa/pins/{pinId}/fixed` | Mangaka/Assistant | Không có nút báo cáo đã sửa lỗi (Bug pin status lifecycle) | 🟡 | ✅ Đã làm (trong `bach-v2`) |
+| POST | `/api/v1/qa/pins/{pinId}/assign-fix` | Mangaka | Không có API phân công Fix Task cho Assistant | 🟡 | ✅ Đã làm (trong `bach-v2`) |
 
 ### B — Publishing Schedule
 
-| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|---|
-| GET | `/api/v1/publishing/chapters/{id}` | EB, Admin, TE | Không xem được chi tiết trạng thái phát hành | 🟢 |
-| PATCH | `/api/v1/publishing/schedule/{id}` | EB | Lên lịch sai ngày không sửa được | 🟢 |
-| DELETE | `/api/v1/publishing/schedule/{id}` | EB | Lên lịch nhầm phải nhờ Admin can thiệp DB | 🟢 |
+| Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|---|
+| GET | `/api/v1/publishing/chapters/{id}` | EB, Admin, TE | Không xem được chi tiết trạng thái phát hành | 🟢 | ⬜ Chưa làm |
+| PATCH | `/api/v1/publishing/schedule/{id}` | EB | Lên lịch sai ngày không sửa được | 🟢 | ✅ Đã làm (trong `bach-v2` - `PATCH /schedule`) |
+| DELETE | `/api/v1/publishing/schedule/{id}` | EB | Lên lịch nhầm phải nhờ Admin can thiệp DB | 🟢 | ✅ Đã làm (trong `bach-v2` - `DELETE /schedule`) |
 
 ---
 
@@ -409,23 +392,23 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### B — Identity & Tài Khoản (Người làm: **Nam** — Core - Phần 1)
 
-| Method | Route | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/users/me` | FE không biết tên/avatar/role sau login — phải giải mã JWT thủ công | 🔴 |
-| PUT | `/api/v1/users/me/change-password` | Không tự đổi được mật khẩu — phải nhờ Admin reset | 🟢 |
-| POST | `/api/v1/auth/forgot-password` | Quên mật khẩu → không có cách vào lại tài khoản | 🟢 |
-| POST | `/api/v1/auth/reset-password` | Đi kèm forgot-password | 🟢 |
-| PUT | `/api/v1/users/me/avatar` | Mọi user dùng avatar mặc định, không cá nhân hóa | 🟢 |
+| Method | Route | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|
+| GET | `/api/v1/users/me` | FE không biết tên/avatar/role sau login — phải giải mã JWT thủ công | 🔴 | ⬜ Chưa làm |
+| PUT | `/api/v1/users/me/change-password` | Không tự đổi được mật khẩu — phải nhờ Admin reset | 🟢 | ⬜ Chưa làm |
+| POST | `/api/v1/auth/forgot-password` | Quên mật khẩu → không có cách vào lại tài khoản | 🟢 | ⬜ Chưa làm |
+| POST | `/api/v1/auth/reset-password` | Đi kèm forgot-password | 🟢 | ⬜ Chưa làm |
+| PUT | `/api/v1/users/me/avatar` | Mọi user dùng avatar mặc định, không cá nhân hóa | 🟢 | ⬜ Chưa làm |
 
 > `POST /auth/logout` và `POST /auth/refresh` **đã có** — bỏ qua tài liệu cũ ghi là "thiếu".
 
 ### B — Notifications (Người làm: **Nam** — Core - Phần 1)
 
-| Method | Route | Vấn đề nếu thiếu | Ưu tiên |
-|---|---|---|---|
-| GET | `/api/v1/notifications/unread-count` | Không có badge số chưa đọc trên Navbar | 🟡 |
-| DELETE | `/api/v1/notifications/{id}` | Không dọn được thông báo đơn lẻ | 🟢 |
-| DELETE | `/api/v1/notifications` | Không xóa hàng loạt thông báo đã đọc | 🟢 |
+| Method | Route | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
+|---|---|---|---|---|
+| GET | `/api/v1/notifications/unread-count` | Không có badge số chưa đọc trên Navbar | 🟡 | ⬜ Chưa làm |
+| DELETE | `/api/v1/notifications/{id}` | Không dọn được thông báo đơn lẻ | 🟢 | ⬜ Chưa làm |
+| DELETE | `/api/v1/notifications` | Không xóa hàng loạt thông báo đã đọc | 🟢 | ⬜ Chưa làm |
 
 ### B — Infrastructure & Services (Bắt buộc trước go-live)
 
@@ -453,12 +436,12 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | Phase | Nội dung | Luồng | Ưu tiên | Trạng thái |
 |---|---|---|---|---|
 | **Phase 0 — Quick Wins** | FE kết nối các trang đang gọi sai (Notifications, Board Voting, Editor Dashboard, Assistant pages, QA Canvas) — không cần code BE | MF1 + MF2 + MF3 + Core | 🔴 ROI cao nhất | ⬜ FE việc |
-| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me` (**Nam**); viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard (**Bao**) | Core + MF2 + MF3 | 🔴 | 🔄 Một phần: Admin Dashboard ✅ done Bao. Bugs #1 #2 + queue TE ⬜ chưa |
+| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me` (**Nam**); viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard (**Bao**) | Core + MF2 + MF3 | 🔴 | 🔄 Một phần: Admin Dashboard ✅ done Bao, Bugs #1 #2 + QA queue ✅ done Nam/Bach. Còn thiếu: users/me, publishing queue ⬜ |
 | **Phase 2 — Ranking Module** | Toàn bộ Infrastructure + Application + Controller Ranking (Phương án A thủ công) (**Bach**) | Core | 🟡 Khối lượng lớn nhất | ⬜ Chưa bắt đầu |
 | **Phase 3 — Cancellation Flow** | request/approve/reject-cancellation đúng phân quyền EB/EIC; cancellation-queue; board/reports | MF1 | 🟡 | ✅ Hoàn thành (2026-07-01, Bao) |
-| **Phase 4 — CRUD Hoàn Chỉnh** | PUT/DELETE series, chapter; Studio members; Reassign trang; Task deadline; QA pins; Publishing schedule | MF1 + MF2 + MF3 | 🟡–🟢 | ⬜ Chưa bắt đầu |
+| **Phase 4 — CRUD Hoàn Chỉnh** | PUT/DELETE series, chapter; Studio members; Reassign trang; Task deadline; QA pins; Publishing schedule | MF1 + MF2 + MF3 | 🟡–🟢 | 🔄 Một phần: Studio members, Reassign trang, Task deadline, QA pins (assign/fixed), Publishing schedule (schedule/update/cancel) ✅. PUT/DELETE series/chapter/pins ⬜ chưa |
 | **Phase 5 — Identity & Notifications** | change-password, forgot/reset-password, avatar; notifications unread-count, delete (**Nam**) | Core | 🟢 | ⬜ Chưa bắt đầu |
-| **Phase 6 — History & Transparency** | submissions/{id}/votes; QA history/reopen; tasks/{id} detail; publishing/{id} detail | MF1 + MF2 + MF3 | 🟢 | 🔄 Một phần: votes + delete draft ✅ done Bao. Phần còn lại ⬜ |
+| **Phase 6 — History & Transparency** | submissions/{id}/votes; QA history/reopen; tasks/{id} detail; publishing/{id} detail | MF1 + MF2 + MF3 | 🟢 | 🔄 Một phần: votes + delete draft ✅ done Bao, tasks/publishing detail ✅ done Nam/Bach. QA history/reopen ⬜ chưa |
 | **Phase 7 — Production Infrastructure** | SignalR Hub, Email SMTP, Rate Limiter (**Nam**) <br> Scheduled Publisher Job, Health Check (**Bach**) <br> File Storage thật, Global Exception Handler, Audit Log (**Bao**) | Infra | ⚪ Bắt buộc trước go-live | 🔄 Một phần: Audit Log cho Admin Dashboard ✅. Còn lại ⬜ |
 
 ---
@@ -492,10 +475,10 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 | # | File | Mức độ | Người fix | Trạng thái |
 |---|---|---|---|---|
-| Bug #1 | `BulkReviewLayersHandler.cs` — thiếu `_pageTaskRepo.SaveChangesAsync` | 🔴 Nghiêm trọng | Nam | ⬜ Chưa fix |
-| Bug #2 | `GetLayerHistoryHandler.cs` — status suy luận từ `RejectionNote` sai | 🔴 Nghiêm trọng | Nam | ⬜ Chưa fix |
-| Issue #3 | `GetLayerHistoryHandler.cs` — `?status=Pending` trả `[]` không báo lỗi | 🟡 Minor UX | Nam | ⬜ Chưa fix |
-| Minor #4 | `BulkActivatePageTasksHandler.cs` — N+1 queries khi giao nhiều trang | 🟢 Performance | Nam | ⬜ Có thể để sau |
+| Bug #1 | `BulkReviewLayersHandler.cs` — thiếu `_pageTaskRepo.SaveChangesAsync` | 🔴 Nghiêm trọng | Nam | ✅ Đã fix |
+| Bug #2 | `GetLayerHistoryHandler.cs` — status suy luận từ `RejectionNote` sai | 🔴 Nghiêm trọng | Nam | ✅ Đã fix |
+| Issue #3 | `GetLayerHistoryHandler.cs` — `?status=Pending` trả `[]` không báo lỗi | 🟡 Minor UX | Nam | ✅ Đã fix |
+| Minor #4 | `BulkActivatePageTasksHandler.cs` — N+1 queries khi giao nhiều trang | 🟢 Performance | Nam | ✅ Đã fix |
 
 ---
 
@@ -507,7 +490,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ### Phase 4 — Khóa Vùng Vẽ Cho Assistant (FE + BE `👤 Bao`)
 - **FE:** Gọi `GET /api/segmentation/tasks/mine?status=Pending` → Decode RLE → Dựng clip mask chặn vẽ ngoài vùng.
-- **BE:** Thêm thông tin kích thước ảnh gốc `ImageSize` (OriginalWidth/OriginalHeight) vào `SegmentationTaskDto` để FE scale đúng mask khi canvas zoom/pan.
+- **BE:** ✅ **Đã hoàn thành** — Thêm thông tin kích thước ảnh gốc `OriginalWidth`/`OriginalHeight` vào `SegmentationTaskDto` và thực hiện tạo migration `AddImageSizeToSegmentationTask` để lưu trực tiếp lúc upload (không đọc lại file lúc query). Endpoint `GET /api/segmentation/tasks/mine` đã tích hợp phân trang chuẩn.
 
 ### Phase 5 — Content Moderation Pipeline (BE `👤 Bao`)
 - **BE (S3/File Storage):** Sau khi ảnh được upload, gọi `SamServiceClient` chạy `/embedding` để quét xem ảnh có hợp lệ/không bị hỏng trước khi cho phép publish.
@@ -518,7 +501,11 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 - Chạy 3 lệnh grep kiểm tra cách ly module (Segmentation cô lập hoàn toàn khỏi Task, Chapter, Identity).
 - Chạy `dotnet ef database update` cho Segmentation DbContext để đồng bộ bảng vật lý lên DB dev thật.
 
-### 🔗 Tích Hợp Hệ Thống Event (BE `👤 Nam` — MF2 & Core 1)
-- **Tình trạng:** Khi một Segmentation Task được tạo, module `Segmentation` sẽ phát đi sự kiện `SegmentationTaskAssignedEvent` qua MediatR.
-- **Nhiệm vụ của Nam:** Viết một Handler tiêu thụ sự kiện này trong module `Task`/`Notification` để tự động tạo bản ghi `Notification` và gửi thông báo Real-time (qua SignalR Hub `/hubs/notifications`) cho Assistant được giao việc.
+### 🔗 Tích Hợp Hệ Thống Event (BE — MF2 & Core 1)
+- **Tình trạng:** ✅ **Đã hoàn thành (2026-07-02)**
+- **Triển khai:**
+  - `INotificationService` — thêm method `NotifySegmentationTaskAssignedAsync(assistantId, segmentationTaskId, taskType)`
+  - `NotificationService.cs` — implement: lưu DB + push SignalR `ReceiveNotification` tới `assistantId`
+  - `SegmentationTaskAssignedHandler.cs` (module `MangaERP.Task`) — `INotificationHandler<SegmentationTaskAssignedEvent>` lắng nghe sự kiện, gọi `NotifySegmentationTaskAssignedAsync`; lỗi notification bị swallow (không rollback transaction Segmentation)
+- **Build:** ✅ 0 errors
 

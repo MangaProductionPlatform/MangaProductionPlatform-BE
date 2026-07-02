@@ -5,13 +5,35 @@ using MangaERP.Segmentation.Domain.Entities;
 using MangaERP.Segmentation.Infrastructure;
 using MangaERP.Segmentation.Infrastructure.Repositories;
 using MangaERP.Shared.Application.Contracts.Events;
+using MangaERP.Shared.Application.Contracts.Queries;
+using MangaERP.Segmentation.Application.Ports;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
+using System.Net.Http;
 using Xunit;
 
 namespace MangaERP.Segmentation.Tests;
+
+public class TestableCreateSegmentationTaskHandler : CreateSegmentationTaskHandler
+{
+    public (int Width, int Height)? MockedDimensions { get; set; }
+
+    public TestableCreateSegmentationTaskHandler(
+        ISegmentationTaskRepository repo,
+        IMediator mediator,
+        ILogger<CreateSegmentationTaskHandler> logger,
+        IHttpClientFactory httpClientFactory)
+        : base(repo, mediator, logger, httpClientFactory)
+    {
+    }
+
+    protected override Task<(int Width, int Height)?> GetImageDimensionsAsync(string imageUrl, CancellationToken ct)
+    {
+        return Task.FromResult(MockedDimensions);
+    }
+}
 
 public class SegmentationTests
 {
@@ -74,10 +96,24 @@ public class SegmentationTests
         var repo = new SegmentationTaskRepository(db);
         var mediatorMock = new Mock<IMediator>();
         var loggerMock = new Mock<ILogger<CreateSegmentationTaskHandler>>();
-        var handler = new CreateSegmentationTaskHandler(repo, mediatorMock.Object, loggerMock.Object);
+        var httpClientFactoryMock = new Mock<IHttpClientFactory>();
+
+        var pageId = Guid.NewGuid();
+
+        mediatorMock.Setup(m => m.Send(It.Is<GetPageTaskPreviewUrlQuery>(q => q.PageId == pageId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("http://example.com/image.png");
+
+        var handler = new TestableCreateSegmentationTaskHandler(
+            repo, 
+            mediatorMock.Object, 
+            loggerMock.Object,
+            httpClientFactoryMock.Object)
+        {
+            MockedDimensions = (1920, 1080)
+        };
 
         var command = new CreateSegmentationTaskCommand(
-            PageId: Guid.NewGuid(),
+            PageId: pageId,
             MaskRle: "rle-data",
             Bbox: new[] { 10, 20, 30, 40 },
             TaskType: SegmentationTaskType.Shading,
@@ -99,6 +135,8 @@ public class SegmentationTests
         Assert.NotNull(savedTask);
         Assert.Equal("rle-data", savedTask.MaskRle);
         Assert.Equal("Assistant", savedTask.AssignedToUserRole);
+        Assert.Equal(1920, savedTask.OriginalWidth);
+        Assert.Equal(1080, savedTask.OriginalHeight);
 
         mediatorMock.Verify(m => m.Publish(
             It.Is<SegmentationTaskAssignedEvent>(e => 
@@ -106,6 +144,132 @@ public class SegmentationTests
                 e.AssignedToUserId == command.AssignedToUserId &&
                 e.PageId == command.PageId),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateTaskHandler_ShouldSaveTask_WhenImageDimensionsAreNull()
+    {
+        // Arrange
+        using var db = CreateDbContext();
+        var repo = new SegmentationTaskRepository(db);
+        var mediatorMock = new Mock<IMediator>();
+        var loggerMock = new Mock<ILogger<CreateSegmentationTaskHandler>>();
+        var httpClientFactoryMock = new Mock<IHttpClientFactory>();
+
+        var pageId = Guid.NewGuid();
+
+        mediatorMock.Setup(m => m.Send(It.Is<GetPageTaskPreviewUrlQuery>(q => q.PageId == pageId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+
+        var handler = new TestableCreateSegmentationTaskHandler(
+            repo, 
+            mediatorMock.Object, 
+            loggerMock.Object,
+            httpClientFactoryMock.Object)
+        {
+            MockedDimensions = null
+        };
+
+        var command = new CreateSegmentationTaskCommand(
+            PageId: pageId,
+            MaskRle: "rle-data",
+            Bbox: new[] { 10, 20, 30, 40 },
+            TaskType: SegmentationTaskType.Shading,
+            Note: "Null dimensions",
+            AssignedToUserId: Guid.NewGuid(),
+            AssignedToUserRole: "Assistant",
+            CreatedByUserId: Guid.NewGuid()
+        );
+
+        // Act
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(result);
+        var savedTask = await db.SegmentationTasks.FindAsync(result.TaskId);
+        Assert.NotNull(savedTask);
+        Assert.Null(savedTask.OriginalWidth);
+        Assert.Null(savedTask.OriginalHeight);
+    }
+
+    [Fact]
+    public async Task CreateTaskHandler_ShouldThrowValidationException_WhenDimensionsAreNegative()
+    {
+        // Arrange
+        using var db = CreateDbContext();
+        var repo = new SegmentationTaskRepository(db);
+        var mediatorMock = new Mock<IMediator>();
+        var loggerMock = new Mock<ILogger<CreateSegmentationTaskHandler>>();
+        var httpClientFactoryMock = new Mock<IHttpClientFactory>();
+
+        var pageId = Guid.NewGuid();
+
+        mediatorMock.Setup(m => m.Send(It.Is<GetPageTaskPreviewUrlQuery>(q => q.PageId == pageId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("http://example.com/image.png");
+
+        var handler = new TestableCreateSegmentationTaskHandler(
+            repo, 
+            mediatorMock.Object, 
+            loggerMock.Object,
+            httpClientFactoryMock.Object)
+        {
+            MockedDimensions = (-100, 1080)
+        };
+
+        var command = new CreateSegmentationTaskCommand(
+            PageId: pageId,
+            MaskRle: "rle-data",
+            Bbox: new[] { 10, 20, 30, 40 },
+            TaskType: SegmentationTaskType.Shading,
+            Note: "Negative Width",
+            AssignedToUserId: Guid.NewGuid(),
+            AssignedToUserRole: "Assistant",
+            CreatedByUserId: Guid.NewGuid()
+        );
+
+        // Act & Assert
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => 
+            handler.Handle(command, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateTaskHandler_ShouldThrowValidationException_WhenDimensionsAreTooLarge()
+    {
+        // Arrange
+        using var db = CreateDbContext();
+        var repo = new SegmentationTaskRepository(db);
+        var mediatorMock = new Mock<IMediator>();
+        var loggerMock = new Mock<ILogger<CreateSegmentationTaskHandler>>();
+        var httpClientFactoryMock = new Mock<IHttpClientFactory>();
+
+        var pageId = Guid.NewGuid();
+
+        mediatorMock.Setup(m => m.Send(It.Is<GetPageTaskPreviewUrlQuery>(q => q.PageId == pageId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("http://example.com/image.png");
+
+        var handler = new TestableCreateSegmentationTaskHandler(
+            repo, 
+            mediatorMock.Object, 
+            loggerMock.Object,
+            httpClientFactoryMock.Object)
+        {
+            MockedDimensions = (1920, 12000) // Height too large
+        };
+
+        var command = new CreateSegmentationTaskCommand(
+            PageId: pageId,
+            MaskRle: "rle-data",
+            Bbox: new[] { 10, 20, 30, 40 },
+            TaskType: SegmentationTaskType.Shading,
+            Note: "Excessive Height",
+            AssignedToUserId: Guid.NewGuid(),
+            AssignedToUserRole: "Assistant",
+            CreatedByUserId: Guid.NewGuid()
+        );
+
+        // Act & Assert
+        await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => 
+            handler.Handle(command, CancellationToken.None));
     }
 
     [Fact]
@@ -120,10 +284,23 @@ public class SegmentationTests
             .ThrowsAsync(new Exception("RabbitMQ/SignalR is down"));
 
         var loggerMock = new Mock<ILogger<CreateSegmentationTaskHandler>>();
-        var handler = new CreateSegmentationTaskHandler(repo, mediatorMock.Object, loggerMock.Object);
+        var httpClientFactoryMock = new Mock<IHttpClientFactory>();
+
+        var pageId = Guid.NewGuid();
+        mediatorMock.Setup(m => m.Send(It.Is<GetPageTaskPreviewUrlQuery>(q => q.PageId == pageId), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string?)null);
+
+        var handler = new TestableCreateSegmentationTaskHandler(
+            repo, 
+            mediatorMock.Object, 
+            loggerMock.Object,
+            httpClientFactoryMock.Object)
+        {
+            MockedDimensions = null
+        };
 
         var command = new CreateSegmentationTaskCommand(
-            PageId: Guid.NewGuid(),
+            PageId: pageId,
             MaskRle: "rle-data",
             Bbox: new[] { 10, 20, 30, 40 },
             TaskType: SegmentationTaskType.Shading,

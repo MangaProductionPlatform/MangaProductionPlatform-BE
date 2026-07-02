@@ -17,5 +17,6 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.2" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
   </ItemGroup>
 </Project>

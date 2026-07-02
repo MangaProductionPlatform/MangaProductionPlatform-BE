@@ -43,7 +43,10 @@ public class GetChapterPagesHandler : IRequestHandler<GetChapterPagesQuery, IEnu
         var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, ct)
             ?? throw new KeyNotFoundException($"Series {chapter.SeriesId} not found.");
 
-        chapter.EnsureOwnedBy(query.RequesterId, series.AuthorId);
+        if (series.AuthorId != query.RequesterId && chapter.AssignedEditorId != query.RequesterId)
+        {
+            throw new UnauthorizedAccessException("You are not authorized to view this chapter's pages.");
+        }
 
         var pages = await _pageTaskRepo.GetByChapterIdAsync(chapter.Id, ct);
 
