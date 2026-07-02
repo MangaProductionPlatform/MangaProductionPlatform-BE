@@ -65,7 +65,7 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
             if (!pageTasksDict.TryGetValue(pageNum, out var pageTask))
                 throw new KeyNotFoundException($"Page {pageNum} not found in chapter {cmd.ChapterId}.");
 
-            pageTask.Activate(cmd.AssignedAssistantId, cmd.Description);
+            pageTask.Activate(cmd.AssignedAssistantId, cmd.Description, cmd.Deadline);
             await _pageTaskRepo.UpdateAsync(pageTask, ct);
             activatedTasks.Add(pageTask);
 

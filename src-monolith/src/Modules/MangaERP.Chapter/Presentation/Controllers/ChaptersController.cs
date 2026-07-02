@@ -131,7 +131,8 @@ public class ChaptersController : ControllerBase
                 chapterId,
                 request.PageNumber,
                 request.AssignedAssistantId,
-                request.Description);
+                request.Description,
+                request.Deadline);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -156,7 +157,8 @@ public class ChaptersController : ControllerBase
                 chapterId,
                 request.PageNumbers,
                 request.AssignedAssistantId,
-                request.Description);
+                request.Description,
+                request.Deadline);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -247,9 +249,9 @@ public record CreateChapterRequest(
 
 public record AddBasePageRequest(int PageNumber);
 
-public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description);
+public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description, DateTime? Deadline);
 
-public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedAssistantId, string? Description);
+public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedAssistantId, string? Description, DateTime? Deadline);
 
 /// <summary>
 /// Request to save a SAM region on a page task.

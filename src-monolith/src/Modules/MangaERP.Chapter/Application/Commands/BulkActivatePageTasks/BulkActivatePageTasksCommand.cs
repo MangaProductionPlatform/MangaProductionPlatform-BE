@@ -8,7 +8,8 @@ public record BulkActivatePageTasksCommand(
     Guid ChapterId,
     List<int> PageNumbers,
     Guid AssignedAssistantId,
-    string? Description = null
+    string? Description = null,
+    DateTime? Deadline = null
 ) : IRequest<BulkActivatePageTasksResult>;
 
 public record BulkPageTaskActivationResult(
@@ -33,5 +34,8 @@ public class BulkActivatePageTasksValidator : AbstractValidator<BulkActivatePage
             .WithMessage("All page numbers must be greater than 0.");
         RuleFor(x => x.AssignedAssistantId).NotEmpty();
         RuleFor(x => x.Description).MaximumLength(2000).When(x => x.Description != null);
+        RuleFor(x => x.Deadline)
+            .Must(d => !d.HasValue || d.Value > DateTime.UtcNow.AddMinutes(-5))
+            .WithMessage("Deadline must be in the future.");
     }
 }
