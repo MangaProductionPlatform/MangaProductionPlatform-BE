@@ -8,6 +8,7 @@ using MangaERP.Chapter.Application.Commands.SetPageRegion;
 using MangaERP.Chapter.Application.Commands.SubmitForQA;
 using MangaERP.Chapter.Application.Queries.GetChapterDetail;
 using MangaERP.Chapter.Application.Queries.GetChaptersBySeries;
+using MangaERP.Chapter.Application.Queries.GetChapterPages;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -79,6 +80,21 @@ public class ChaptersController : ControllerBase
             return Ok(result);
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+    }
+
+    [HttpGet("{chapterId:guid}/pages")]
+    [Authorize(Roles = "Mangaka,TantouEditor")]
+    [ProducesResponseType(typeof(IEnumerable<ChapterPageDto>), 200)]
+    public async Task<IActionResult> GetChapterPages(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetChapterPagesQuery(GetUserId(), chapterId);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 
     [HttpPost("{chapterId:guid}/pages")]
