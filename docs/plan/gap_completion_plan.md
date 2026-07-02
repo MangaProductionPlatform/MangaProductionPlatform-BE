@@ -278,6 +278,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 |---|---|---|---|
 | GET | `/api/v1/publishing/chapters/my-queue` | `PublishingQueuePage.tsx` (Tantou Editor) | 🔴 |
 | GET | `/api/v1/publishing/schedule` | `PublishingSchedulePage.tsx` | 🟡 |
+| GET | `/api/v1/qa/queue` | `ReviewQueuePage.tsx` (QA Queue cho Editor nhận Chapter) | 🔴 |
 
 ---
 
@@ -389,6 +390,8 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | POST | `/api/v1/qa/chapters/{id}/reopen` | TE | Không mở lại được QA nếu phát hiện sót lỗi | 🟢 |
 | PATCH | `/api/v1/qa/pins/{pinId}` | TE | Không sửa được nội dung pin tạo nhầm | 🟢 |
 | DELETE | `/api/v1/qa/pins/{pinId}` | TE | Không xóa được pin tạo nhầm | 🟢 |
+| POST | `/api/v1/qa/pins/{pinId}/fixed` | Mangaka/Assistant | Không có nút báo cáo đã sửa lỗi (Bug pin status lifecycle) | 🟡 |
+| POST | `/api/v1/qa/pins/{pinId}/assign-fix` | Mangaka | Không có API phân công Fix Task cho Assistant | 🟡 |
 
 ### B — Publishing Schedule
 
@@ -434,6 +437,12 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | **Audit Log** | Không có | Không điều tra được sự cố — ai làm gì, lúc mấy giờ | ⚪ | **Bao** (Core - Phần 3) |
 | **Rate Limiter** | Không có | Dễ bị spam login/vote — lỗ hổng bảo mật | ⚪ | **Nam** (Core - Phần 1) |
 | **Health Check** | Không có `GET /health` | Deployment/monitoring không biết service có đang sống | ⚪ | **Bach** (Core - Phần 2) |
+
+## 📌 Cập nhật — Media Upload (nối tiếp dòng 435)
+
+**Trạng thái:** ✅ Upload private hoạt động, có magic bytes + reject extension nguy hiểm + chặn path traversal. Test coverage đủ.
+**Còn thiếu:** Cơ chế di chuyển file từ private/ sang public/ khi chapter/cover được duyệt/publish — hiện chưa có endpoint hay logic nào gọi việc này. Cần bổ sung khi tích hợp vào luồng Approve/Publish thật (có thể là 1 method nội bộ MoveToPublicAsync(fileKey) gọi từ Handler duyệt chapter, không expose qua API public).
+**Nợ kỹ thuật giữ nguyên:** Ownership check ở ViewPrivateFile chỉ dựa vào [Authorize] + GUID khó đoán, chưa có bảng metadata fileKey→uploaderId.
 
 ---
 
@@ -485,4 +494,29 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | Bug #2 | `GetLayerHistoryHandler.cs` — status suy luận từ `RejectionNote` sai | 🔴 Nghiêm trọng | Nam | ⬜ Chưa fix |
 | Issue #3 | `GetLayerHistoryHandler.cs` — `?status=Pending` trả `[]` không báo lỗi | 🟡 Minor UX | Nam | ⬜ Chưa fix |
 | Minor #4 | `BulkActivatePageTasksHandler.cs` — N+1 queries khi giao nhiều trang | 🟢 Performance | Nam | ⬜ Có thể để sau |
+
+---
+
+## 📌 Lộ Trình Hoàn Thiện Module Segmentation (SAM) — Phase 3-6
+
+### Phase 3 — Invert Mask (Quyết định kỹ thuật: Làm ở FE)
+- **FE:** Decode RLE → Invert trên canvas phụ (bằng XOR composite hoặc pixel manipulation) → Re-encode RLE và gửi lên API khi giao việc.
+- **BE:** Không cần thay đổi gì.
+
+### Phase 4 — Khóa Vùng Vẽ Cho Assistant (FE + BE `👤 Bao`)
+- **FE:** Gọi `GET /api/segmentation/tasks/mine?status=Pending` → Decode RLE → Dựng clip mask chặn vẽ ngoài vùng.
+- **BE:** Thêm thông tin kích thước ảnh gốc `ImageSize` (OriginalWidth/OriginalHeight) vào `SegmentationTaskDto` để FE scale đúng mask khi canvas zoom/pan.
+
+### Phase 5 — Content Moderation Pipeline (BE `👤 Bao`)
+- **BE (S3/File Storage):** Sau khi ảnh được upload, gọi `SamServiceClient` chạy `/embedding` để quét xem ảnh có hợp lệ/không bị hỏng trước khi cho phép publish.
+- *Giới hạn:* Chỉ kiểm tra tính hợp lệ cơ bản của ảnh, không phải bộ lọc NSFW đầy đủ. Nếu Colab sập, chỉ ghi log cảnh báo và bỏ qua (không chặn luồng chính).
+
+### Phase 6 — Test & Rollout (BE `👤 Bao`)
+- Test tích hợp Circuit Breaker khi Colab ngắt kết nối.
+- Chạy 3 lệnh grep kiểm tra cách ly module (Segmentation cô lập hoàn toàn khỏi Task, Chapter, Identity).
+- Chạy `dotnet ef database update` cho Segmentation DbContext để đồng bộ bảng vật lý lên DB dev thật.
+
+### 🔗 Tích Hợp Hệ Thống Event (BE `👤 Nam` — MF2 & Core 1)
+- **Tình trạng:** Khi một Segmentation Task được tạo, module `Segmentation` sẽ phát đi sự kiện `SegmentationTaskAssignedEvent` qua MediatR.
+- **Nhiệm vụ của Nam:** Viết một Handler tiêu thụ sự kiện này trong module `Task`/`Notification` để tự động tạo bản ghi `Notification` và gửi thông báo Real-time (qua SignalR Hub `/hubs/notifications`) cho Assistant được giao việc.
 

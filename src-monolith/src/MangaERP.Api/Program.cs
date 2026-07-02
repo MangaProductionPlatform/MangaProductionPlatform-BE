@@ -189,6 +189,12 @@ if (app.Environment.IsDevelopment() ||
 }
 
 app.UseCors(CorsPolicyName);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "public")),
+    RequestPath = "/uploads/public"
+});
 
 // Skip HTTPS redirect in Railway (Railway handles TLS at the gateway level)
 if (!app.Environment.IsProduction())
