@@ -71,6 +71,27 @@ public class StudioInvitationsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// [Mangaka] Xem danh sách Assistant đang hoạt động trong studio của một Series.
+    /// Trả về các Assistant có lời mời Accepted (hoặc IsNewAccountFlow + Pending).
+    /// </summary>
+    [HttpGet("{seriesId:guid}/members")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(IEnumerable<StudioMemberDto>), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetStudioMembers(Guid seriesId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetStudioMembersQuery(GetUserId(), seriesId);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
+
     // ── ASSISTANT APIs ────────────────────────────────────────────────────────
 
     /// <summary>

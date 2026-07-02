@@ -28,6 +28,34 @@ public class StudioInvitationRepository : IStudioInvitationRepository
             .OrderByDescending(i => i.CreatedAt)
             .ToListAsync(ct);
 
+    public async System.Threading.Tasks.Task<IEnumerable<StudioMemberInfo>> GetActiveMembersWithUsersBySeriesIdAsync(Guid seriesId, CancellationToken ct = default)
+    {
+        // Thành viên "active" = Accepted, hoặc IsNewAccountFlow + Pending (chưa kích hoạt nhưng đã được giao việc)
+        var members = await _db.StudioInvitations
+            .Where(i => i.SeriesId == seriesId
+                && i.AssistantUserId != null
+                && (i.Status == StudioInvitationStatus.Accepted
+                    || (i.IsNewAccountFlow && i.Status == StudioInvitationStatus.Pending)))
+            .Join(_db.Users,
+                inv => inv.AssistantUserId,
+                user => user.Id,
+                (inv, user) => new StudioMemberInfo(
+                    inv.Id,
+                    user.Id,
+                    inv.AssistantEmail,
+                    user.FullName,
+                    user.AvatarUrl,
+                    user.PenName,
+                    inv.Status.ToString(),
+                    // Thời điểm gia nhập: RespondedAt nếu TH2, CreatedAt nếu TH1 (new account)
+                    inv.RespondedAt ?? inv.CreatedAt
+                ))
+            .OrderByDescending(m => m.JoinedAt)
+            .ToListAsync(ct);
+
+        return members;
+    }
+
     public async System.Threading.Tasks.Task<StudioInvitation?> GetByActivationTokenAsync(string token, CancellationToken ct = default)
         => await _db.StudioInvitations.FirstOrDefaultAsync(i => i.ActivationToken == token, ct);
 
