@@ -3,6 +3,7 @@ using System;
 using MangaERP.Segmentation.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MangaERP.Segmentation.Migrations
 {
     [DbContext(typeof(SegmentationDbContext))]
-    partial class SegmentationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260702133208_AddImageSizeToSegmentationTask")]
+    partial class AddImageSizeToSegmentationTask
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

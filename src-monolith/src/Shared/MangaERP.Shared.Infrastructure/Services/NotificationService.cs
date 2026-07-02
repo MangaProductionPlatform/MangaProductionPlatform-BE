@@ -409,4 +409,36 @@ public class NotificationService : INotificationService
                 createdAt   = notification.CreatedAt
             }, ct);
     }
+
+    public async System.Threading.Tasks.Task NotifySegmentationTaskAssignedAsync(
+        Guid assistantId, Guid segmentationTaskId, string taskType,
+        CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId        = assistantId,
+            Title             = "Bạn được giao một nhiệm vụ phân vùng mới",
+            Message           = $"Bạn vừa được giao một Segmentation Task loại '{taskType}'. Hãy kiểm tra workspace để bắt đầu.",
+            NotifyType        = "SegmentationTaskAssigned",
+            RelatedEntityId   = segmentationTaskId,
+            RelatedEntityType = "SegmentationTask",
+            TargetUrl         = "/app/assistant/tasks"
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(assistantId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id                  = notification.Id,
+                title               = notification.Title,
+                message             = notification.Message,
+                notifyType          = notification.NotifyType,
+                segmentationTaskId,
+                taskType,
+                targetUrl           = notification.TargetUrl,
+                createdAt           = notification.CreatedAt
+            }, ct);
+    }
 }

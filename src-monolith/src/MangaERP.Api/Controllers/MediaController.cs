@@ -10,13 +10,18 @@ namespace MangaERP.Api.Controllers;
 public class MediaController : ControllerBase
 {
     private readonly ICloudinaryService _cloudinary;
+    private readonly SamServiceClient _samServiceClient;
     private readonly ILogger<MediaController> _logger;
 
     private static readonly string[] AllowedExtensions = { ".png", ".jpg", ".jpeg", ".webp" };
 
-    public MediaController(ICloudinaryService cloudinary, ILogger<MediaController> logger)
+    public MediaController(
+        ICloudinaryService cloudinary, 
+        SamServiceClient samServiceClient, 
+        ILogger<MediaController> logger)
     {
         _cloudinary = cloudinary;
+        _samServiceClient = samServiceClient;
         _logger = logger;
     }
 
@@ -57,6 +62,18 @@ public class MediaController : ControllerBase
             _logger.LogInformation(
                 "File {OriginalName} uploaded to Cloudinary → {PublicId}",
                 file.FileName, result.PublicId);
+
+            // Gọi SamServiceClient.GetEmbeddingAsync(fileKey) để validate ảnh trước khi cho phép client sử dụng cho publishing
+            try
+            {
+                // NOTE: basic validity check only, not full content moderation
+                await _samServiceClient.GetEmbeddingAsync(result.PublicId, ct);
+            }
+            catch (Exception ex)
+            {
+                // Nếu gọi Colab fail (timeout/exception) → log mức Warning (không phải Error), không chặn luồng publish chính, tiếp tục xử lý bình thường.
+                _logger.LogWarning(ex, "SAM service embedding check failed for fileKey: {FileKey}. Continuing publish flow normally.", result.PublicId);
+            }
 
             return Ok(new
             {

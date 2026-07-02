@@ -1,9 +1,11 @@
 using FluentValidation;
 using MangaERP.Shared.Application.Contracts.Events;
+using MangaERP.Shared.Application.Contracts.Queries;
 using MangaERP.Segmentation.Application.Ports;
 using MangaERP.Segmentation.Domain.Entities;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using System.Net.Http;
 
 namespace MangaERP.Segmentation.Application.Commands.CreateSegmentationTask;
 
@@ -26,21 +28,86 @@ public class CreateSegmentationTaskHandler
     private readonly ISegmentationTaskRepository _repo;
     private readonly IMediator _mediator;
     private readonly ILogger<CreateSegmentationTaskHandler> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public CreateSegmentationTaskHandler(
         ISegmentationTaskRepository repo,
         IMediator mediator,
-        ILogger<CreateSegmentationTaskHandler> logger)
+        ILogger<CreateSegmentationTaskHandler> logger,
+        IHttpClientFactory httpClientFactory)
     {
         _repo = repo;
         _mediator = mediator;
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
+    }
+
+    protected virtual async Task<(int Width, int Height)?> GetImageDimensionsAsync(string imageUrl, CancellationToken ct)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(imageUrl)) return null;
+
+            if (imageUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || 
+                imageUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                var client = _httpClientFactory.CreateClient();
+                using var response = await client.GetAsync(imageUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+                response.EnsureSuccessStatusCode();
+
+                using var stream = await response.Content.ReadAsStreamAsync(ct);
+                var imageInfo = await SixLabors.ImageSharp.Image.IdentifyAsync(stream, ct);
+                if (imageInfo != null)
+                {
+                    return (imageInfo.Width, imageInfo.Height);
+                }
+            }
+            else
+            {
+                if (System.IO.File.Exists(imageUrl))
+                {
+                    using var stream = System.IO.File.OpenRead(imageUrl);
+                    var imageInfo = await SixLabors.ImageSharp.Image.IdentifyAsync(stream, ct);
+                    if (imageInfo != null)
+                    {
+                        return (imageInfo.Width, imageInfo.Height);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read image dimensions from URL/path: {Url}", imageUrl);
+        }
+        return null;
     }
 
     public async Task<CreateSegmentationTaskResult> Handle(
         CreateSegmentationTaskCommand cmd,
         CancellationToken ct)
     {
+        int? originalWidth = null;
+        int? originalHeight = null;
+
+        var imageUrl = await _mediator.Send(new GetPageTaskPreviewUrlQuery(cmd.PageId), ct);
+        if (!string.IsNullOrEmpty(imageUrl))
+        {
+            var dims = await GetImageDimensionsAsync(imageUrl, ct);
+            if (dims.HasValue)
+            {
+                var (w, h) = dims.Value;
+                if (w <= 0 || w > 10000 || h <= 0 || h > 10000)
+                {
+                    throw new FluentValidation.ValidationException(new[]
+                    {
+                        new FluentValidation.Results.ValidationFailure("OriginalWidth/OriginalHeight", "Image dimensions are invalid (must be between 1 and 10000).")
+                    });
+                }
+                originalWidth = w;
+                originalHeight = h;
+            }
+        }
+
         var task = new SegmentationTask
         {
             PageId             = cmd.PageId,
@@ -52,7 +119,9 @@ public class CreateSegmentationTaskHandler
             AssignedToUserRole = cmd.AssignedToUserRole,
             CreatedByUserId    = cmd.CreatedByUserId,
             Status             = SegmentationTaskStatus.Pending,
-            CreatedAt          = DateTime.UtcNow
+            CreatedAt          = DateTime.UtcNow,
+            OriginalWidth      = originalWidth,
+            OriginalHeight     = originalHeight
         };
 
         await _repo.AddAsync(task, ct);
