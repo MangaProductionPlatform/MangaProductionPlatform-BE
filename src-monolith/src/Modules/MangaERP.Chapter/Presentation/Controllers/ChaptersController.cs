@@ -1,6 +1,7 @@
 using MediatR;
 using MangaERP.Chapter.Application.Commands.ActivatePageTask;
 using MangaERP.Chapter.Application.Commands.BulkActivatePageTasks;
+using MangaERP.Chapter.Application.Commands.ReassignPageTask;
 using MangaERP.Chapter.Application.Commands.AddBasePage;
 using MangaERP.Chapter.Application.Commands.CreateChapter;
 using MangaERP.Chapter.Application.Commands.SetPageRegion;
@@ -192,6 +193,32 @@ public class ChaptersController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    [HttpPut("{chapterId:guid}/pages/{pageNumber:int}/reassign")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(ReassignPageTaskResult), 200)]
+    public async Task<IActionResult> ReassignPageTask(
+        Guid chapterId,
+        int pageNumber,
+        [FromBody] ReassignPageTaskRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new ReassignPageTaskCommand(
+                GetUserId(),
+                chapterId,
+                pageNumber,
+                request.NewAssistantId,
+                request.Description);
+
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
 
 public record CreateChapterRequest(
@@ -214,3 +241,5 @@ public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedA
 /// TaskType is one of: General, Background, Shading, Inking, Effect, Coloring.
 /// </summary>
 public record SetPageRegionRequest(int PageNumber, string RegionMask, string TaskType);
+
+public record ReassignPageTaskRequest(Guid NewAssistantId, string? Description);

@@ -1,3 +1,4 @@
+using FluentValidation;
 using MangaERP.Chapter.Application.Ports;
 using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Identity.Application.Ports;
@@ -8,9 +9,24 @@ using MangaERP.Studio.Application.Ports;
 using MangaERP.Studio.Domain.Entities;
 using MediatR;
 
-namespace MangaERP.Chapter.Application.Commands.BulkActivatePageTasks;
+namespace MangaERP.Chapter.Application.Commands.ReassignPageTask;
 
-public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTasksCommand, BulkActivatePageTasksResult>
+public record ReassignPageTaskCommand(
+    Guid MangakaId,
+    Guid ChapterId,
+    int PageNumber,
+    Guid NewAssistantId,
+    string? Description = null
+) : IRequest<ReassignPageTaskResult>;
+
+public record ReassignPageTaskResult(
+    Guid PageTaskId,
+    int PageNumber,
+    Guid AssignedAssistantId,
+    string TaskStatus,
+    string? Description);
+
+public class ReassignPageTaskHandler : IRequestHandler<ReassignPageTaskCommand, ReassignPageTaskResult>
 {
     private readonly IChapterRepository _chapterRepo;
     private readonly IPageTaskRepository _pageTaskRepo;
@@ -19,7 +35,7 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
     private readonly IStudioInvitationRepository _studioRepo;
     private readonly INotificationService _notificationService;
 
-    public BulkActivatePageTasksHandler(
+    public ReassignPageTaskHandler(
         IChapterRepository chapterRepo,
         IPageTaskRepository pageTaskRepo,
         ISeriesRepository seriesRepo,
@@ -35,7 +51,7 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
         _notificationService = notificationService;
     }
 
-    public async Task<BulkActivatePageTasksResult> Handle(BulkActivatePageTasksCommand cmd, CancellationToken ct)
+    public async Task<ReassignPageTaskResult> Handle(ReassignPageTaskCommand cmd, CancellationToken ct)
     {
         var chapter = await _chapterRepo.GetByIdAsync(cmd.ChapterId, ct)
             ?? throw new KeyNotFoundException($"Chapter {cmd.ChapterId} not found.");
@@ -45,47 +61,30 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
 
         chapter.EnsureOwnedBy(cmd.MangakaId, series.AuthorId);
 
-        var assistant = await _userRepo.GetByIdAsync(cmd.AssignedAssistantId, ct)
-            ?? throw new KeyNotFoundException($"Assistant {cmd.AssignedAssistantId} not found.");
+        var pageTask = await _pageTaskRepo.GetByChapterAndPageNumberAsync(cmd.ChapterId, cmd.PageNumber, ct)
+            ?? throw new KeyNotFoundException($"Page {cmd.PageNumber} not found in chapter {cmd.ChapterId}.");
+
+        var assistant = await _userRepo.GetByIdAsync(cmd.NewAssistantId, ct)
+            ?? throw new KeyNotFoundException($"Assistant {cmd.NewAssistantId} not found.");
 
         if (assistant.Role != UserRole.Assistant)
             throw new InvalidOperationException("Assigned user must have Assistant role.");
 
-        await EnsureAssistantInStudioAsync(series.Id, cmd.AssignedAssistantId, ct);
+        await EnsureAssistantInStudioAsync(series.Id, cmd.NewAssistantId, ct);
 
-        var results = new List<BulkPageTaskActivationResult>();
-        var activatedTasks = new List<PageTask>();
-        var pageNumbers = cmd.PageNumbers.Distinct().ToList();
-
-        var pageTasks = await _pageTaskRepo.GetByChapterAndPageNumbersAsync(cmd.ChapterId, pageNumbers, ct);
-        var pageTasksDict = pageTasks.ToDictionary(p => p.PageNumber);
-
-        foreach (var pageNum in pageNumbers)
-        {
-            if (!pageTasksDict.TryGetValue(pageNum, out var pageTask))
-                throw new KeyNotFoundException($"Page {pageNum} not found in chapter {cmd.ChapterId}.");
-
-            pageTask.Activate(cmd.AssignedAssistantId, cmd.Description);
-            await _pageTaskRepo.UpdateAsync(pageTask, ct);
-            activatedTasks.Add(pageTask);
-
-            results.Add(new BulkPageTaskActivationResult(
-                pageTask.Id,
-                pageTask.PageNumber,
-                pageTask.TaskStatus.ToString()
-            ));
-        }
-
+        pageTask.Reassign(cmd.NewAssistantId, cmd.Description);
+        await _pageTaskRepo.UpdateAsync(pageTask, ct);
         await _pageTaskRepo.SaveChangesAsync(ct);
 
-        // Notify assistant for all assigned page tasks
-        foreach (var pageTask in activatedTasks)
-        {
-            await _notificationService.NotifyTaskAssignedAsync(
-                cmd.AssignedAssistantId, pageTask.Id, pageTask.PageNumber, ct);
-        }
+        await _notificationService.NotifyTaskAssignedAsync(
+            cmd.NewAssistantId, pageTask.Id, pageTask.PageNumber, ct);
 
-        return new BulkActivatePageTasksResult(chapter.Id, cmd.AssignedAssistantId, results);
+        return new ReassignPageTaskResult(
+            pageTask.Id,
+            pageTask.PageNumber,
+            pageTask.AssignedAssistantId!.Value,
+            pageTask.TaskStatus.ToString(),
+            pageTask.Description);
     }
 
     private async Task EnsureAssistantInStudioAsync(Guid seriesId, Guid assistantId, CancellationToken ct)
@@ -98,5 +97,17 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
 
         if (!isMember)
             throw new InvalidOperationException("Assistant must be invited to the series studio before assignment.");
+    }
+}
+
+public class ReassignPageTaskValidator : AbstractValidator<ReassignPageTaskCommand>
+{
+    public ReassignPageTaskValidator()
+    {
+        RuleFor(x => x.MangakaId).NotEmpty();
+        RuleFor(x => x.ChapterId).NotEmpty();
+        RuleFor(x => x.PageNumber).GreaterThan(0);
+        RuleFor(x => x.NewAssistantId).NotEmpty();
+        RuleFor(x => x.Description).MaximumLength(2000).When(x => x.Description != null);
     }
 }

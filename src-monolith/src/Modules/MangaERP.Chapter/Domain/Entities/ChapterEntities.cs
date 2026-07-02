@@ -126,6 +126,17 @@ public class PageTask : AggregateRoot, ISoftDeletable
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void Reassign(Guid assistantId, string? description = null)
+    {
+        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+            throw new InvalidOperationException("Only Incomplete or RevisionAlert page tasks can be reassigned.");
+
+        AssignedAssistantId = assistantId;
+        Description = description ?? Description;
+        TaskStatus = PageTaskStatus.Incomplete;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void MarkReviewing()
     {
         if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)

@@ -111,6 +111,7 @@ public class BulkReviewLayersHandler : IRequestHandler<BulkReviewLayersCommand, 
         }
 
         await _layerRepo.SaveChangesAsync(ct);
+        await _pageTaskRepo.SaveChangesAsync(ct);
 
         return new BulkReviewLayersResult(results);
     }
