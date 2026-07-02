@@ -195,12 +195,18 @@ if (app.Environment.IsDevelopment() ||
 }
 
 app.UseCors(CorsPolicyName);
-app.UseStaticFiles(new StaticFileOptions
+// Static files for public uploads (local/demo only).
+// Skipped when directory doesn't exist (e.g. fresh Docker container on Render).
+// Production uploads go to Cloudinary — this block is a no-op in that case.
+var publicUploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "public");
+if (Directory.Exists(publicUploadsPath))
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
-        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "public")),
-    RequestPath = "/uploads/public"
-});
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(publicUploadsPath),
+        RequestPath  = "/uploads/public"
+    });
+}
 
 // Skip HTTPS redirect in Railway (Railway handles TLS at the gateway level)
 if (!app.Environment.IsProduction())
