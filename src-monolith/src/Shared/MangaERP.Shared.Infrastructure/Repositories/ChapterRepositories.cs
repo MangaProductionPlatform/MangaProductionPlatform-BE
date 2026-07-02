@@ -52,6 +52,12 @@ public class ChapterRepository : IChapterRepository
                         c.ScheduledPublishAt.HasValue &&
                         c.ScheduledPublishAt.Value <= threshold)
             .ToListAsync(ct);
+
+    public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetQAQueueAsync(Guid editorId, CancellationToken ct = default)
+        => await _db.Chapters
+            .Where(c => c.Status == ChapterStatus.ReadyForQA && c.AssignedEditorId == editorId)
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(ct);
 }
 
 public class PageTaskRepository : IPageTaskRepository
