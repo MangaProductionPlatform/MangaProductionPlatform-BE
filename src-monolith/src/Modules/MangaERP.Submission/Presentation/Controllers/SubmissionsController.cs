@@ -239,7 +239,7 @@ public class SubmissionsController : ControllerBase
     /// </summary>
     /// <remarks>GET /api/v1/submissions/{id}/votes?round=1 (bỏ round = lấy vòng hiện tại)</remarks>
     [HttpGet("{id:guid}/votes")]
-    [Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief")]
     [ProducesResponseType(typeof(SubmissionVotesDto), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
@@ -265,7 +265,7 @@ public class SubmissionsController : ControllerBase
     /// Role is determined from RBAC via JWT claim.
     /// </summary>
     [HttpGet("queue")]
-    [Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief")]
     [ProducesResponseType(typeof(IEnumerable<SubmissionSummaryDto>), 200)]
     public async Task<IActionResult> GetQueue(CancellationToken ct)
     {
@@ -288,7 +288,7 @@ public class SubmissionsController : ControllerBase
     /// Kept for Admin override scenarios.
     /// </summary>
     [HttpPost("{id:guid}/request-revision")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief,TantouEditor")]
     [ProducesResponseType(typeof(RequestRevisionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -313,7 +313,7 @@ public class SubmissionsController : ControllerBase
     /// [DEPRECATED] [Admin only] Reject a submission permanently. Use POST /{id}/vote for EB members.
     /// </summary>
     [HttpPost("{id:guid}/reject")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "EditorInChief")]
     [ProducesResponseType(typeof(RejectSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -335,7 +335,7 @@ public class SubmissionsController : ControllerBase
     /// Pending_EB_Review → EB_Approved + MangaSeries created + Mangaka assigned to TE.
     /// </summary>
     [HttpPost("{id:guid}/approve")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "EditorInChief")]
     [ProducesResponseType(typeof(ApproveSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]

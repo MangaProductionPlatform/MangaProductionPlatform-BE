@@ -1,4 +1,5 @@
 using System.Text;
+using MangaERP.Api.Services;
 using DotNetEnv;
 using MangaERP.Identity;
 using MangaERP.Submission;
@@ -8,6 +9,7 @@ using MangaERP.Chapter;
 using MangaERP.Task;
 using MangaERP.QA;
 using MangaERP.Publishing;
+using MangaERP.Segmentation;
 using MangaERP.Shared.Infrastructure;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -77,6 +79,7 @@ builder.Services.AddSeriesModule();
 builder.Services.AddStudioModule();
 builder.Services.AddChapterModule();
 builder.Services.AddTaskModule();
+builder.Services.AddSegmentationModule(builder.Configuration);
 builder.Services.AddQaModule();
 builder.Services.AddPublishingModule();
 // builder.Services.AddRankingModule();
@@ -131,6 +134,11 @@ builder.Services.AddHttpClient<MangaERP.Api.Services.SamServiceClient>(client =>
 })
 .AddPolicyHandler(GetRetryPolicy())
 .AddPolicyHandler(GetCircuitBreakerPolicy());
+
+// ── Cloudinary Image Storage ──────────────────────────────────────────────────
+// Credential config via .env: Cloudinary__CloudName, Cloudinary__ApiKey, Cloudinary__ApiSecret
+builder.Services.AddSingleton<ICloudinaryService, CloudinaryService>();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -187,6 +195,12 @@ if (app.Environment.IsDevelopment() ||
 }
 
 app.UseCors(CorsPolicyName);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "public")),
+    RequestPath = "/uploads/public"
+});
 
 // Skip HTTPS redirect in Railway (Railway handles TLS at the gateway level)
 if (!app.Environment.IsProduction())
