@@ -1,11 +1,6 @@
+using MangaERP.Api.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace MangaERP.Api.Controllers;
 
@@ -14,116 +9,71 @@ namespace MangaERP.Api.Controllers;
 [Authorize]
 public class MediaController : ControllerBase
 {
-    private readonly IWebHostEnvironment _env;
+    private readonly ICloudinaryService _cloudinary;
     private readonly ILogger<MediaController> _logger;
 
-    // TODO: migrate sang S3 pre-signed URL trước production thật — xem gap_completion_plan.md, guardrail 1.1
     private static readonly string[] AllowedExtensions = { ".png", ".jpg", ".jpeg", ".webp" };
 
-    public MediaController(IWebHostEnvironment env, ILogger<MediaController> logger)
+    public MediaController(ICloudinaryService cloudinary, ILogger<MediaController> logger)
     {
-        _env = env;
+        _cloudinary = cloudinary;
         _logger = logger;
     }
 
     /// <summary>
-    /// Upload a file (cover image, or page artwork).
-    /// All uploads are strictly private by default and saved to App_Data/uploads/private/.
-    /// Public movement is handled by the system later (e.g. on publish).
+    /// Upload a file (cover image, page artwork, or any image asset) lên Cloudinary.
+    /// Trả về secure_url (HTTPS CDN URL công khai) và publicId.
     /// </summary>
+    /// <remarks>
+    /// **Response:**
+    /// ```json
+    /// { "url": "https://res.cloudinary.com/...", "fileKey": "manga-platform/abc123" }
+    /// ```
+    /// </remarks>
     [HttpPost("upload")]
-    [RequestSizeLimit(30 * 1024 * 1024)] // Limit up to 30MB
+    [RequestSizeLimit(30 * 1024 * 1024)] // 30MB
     [ProducesResponseType(200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(401)]
+    [ProducesResponseType(500)]
     public async Task<IActionResult> UploadFile(IFormFile file, CancellationToken ct)
     {
         if (file == null || file.Length == 0)
-        {
             return BadRequest(new { message = "Không tìm thấy tệp tải lên hoặc tệp bị rỗng." });
-        }
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (string.IsNullOrEmpty(extension) || !AllowedExtensions.Contains(extension))
-        {
             return BadRequest(new { message = $"Định dạng file không hỗ trợ. Cho phép: {string.Join(", ", AllowedExtensions)}" });
-        }
 
-        // Validate Magic Bytes
+        // Validate Magic Bytes — bảo vệ chống extension spoofing
         if (!await IsValidImageMagicBytesAsync(file))
-        {
             return BadRequest(new { message = "Tệp tin hình ảnh không hợp lệ (sai Magic Bytes header)." });
-        }
 
         try
         {
-            var uniqueFileName = $"{Guid.NewGuid()}{extension}";
-            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "App_Data", "uploads", "private");
-            
-            var scheme = Request.Scheme;
-            var host = Request.Host.ToUriComponent();
-            var returnUrl = $"{scheme}://{host}/api/v1/media/{uniqueFileName}/view";
+            await using var stream = file.OpenReadStream();
+            var result = await _cloudinary.UploadImageAsync(stream, file.FileName, ct);
 
-            if (!Directory.Exists(folderPath))
+            _logger.LogInformation(
+                "File {OriginalName} uploaded to Cloudinary → {PublicId}",
+                file.FileName, result.PublicId);
+
+            return Ok(new
             {
-                Directory.CreateDirectory(folderPath);
-            }
-
-            var filePath = Path.Combine(folderPath, uniqueFileName);
-
-            using (var fileStream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(fileStream, ct);
-            }
-
-            _logger.LogInformation("File {FileName} uploaded as {UniqueName} (private by default).", file.FileName, uniqueFileName);
-
-            return Ok(new { url = returnUrl, fileKey = uniqueFileName });
+                url     = result.SecureUrl,
+                fileKey = result.PublicId
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogError(ex, "Cloudinary upload failed for {FileName}", file.FileName);
+            return StatusCode(500, new { message = "Lỗi khi tải ảnh lên Cloudinary.", details = ex.Message });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Lỗi xảy ra trong quá trình upload file: {Message}", ex.Message);
-            return StatusCode(500, new { message = "Lỗi máy chủ khi lưu trữ file.", details = ex.Message });
+            _logger.LogError(ex, "Unexpected error during upload of {FileName}", file.FileName);
+            return StatusCode(500, new { message = "Lỗi máy chủ không mong đợi.", details = ex.Message });
         }
-    }
-
-    /// <summary>
-    /// Serves a private file from App_Data/uploads/private/ via Stream.
-    /// </summary>
-    [HttpGet("{fileKey}/view")]
-    [ProducesResponseType(200)]
-    [ProducesResponseType(400)]
-    [ProducesResponseType(401)]
-    [ProducesResponseType(404)]
-    public IActionResult ViewPrivateFile(string fileKey)
-    {
-        // TODO: cần bảng metadata fileKey -> uploaderId để check ownership thật, hiện chỉ dựa vào [Authorize] + GUID khó đoán — chấp nhận rủi ro thấp cho demo
-
-        // Simple security check: prevent directory traversal
-        if (string.IsNullOrEmpty(fileKey) || fileKey.Contains("..") || Path.GetInvalidFileNameChars().Any(c => fileKey.Contains(c)))
-        {
-            return BadRequest(new { message = "fileKey không hợp lệ." });
-        }
-
-        var privateFolder = Path.Combine(Directory.GetCurrentDirectory(), "App_Data", "uploads", "private");
-        var filePath = Path.Combine(privateFolder, fileKey);
-
-        if (!System.IO.File.Exists(filePath))
-        {
-            return NotFound(new { message = "Không tìm thấy file yêu cầu." });
-        }
-
-        var extension = Path.GetExtension(filePath).ToLowerInvariant();
-        var contentType = extension switch
-        {
-            ".png" => "image/png",
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".webp" => "image/webp",
-            _ => "application/octet-stream"
-        };
-
-        var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
-        return File(fileStream, contentType);
     }
 
     /// <summary>
@@ -134,16 +84,15 @@ public class MediaController : ControllerBase
         var header = new byte[12];
         await using var stream = file.OpenReadStream();
         var read = await stream.ReadAsync(header.AsMemory(0, 12));
-        stream.Position = 0; // Reset để stream đọc lại từ đầu khi lưu file
 
         if (read < 4) return false;
 
         // PNG: 89 50 4E 47
         bool isPng = header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47;
-        
+
         // JPEG: FF D8 FF
         bool isJpeg = header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF;
-        
+
         // WEBP: RIFF....WEBP
         bool isWebp = read >= 12 &&
             header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F' &&

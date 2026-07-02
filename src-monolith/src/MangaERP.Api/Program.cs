@@ -1,4 +1,5 @@
 using System.Text;
+using MangaERP.Api.Services;
 using DotNetEnv;
 using MangaERP.Identity;
 using MangaERP.Submission;
@@ -133,6 +134,11 @@ builder.Services.AddHttpClient<MangaERP.Api.Services.SamServiceClient>(client =>
 })
 .AddPolicyHandler(GetRetryPolicy())
 .AddPolicyHandler(GetCircuitBreakerPolicy());
+
+// ── Cloudinary Image Storage ──────────────────────────────────────────────────
+// Credential config via .env: Cloudinary__CloudName, Cloudinary__ApiKey, Cloudinary__ApiSecret
+builder.Services.AddSingleton<ICloudinaryService, CloudinaryService>();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
