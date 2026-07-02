@@ -60,7 +60,50 @@ public class GetSeriesInvitationsHandler
     }
 }
 
-// ── DTO ───────────────────────────────────────────────────────────────────────
+// ── Query: Mangaka xem danh sách thành viên đang hoạt động trong Studio ──────
+
+public record GetStudioMembersQuery(Guid RequesterId, Guid SeriesId)
+    : IRequest<IEnumerable<StudioMemberDto>>;
+
+public class GetStudioMembersHandler
+    : IRequestHandler<GetStudioMembersQuery, IEnumerable<StudioMemberDto>>
+{
+    private readonly IStudioInvitationRepository _repo;
+    private readonly MangaERP.Series.Application.Ports.ISeriesRepository _seriesRepo;
+
+    public GetStudioMembersHandler(
+        IStudioInvitationRepository repo,
+        MangaERP.Series.Application.Ports.ISeriesRepository seriesRepo)
+    {
+        _repo = repo;
+        _seriesRepo = seriesRepo;
+    }
+
+    public async Task<IEnumerable<StudioMemberDto>> Handle(GetStudioMembersQuery request, CancellationToken ct)
+    {
+        var series = await _seriesRepo.GetByIdAsync(request.SeriesId, ct)
+            ?? throw new KeyNotFoundException($"Series {request.SeriesId} not found.");
+
+        // Chỉ Mangaka sở hữu series mới có thể xem danh sách thành viên studio
+        if (series.AuthorId != request.RequesterId)
+            throw new UnauthorizedAccessException("You do not have access to this studio's member list.");
+
+        var members = await _repo.GetActiveMembersWithUsersBySeriesIdAsync(request.SeriesId, ct);
+
+        return members.Select(m => new StudioMemberDto(
+            m.InvitationId,
+            m.AssistantUserId,
+            m.AssistantEmail,
+            m.FullName,
+            m.AvatarUrl,
+            m.PenName,
+            m.InvitationStatus,
+            m.JoinedAt
+        ));
+    }
+}
+
+// ── DTOs ─────────────────────────────────────────────────────────────────────
 
 public record StudioInvitationDto(
     Guid InvitationId,
@@ -70,4 +113,15 @@ public record StudioInvitationDto(
     string? Message,
     string Status,
     DateTime ExpiresAt
+);
+
+public record StudioMemberDto(
+    Guid InvitationId,
+    Guid AssistantUserId,
+    string AssistantEmail,
+    string? FullName,
+    string? AvatarUrl,
+    string? PenName,
+    string Status,
+    DateTime JoinedAt
 );

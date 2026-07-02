@@ -10,11 +10,26 @@ public interface IStudioInvitationRepository
     System.Threading.Tasks.Task<StudioInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<StudioInvitation>> GetPendingByAssistantUserIdAsync(Guid assistantUserId, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<StudioInvitation>> GetBySeriesIdAsync(Guid seriesId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<StudioMemberInfo>> GetActiveMembersWithUsersBySeriesIdAsync(Guid seriesId, CancellationToken ct = default);
     System.Threading.Tasks.Task<StudioInvitation?> GetByActivationTokenAsync(string token, CancellationToken ct = default);
     System.Threading.Tasks.Task AddAsync(StudioInvitation invitation, CancellationToken ct = default);
     System.Threading.Tasks.Task UpdateAsync(StudioInvitation invitation, CancellationToken ct = default);
     System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
+
+/// <summary>
+/// Projection kết hợp thông tin invitation + user profile của Assistant đang hoạt động trong studio.
+/// </summary>
+public record StudioMemberInfo(
+    Guid InvitationId,
+    Guid AssistantUserId,
+    string AssistantEmail,
+    string? FullName,
+    string? AvatarUrl,
+    string? PenName,
+    string InvitationStatus,
+    DateTime JoinedAt   // RespondedAt (thời điểm chấp nhận), hoặc CreatedAt nếu IsNewAccountFlow
+);
 
 /// <summary>
 /// Cổng giao tiếp với Identity module để kiểm tra / tạo user mới.

@@ -93,11 +93,18 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public string? RegionMask { get; set; }
     /// <summary>Type of artwork work for this region (Background, Shading, etc.).</summary>
     public PageTaskType TaskType { get; set; } = PageTaskType.General;
+    public DateTime? Deadline { get; set; }
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public virtual Chapter Chapter { get; set; } = null!;
+
+    public void SetDeadline(DateTime? deadline)
+    {
+        Deadline = deadline;
+        UpdatedAt = DateTime.UtcNow;
+    }
     public virtual PreviewPage? PreviewPage { get; set; }
 
     public static PageTask CreatePending(Guid chapterId, int pageNumber)
@@ -115,13 +122,25 @@ public class PageTask : AggregateRoot, ISoftDeletable
         };
     }
 
-    public void Activate(Guid assistantId, string? description = null)
+    public void Activate(Guid assistantId, string? description = null, DateTime? deadline = null)
     {
         if (TaskStatus != PageTaskStatus.Pending)
             throw new InvalidOperationException("Only Pending page tasks can be activated.");
 
         AssignedAssistantId = assistantId;
         Description = description;
+        Deadline = deadline;
+        TaskStatus = PageTaskStatus.Incomplete;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Reassign(Guid assistantId, string? description = null)
+    {
+        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+            throw new InvalidOperationException("Only Incomplete or RevisionAlert page tasks can be reassigned.");
+
+        AssignedAssistantId = assistantId;
+        Description = description ?? Description;
         TaskStatus = PageTaskStatus.Incomplete;
         UpdatedAt = DateTime.UtcNow;
     }

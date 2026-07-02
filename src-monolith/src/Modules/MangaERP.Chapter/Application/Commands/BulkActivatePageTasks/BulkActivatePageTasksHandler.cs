@@ -55,13 +55,17 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
 
         var results = new List<BulkPageTaskActivationResult>();
         var activatedTasks = new List<PageTask>();
+        var pageNumbers = cmd.PageNumbers.Distinct().ToList();
 
-        foreach (var pageNum in cmd.PageNumbers.Distinct())
+        var pageTasks = await _pageTaskRepo.GetByChapterAndPageNumbersAsync(cmd.ChapterId, pageNumbers, ct);
+        var pageTasksDict = pageTasks.ToDictionary(p => p.PageNumber);
+
+        foreach (var pageNum in pageNumbers)
         {
-            var pageTask = await _pageTaskRepo.GetByChapterAndPageNumberAsync(cmd.ChapterId, pageNum, ct)
-                ?? throw new KeyNotFoundException($"Page {pageNum} not found in chapter {cmd.ChapterId}.");
+            if (!pageTasksDict.TryGetValue(pageNum, out var pageTask))
+                throw new KeyNotFoundException($"Page {pageNum} not found in chapter {cmd.ChapterId}.");
 
-            pageTask.Activate(cmd.AssignedAssistantId, cmd.Description);
+            pageTask.Activate(cmd.AssignedAssistantId, cmd.Description, cmd.Deadline);
             await _pageTaskRepo.UpdateAsync(pageTask, ct);
             activatedTasks.Add(pageTask);
 

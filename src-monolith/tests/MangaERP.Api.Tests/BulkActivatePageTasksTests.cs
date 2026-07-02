@@ -213,8 +213,8 @@ public class BulkActivatePageTasksTests
             .ReturnsAsync(assistantUser);
         _studioRepoMock.Setup(r => r.GetBySeriesIdAsync(seriesId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<StudioInvitation> { studioInvitation });
-        _pageTaskRepoMock.Setup(r => r.GetByChapterAndPageNumberAsync(chapterId, 5, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((PageTask)null!);
+        _pageTaskRepoMock.Setup(r => r.GetByChapterAndPageNumbersAsync(chapterId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<PageTask>());
 
         // Act & Assert
         await Assert.ThrowsAsync<KeyNotFoundException>(() => _handler.Handle(command, CancellationToken.None));
@@ -255,10 +255,8 @@ public class BulkActivatePageTasksTests
         _studioRepoMock.Setup(r => r.GetBySeriesIdAsync(seriesId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<StudioInvitation> { studioInvitation });
 
-        _pageTaskRepoMock.Setup(r => r.GetByChapterAndPageNumberAsync(chapterId, 1, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(page1);
-        _pageTaskRepoMock.Setup(r => r.GetByChapterAndPageNumberAsync(chapterId, 2, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(page2);
+        _pageTaskRepoMock.Setup(r => r.GetByChapterAndPageNumbersAsync(chapterId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<PageTask> { page1, page2 });
 
         // Act
         var result = await _handler.Handle(command, CancellationToken.None);
