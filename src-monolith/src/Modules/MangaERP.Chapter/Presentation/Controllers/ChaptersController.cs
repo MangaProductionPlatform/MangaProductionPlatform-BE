@@ -1,12 +1,14 @@
 using MediatR;
 using MangaERP.Chapter.Application.Commands.ActivatePageTask;
 using MangaERP.Chapter.Application.Commands.BulkActivatePageTasks;
+using MangaERP.Chapter.Application.Commands.ReassignPageTask;
 using MangaERP.Chapter.Application.Commands.AddBasePage;
 using MangaERP.Chapter.Application.Commands.CreateChapter;
 using MangaERP.Chapter.Application.Commands.SetPageRegion;
 using MangaERP.Chapter.Application.Commands.SubmitForQA;
 using MangaERP.Chapter.Application.Queries.GetChapterDetail;
 using MangaERP.Chapter.Application.Queries.GetChaptersBySeries;
+using MangaERP.Chapter.Application.Queries.GetChapterPages;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -80,6 +82,21 @@ public class ChaptersController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
     }
 
+    [HttpGet("{chapterId:guid}/pages")]
+    [Authorize(Roles = "Mangaka,TantouEditor")]
+    [ProducesResponseType(typeof(IEnumerable<ChapterPageDto>), 200)]
+    public async Task<IActionResult> GetChapterPages(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetChapterPagesQuery(GetUserId(), chapterId);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
+
     [HttpPost("{chapterId:guid}/pages")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(AddBasePageResult), 200)]
@@ -114,7 +131,8 @@ public class ChaptersController : ControllerBase
                 chapterId,
                 request.PageNumber,
                 request.AssignedAssistantId,
-                request.Description);
+                request.Description,
+                request.Deadline);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -139,7 +157,8 @@ public class ChaptersController : ControllerBase
                 chapterId,
                 request.PageNumbers,
                 request.AssignedAssistantId,
-                request.Description);
+                request.Description,
+                request.Deadline);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -192,6 +211,32 @@ public class ChaptersController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    [HttpPut("{chapterId:guid}/pages/{pageNumber:int}/reassign")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(ReassignPageTaskResult), 200)]
+    public async Task<IActionResult> ReassignPageTask(
+        Guid chapterId,
+        int pageNumber,
+        [FromBody] ReassignPageTaskRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new ReassignPageTaskCommand(
+                GetUserId(),
+                chapterId,
+                pageNumber,
+                request.NewAssistantId,
+                request.Description);
+
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
 
 public record CreateChapterRequest(
@@ -204,9 +249,9 @@ public record CreateChapterRequest(
 
 public record AddBasePageRequest(int PageNumber);
 
-public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description);
+public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description, DateTime? Deadline);
 
-public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedAssistantId, string? Description);
+public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedAssistantId, string? Description, DateTime? Deadline);
 
 /// <summary>
 /// Request to save a SAM region on a page task.
@@ -214,3 +259,5 @@ public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedA
 /// TaskType is one of: General, Background, Shading, Inking, Effect, Coloring.
 /// </summary>
 public record SetPageRegionRequest(int PageNumber, string RegionMask, string TaskType);
+
+public record ReassignPageTaskRequest(Guid NewAssistantId, string? Description);

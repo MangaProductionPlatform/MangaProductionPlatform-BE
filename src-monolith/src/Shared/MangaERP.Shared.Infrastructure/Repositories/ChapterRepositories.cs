@@ -52,6 +52,12 @@ public class ChapterRepository : IChapterRepository
                         c.ScheduledPublishAt.HasValue &&
                         c.ScheduledPublishAt.Value <= threshold)
             .ToListAsync(ct);
+
+    public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetQAQueueAsync(Guid editorId, CancellationToken ct = default)
+        => await _db.Chapters
+            .Where(c => c.Status == ChapterStatus.ReadyForQA && c.AssignedEditorId == editorId)
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(ct);
 }
 
 public class PageTaskRepository : IPageTaskRepository
@@ -71,6 +77,13 @@ public class PageTaskRepository : IPageTaskRepository
         => await _db.PageTasks
             .IgnoreQueryFilters() // Bỏ qua soft-delete filter để tránh unique index violation khi trang đã bị xóa mềm
             .FirstOrDefaultAsync(p => p.ChapterId == chapterId && p.PageNumber == pageNumber, ct);
+
+    public async System.Threading.Tasks.Task<IEnumerable<PageTask>> GetByChapterAndPageNumbersAsync(
+        Guid chapterId, IEnumerable<int> pageNumbers, CancellationToken ct = default)
+        => await _db.PageTasks
+            .IgnoreQueryFilters()
+            .Where(p => p.ChapterId == chapterId && pageNumbers.Contains(p.PageNumber))
+            .ToListAsync(ct);
 
     public async System.Threading.Tasks.Task<IEnumerable<PageTask>> GetByChapterIdAsync(Guid chapterId, CancellationToken ct = default)
         => await _db.PageTasks

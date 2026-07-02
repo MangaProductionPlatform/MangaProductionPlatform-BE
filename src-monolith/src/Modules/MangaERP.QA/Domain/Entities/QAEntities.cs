@@ -13,7 +13,7 @@ public class BugPin
     public string NoteMessage { get; set; } = string.Empty;
     public string? IssueType { get; set; }  // Visual | Content | Text | Layout
     public Guid BatchToken { get; set; }
-    public string Status { get; set; } = "Open";  // Open | InFixing | Resolved
+    public string Status { get; set; } = "Open";  // Open | InFixing | Fixed | Resolved
     public DateTime? ResolvedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

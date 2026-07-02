@@ -9,26 +9,24 @@ using MangaERP.Studio.Application.Ports;
 using MangaERP.Studio.Domain.Entities;
 using MediatR;
 
-namespace MangaERP.Chapter.Application.Commands.ActivatePageTask;
+namespace MangaERP.Chapter.Application.Commands.ReassignPageTask;
 
-public record ActivatePageTaskCommand(
+public record ReassignPageTaskCommand(
     Guid MangakaId,
     Guid ChapterId,
     int PageNumber,
-    Guid AssignedAssistantId,
-    string? Description = null,
-    DateTime? Deadline = null
-) : IRequest<ActivatePageTaskResult>;
+    Guid NewAssistantId,
+    string? Description = null
+) : IRequest<ReassignPageTaskResult>;
 
-public record ActivatePageTaskResult(
+public record ReassignPageTaskResult(
     Guid PageTaskId,
     int PageNumber,
     Guid AssignedAssistantId,
     string TaskStatus,
-    string? Description,
-    DateTime? Deadline);
+    string? Description);
 
-public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, ActivatePageTaskResult>
+public class ReassignPageTaskHandler : IRequestHandler<ReassignPageTaskCommand, ReassignPageTaskResult>
 {
     private readonly IChapterRepository _chapterRepo;
     private readonly IPageTaskRepository _pageTaskRepo;
@@ -37,7 +35,7 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
     private readonly IStudioInvitationRepository _studioRepo;
     private readonly INotificationService _notificationService;
 
-    public ActivatePageTaskHandler(
+    public ReassignPageTaskHandler(
         IChapterRepository chapterRepo,
         IPageTaskRepository pageTaskRepo,
         ISeriesRepository seriesRepo,
@@ -53,7 +51,7 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
         _notificationService = notificationService;
     }
 
-    public async Task<ActivatePageTaskResult> Handle(ActivatePageTaskCommand cmd, CancellationToken ct)
+    public async Task<ReassignPageTaskResult> Handle(ReassignPageTaskCommand cmd, CancellationToken ct)
     {
         var chapter = await _chapterRepo.GetByIdAsync(cmd.ChapterId, ct)
             ?? throw new KeyNotFoundException($"Chapter {cmd.ChapterId} not found.");
@@ -66,28 +64,27 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
         var pageTask = await _pageTaskRepo.GetByChapterAndPageNumberAsync(cmd.ChapterId, cmd.PageNumber, ct)
             ?? throw new KeyNotFoundException($"Page {cmd.PageNumber} not found in chapter {cmd.ChapterId}.");
 
-        var assistant = await _userRepo.GetByIdAsync(cmd.AssignedAssistantId, ct)
-            ?? throw new KeyNotFoundException($"Assistant {cmd.AssignedAssistantId} not found.");
+        var assistant = await _userRepo.GetByIdAsync(cmd.NewAssistantId, ct)
+            ?? throw new KeyNotFoundException($"Assistant {cmd.NewAssistantId} not found.");
 
         if (assistant.Role != UserRole.Assistant)
             throw new InvalidOperationException("Assigned user must have Assistant role.");
 
-        await EnsureAssistantInStudioAsync(series.Id, cmd.AssignedAssistantId, ct);
+        await EnsureAssistantInStudioAsync(series.Id, cmd.NewAssistantId, ct);
 
-        pageTask.Activate(cmd.AssignedAssistantId, cmd.Description, cmd.Deadline);
+        pageTask.Reassign(cmd.NewAssistantId, cmd.Description);
         await _pageTaskRepo.UpdateAsync(pageTask, ct);
         await _pageTaskRepo.SaveChangesAsync(ct);
 
         await _notificationService.NotifyTaskAssignedAsync(
-            cmd.AssignedAssistantId, pageTask.Id, pageTask.PageNumber, ct);
+            cmd.NewAssistantId, pageTask.Id, pageTask.PageNumber, ct);
 
-        return new ActivatePageTaskResult(
+        return new ReassignPageTaskResult(
             pageTask.Id,
             pageTask.PageNumber,
             pageTask.AssignedAssistantId!.Value,
             pageTask.TaskStatus.ToString(),
-            pageTask.Description,
-            pageTask.Deadline);
+            pageTask.Description);
     }
 
     private async Task EnsureAssistantInStudioAsync(Guid seriesId, Guid assistantId, CancellationToken ct)
@@ -103,17 +100,14 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
     }
 }
 
-public class ActivatePageTaskValidator : AbstractValidator<ActivatePageTaskCommand>
+public class ReassignPageTaskValidator : AbstractValidator<ReassignPageTaskCommand>
 {
-    public ActivatePageTaskValidator()
+    public ReassignPageTaskValidator()
     {
         RuleFor(x => x.MangakaId).NotEmpty();
         RuleFor(x => x.ChapterId).NotEmpty();
         RuleFor(x => x.PageNumber).GreaterThan(0);
-        RuleFor(x => x.AssignedAssistantId).NotEmpty();
+        RuleFor(x => x.NewAssistantId).NotEmpty();
         RuleFor(x => x.Description).MaximumLength(2000).When(x => x.Description != null);
-        RuleFor(x => x.Deadline)
-            .Must(d => !d.HasValue || d.Value > DateTime.UtcNow.AddMinutes(-5))
-            .WithMessage("Deadline must be in the future.");
     }
 }

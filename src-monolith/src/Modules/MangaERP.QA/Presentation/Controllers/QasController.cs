@@ -25,6 +25,41 @@ public class QasController : ControllerBase
     }
 
     /// <summary>
+    /// [TantouEditor] Get chapters in ReadyForQA queue assigned to this editor.
+    /// </summary>
+    [HttpGet("queue")]
+    [Authorize(Roles = "TantouEditor")]
+    [ProducesResponseType(typeof(IEnumerable<MangaERP.QA.Application.Queries.GetQAQueue.QAQueueChapterDto>), 200)]
+    public async Task<IActionResult> GetQAQueue(CancellationToken ct)
+    {
+        var query = new MangaERP.QA.Application.Queries.GetQAQueue.GetQAQueueQuery(GetUserId());
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [Mangaka] Alias endpoint to resubmit a chapter for QA after fixing bugs.
+    /// </summary>
+    [HttpPost("chapters/{chapterId:guid}/resubmit")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(MangaERP.Chapter.Application.Commands.SubmitForQA.SubmitChapterForQAResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ResubmitForQA(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new MangaERP.Chapter.Application.Commands.SubmitForQA.SubmitChapterForQACommand(GetUserId(), chapterId);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+    }
+
+    /// <summary>
     /// [TantouEditor] Add a single bug pin to a chapter.
     /// </summary>
     [HttpPost("chapters/{chapterId:guid}/pins")]
@@ -111,6 +146,46 @@ public class QasController : ControllerBase
     }
 
     /// <summary>
+    /// [Mangaka] Assign an assistant to fix a bug pin.
+    /// </summary>
+    [HttpPost("pins/{pinId:guid}/assign-fix")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(bool), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> AssignFixTask(Guid pinId, [FromBody] AssignFixRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new MangaERP.QA.Application.Commands.AssignFixTask.AssignFixTaskCommand(
+                pinId, GetUserId(), request.AssistantId, request.Instructions);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [Assistant, Mangaka] Report a bug pin as fixed.
+    /// </summary>
+    [HttpPost("pins/{pinId:guid}/fixed")]
+    [Authorize(Roles = "Assistant,Mangaka")]
+    [ProducesResponseType(typeof(bool), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ReportBugPinFixed(Guid pinId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new MangaERP.QA.Application.Commands.ReportBugPinFixed.ReportBugPinFixedCommand(pinId, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
     /// [TantouEditor] Approve a chapter if all bug pins are resolved.
     /// </summary>
     [HttpPost("chapters/{chapterId:guid}/approve")]
@@ -158,3 +233,6 @@ public record AddPinRequest(
 );
 
 public record SendFeedbackRequest(Guid BatchToken);
+
+public record AssignFixRequest(Guid AssistantId, string? Instructions);
+

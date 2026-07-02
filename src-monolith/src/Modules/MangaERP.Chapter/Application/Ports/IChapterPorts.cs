@@ -13,12 +13,14 @@ public interface IChapterRepository
     Task UpdateAsync(ChapterEntity chapter, CancellationToken ct = default);
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     Task<IEnumerable<ChapterEntity>> GetScheduledChaptersAsync(DateTime threshold, CancellationToken ct = default);
+    Task<IEnumerable<ChapterEntity>> GetQAQueueAsync(Guid editorId, CancellationToken ct = default);
 }
 
 public interface IPageTaskRepository
 {
     Task<PageTask?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<PageTask?> GetByChapterAndPageNumberAsync(Guid chapterId, int pageNumber, CancellationToken ct = default);
+    Task<IEnumerable<PageTask>> GetByChapterAndPageNumbersAsync(Guid chapterId, IEnumerable<int> pageNumbers, CancellationToken ct = default);
     Task<IEnumerable<PageTask>> GetByChapterIdAsync(Guid chapterId, CancellationToken ct = default);
     Task<IEnumerable<PageTask>> GetByAssistantAsync(Guid assistantId, CancellationToken ct = default);
     Task<int> CountApprovedPagesAsync(Guid chapterId, CancellationToken ct = default);

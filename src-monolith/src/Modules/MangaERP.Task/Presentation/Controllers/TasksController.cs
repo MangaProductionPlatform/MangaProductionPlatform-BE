@@ -5,6 +5,8 @@ using MangaERP.Task.Application.Commands.SubmitArtworkLayer;
 using MangaERP.Task.Application.Queries.GetAssignedTasks;
 using MangaERP.Task.Application.Queries.GetChapterTasks;
 using MangaERP.Task.Application.Queries.GetLayerHistory;
+using MangaERP.Chapter.Application.Queries.GetTaskDetail;
+using MangaERP.Chapter.Application.Commands.UpdateTaskDeadline;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -143,6 +145,45 @@ public class TasksController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
+
+    [HttpGet("{pageTaskId:guid}")]
+    [Authorize(Roles = "Mangaka,Assistant,TantouEditor")]
+    [ProducesResponseType(typeof(TaskDetailDto), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetTaskDetail(Guid pageTaskId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetTaskDetailQuery(GetUserId(), pageTaskId);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
+
+    [HttpPatch("{pageTaskId:guid}/deadline")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(UpdateTaskDeadlineResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> UpdateTaskDeadline(
+        Guid pageTaskId,
+        [FromBody] UpdateTaskDeadlineRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateTaskDeadlineCommand(GetUserId(), pageTaskId, request.Deadline);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
 
 public record SubmitArtworkLayerRequest(
@@ -155,3 +196,5 @@ public record ReviewLayerRequest(bool IsAccepted, string? RejectionNote);
 public record BulkReviewItemRequest(Guid PageTaskId, bool IsAccepted, string? RejectionNote);
 
 public record BulkReviewLayersRequest(List<BulkReviewItemRequest> Reviews);
+
+public record UpdateTaskDeadlineRequest(DateTime? Deadline);

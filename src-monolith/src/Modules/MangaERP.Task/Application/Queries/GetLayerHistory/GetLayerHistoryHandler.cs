@@ -96,22 +96,25 @@ public class GetLayerHistoryHandler : IRequestHandler<GetLayerHistoryQuery, IEnu
             var layers = await _layerRepo.GetByPageTaskIdAsync(task.Id, ct);
             foreach (var layer in layers)
             {
-                // Only allow Mangaka to view layers they have already approved or rejected (ReviewedAt != null)
-                if (layer.ReviewedAt == null)
-                    continue;
-
-                string statusStr = layer.RejectionNote == null ? "Accepted" : "Rejected";
+                string statusStr = layer.ReviewedAt == null
+                    ? "Pending"
+                    : (layer.RejectionNote == null ? "Accepted" : "Rejected");
 
                 if (query.Status != null)
                 {
                     if (string.Equals(query.Status, "Current", StringComparison.OrdinalIgnoreCase) && !layer.IsCurrentVersion)
                         continue;
-                    if (string.Equals(query.Status, "Accepted", StringComparison.OrdinalIgnoreCase) && layer.RejectionNote != null)
+                    if (string.Equals(query.Status, "Accepted", StringComparison.OrdinalIgnoreCase) && (layer.ReviewedAt == null || layer.RejectionNote != null))
                         continue;
-                    if (string.Equals(query.Status, "Rejected", StringComparison.OrdinalIgnoreCase) && layer.RejectionNote == null)
+                    if (string.Equals(query.Status, "Rejected", StringComparison.OrdinalIgnoreCase) && (layer.ReviewedAt == null || layer.RejectionNote == null))
                         continue;
-                    if (string.Equals(query.Status, "Pending", StringComparison.OrdinalIgnoreCase))
-                        continue; // Pending layers are skipped above because ReviewedAt is null
+                    if (string.Equals(query.Status, "Pending", StringComparison.OrdinalIgnoreCase) && layer.ReviewedAt != null)
+                        continue;
+                }
+                else
+                {
+                    if (layer.ReviewedAt == null)
+                        continue;
                 }
 
                 results.Add(new LayerHistoryDto(
