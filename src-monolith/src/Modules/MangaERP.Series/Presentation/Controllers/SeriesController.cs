@@ -81,7 +81,7 @@ public class SeriesController : ControllerBase
     /// [EditorialBoard, EditorInChief] Lấy queue các series đang chờ duyệt yêu cầu hủy.
     /// </summary>
     [HttpGet("cancellation-queue")]
-    [Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief")]
     [ProducesResponseType(typeof(IEnumerable<CancellationQueueItemDto>), 200)]
     [ProducesResponseType(401)]
     public async Task<IActionResult> GetCancellationQueue(CancellationToken ct)

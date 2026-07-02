@@ -50,10 +50,10 @@ public class GetSubmissionVotesHandler
     public async Task<SubmissionVotesDto> Handle(
         GetSubmissionVotesQuery query, CancellationToken ct)
     {
-        // Chỉ EB, EIC, Admin mới được xem phiếu bầu
-        var allowedRoles = new[] { "EditorialBoard", "EditorInChief", "Admin" };
+        // Chỉ EB, EIC mới được xem phiếu bầu
+        var allowedRoles = new[] { "EditorialBoard", "EditorInChief" };
         if (!allowedRoles.Contains(query.RequesterRole))
-            throw new UnauthorizedAccessException("Chỉ Editorial Board, EIC, hoặc Admin mới được xem phiếu bầu.");
+            throw new UnauthorizedAccessException("Chỉ Editorial Board hoặc EIC mới được xem phiếu bầu.");
 
         var submission = await _repo.GetByIdAsync(query.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {query.SubmissionId} không tìm thấy.");

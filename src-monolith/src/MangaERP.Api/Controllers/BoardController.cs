@@ -11,7 +11,7 @@ namespace MangaERP.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/board")]
-[Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+[Authorize(Roles = "EditorialBoard,EditorInChief")]
 public class BoardController : ControllerBase
 {
     private readonly IMediator _mediator;

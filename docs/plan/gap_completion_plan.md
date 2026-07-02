@@ -308,12 +308,12 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 | Method | Route | Vai trò | Mô tả |
 |---|---|---|---|
-| POST | `/api/v1/ranking/import` | Admin, EB | Import phiếu bầu thô theo kỳ |
-| POST | `/api/v1/ranking/compile` | Admin, EB | Gom vote, gán Rank, lưu Snapshot |
+| POST | `/api/v1/ranking/import` | EB, EIC | Import phiếu bầu thô theo kỳ |
+| POST | `/api/v1/ranking/compile` | EB, EIC | Gom vote, gán Rank, lưu Snapshot |
 | GET | `/api/v1/ranking/board?period=...` | Public | Bảng xếp hạng chính thức |
 | GET | `/api/v1/ranking/periods` | Public | Danh sách kỳ đã có snapshot |
-| GET | `/api/v1/ranking/import/{period}` | Admin, EB | Xem phiếu thô đã import |
-| DELETE | `/api/v1/ranking/import/{period}` | Admin | Xóa phiếu thô trước khi compile |
+| GET | `/api/v1/ranking/import/{period}` | EB, EIC | Xem phiếu thô đã import |
+| DELETE | `/api/v1/ranking/import/{period}` | EB, EIC | Xóa phiếu thô trước khi compile |
 
 **Checklist BE Ranking (Phương án A — thủ công):**
 - [ ] Infrastructure: `IVoteDataRepository`, `IRankingSnapshotRepository`, EF mapping, migration (**Bach**)
@@ -333,6 +333,8 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 ### B — Luồng Cancellation (Thiếu hoàn toàn — có method `Cancel()` nhưng sai phân quyền)
 
 > ⚠️ Quyết định hủy truyện thuộc **EB/EIC**, không phải Admin.
+> 
+> 🛡️ **Nguyên tắc phân quyền hệ thống:** Vai trò **Admin** chỉ có quyền hạn kỹ thuật hệ thống (quản lý tài khoản, phân quyền, cấu hình hệ thống). Mọi nghiệp vụ vận hành, nội dung và xuất bản (bao gồm Duyệt hủy truyện, Lên lịch xuất bản, Biên tập và Ranking) thuộc quyền kiểm soát của Ban biên tập (**EB/EIC** hoặc **Editor**) và hoàn toàn không hiển thị/không cho phép Admin truy cập.
 
 | Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
 |---|---|---|---|---|---|
