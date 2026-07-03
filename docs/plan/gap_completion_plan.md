@@ -95,10 +95,10 @@
 
 | Mainflow | Người phụ trách BE | Module / Thư mục thuộc phạm vi |
 |---|---|---|
-| **MF1** — Series Proposal & Vetting | **Bao** branch `bao`| `MangaERP.Submission`, `MangaERP.Series` (cancellation flow) |
-| **MF2** — Chapter Production & Task | **Nam** (branch `nam1`) | `MangaERP.Chapter`, `MangaERP.Task`, `MangaERP.Studio` |
+| **MF1** — Series Proposal & Vetting | **Bao** branch `bao`| `MangaERP.Submission`, `MangaERP.Series` (cancellation flow), `MangaERP.Studio` (Studio Invitations) |
+| **MF2** — Chapter Production & Task | **Nam** (branch `nam1`) | `MangaERP.Chapter`, `MangaERP.Task` |
 | **MF3** — QA & Publishing | **Bach** `bach-v2`| `MangaERP.QA`, `MangaERP.Publishing` |
-| **Core - Phần 1** (Identity, Security & Notifications) | **Nam** (branch `nam1`) | `MangaERP.Identity` (Auth/Profile, Notifications, SignalR, Email, RateLimiter) |
+| **Core - Phần 1** (Identity, Security & Notifications) | **Bao** (branch `bao`) | `MangaERP.Identity` (Auth/Profile, Notifications, SignalR, Email, RateLimiter) |
 | **Core - Phần 2** (Ranking & Background Jobs) | **Bach** (branch `bach-v2`) | `MangaERP.Ranking`, Quartz/Hangfire Scheduled Publisher Job |
 | **Core - Phần 3** (Admin Portal & Global Infrastructure) | **Bao** (branch `bao`) | `MangaERP.Identity` (Admin endpoints), S3 Storage, Middlewares (Exception, Audit) |
 
@@ -268,7 +268,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 ## Core — Admin, Notifications & Ranking (Chia theo Owner)
 
 ### A — Quick Wins (BE đã có, FE chỉ cần gọi đúng)
-> **Người phụ trách:** **Nam** (Core - Phần 1) tích hợp SignalR; cả team wire API vào các dashboard tương ứng.
+> **Người phụ trách:** **Bao** (Core - Phần 1) tích hợp SignalR; cả team wire API vào các dashboard tương ứng.
 
 | Trang FE | API đã có | Việc FE cần làm |
 |---|---|---|
@@ -298,10 +298,14 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | GET | `/api/v1/ranking/import/{period}` | EB, EIC | Xem phiếu thô đã import |
 | DELETE | `/api/v1/ranking/import/{period}` | EB, EIC | Xóa phiếu thô trước khi compile |
 
-**Checklist BE Ranking (Phương án A — thủ công):**
-- [ ] Infrastructure: `IVoteDataRepository`, `IRankingSnapshotRepository`, EF mapping, migration (**Bach**)
-- [ ] Application: `ImportVoteDataCommand`, `CompileRankingCommand`, `GetRankingBoardQuery` (**Bach**)
-- [ ] Presentation: `RankingController.cs` (**Bach**)
+**Checklist BE Ranking (Phân rã chi tiết cho Bach để tăng commits/lines):**
+- [ ] Commit 1: Tạo DB entities, EF Configurations và chạy Migration tạo bảng cho `VoteData` & `RankingSnapshot` (**Bach**)
+- [ ] Commit 2: Triển khai Infrastructure Repositories cho Ranking (**Bach**)
+- [ ] Commit 3: Viết Command `ImportVoteDataCommand` + Validator nhập phiếu thô (**Bach**)
+- [ ] Commit 4: Viết Command `CompileRankingCommand` chứa thuật toán tổng hợp điểm và xếp hạng truyện (**Bach**)
+- [ ] Commit 5: Viết Query `GetRankingBoardQuery` và `GetRankingPeriodsQuery` (**Bach**)
+- [ ] Commit 6: Viết Controller `RankingController.cs` expose toàn bộ API (**Bach**)
+- [ ] Commit 7-8: Viết bộ Unit Tests cho Ranking (`RankingTests.cs` tối thiểu 200 dòng) (**Bach**)
 
 ---
 
@@ -344,7 +348,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | POST | `/api/v1/series/{id}/set-hiatus` | Mangaka, Admin | Không có trạng thái tạm nghỉ | 🟢 | ⬜ Chưa làm |
 | POST | `/api/v1/series/{id}/reactivate` | Mangaka, Admin | Không khôi phục từ Hiatus được | 🟢 | ⬜ Chưa làm |
 | GET | `/api/v1/studios/{seriesId}/members` | Mangaka, TE | Không biết ai đang trong studio | 🟢 | ✅ Đã làm (trong `nam1`) |
-| DELETE | `/api/v1/studios/{seriesId}/members/{assistantId}` | Mangaka | Không khai trừ được assistant | 🟢 | ⬜ Chưa làm |
+| DELETE | `/api/v1/studios/{seriesId}/members/{assistantId}` | Mangaka | Không khai trừ được assistant (Yêu cầu side-effect: thu hồi tasks chưa xong của assistant & notify) | 🟢 | ⬜ Chưa làm |
 | POST | `/api/v1/studios/invitations/{id}/cancel` | Mangaka | Gửi nhầm lời mời không thu hồi được | 🟢 | ✅ Đã làm (trong `nam1`) |
 
 ### B — Quản lý Chapter & Trang vẽ
@@ -362,6 +366,9 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 |---|---|---|---|---|---|
 | GET | `/api/v1/tasks/{pageTaskId}` | Mangaka, Assistant | Không xem được chi tiết 1 task | 🟡 | ✅ Đã làm (trong `nam1`) |
 | PATCH | `/api/v1/tasks/{pageTaskId}/deadline` | Mangaka | Không cập nhật được deadline khi tiến độ thay đổi | 🟢 | ✅ Đã làm (trong `nam1` - `PUT /deadline`) |
+| GET | `/api/v1/studios/{seriesId}/tasks/board` | Mangaka, TE, Assistant | Không hiển thị được giao diện Kanban Board phân nhóm task trong Studio | 🟢 | ⬜ Chưa làm |
+| GET | `/api/v1/tasks/{pageTaskId}/layers/{layerType}/versions` | Mangaka, Assistant | Không xem lại được các bản vẽ cũ của Assistant (Lịch sử phiên bản layer) | 🟢 | ⬜ Chưa làm |
+| POST | `/api/v1/tasks/{pageTaskId}/layers/{layerType}/rollback` | Mangaka | Không đảo ngược (rollback) layer về bản vẽ cũ khi Assistant vẽ sai | 🟢 | ⬜ Chưa làm |
 
 ---
 
@@ -371,8 +378,8 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 | Method | Route | Người dùng | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
 |---|---|---|---|---|---|
-| GET | `/api/v1/qa/chapters/{id}/history` | TE, Mangaka, Admin | Không truy vết lịch sử QA — bao nhiêu lần, sửa gì | 🟢 | ⬜ Chưa làm |
-| POST | `/api/v1/qa/chapters/{id}/reopen` | TE | Không mở lại được QA nếu phát hiện sót lỗi | 🟢 | ⬜ Chưa làm |
+| GET | `/api/v1/qa/chapters/{id}/history` | TE, Mangaka, Admin | Không truy vết lịch sử QA (Yêu cầu log timeline chi tiết: ghim lỗi, sửa, duyệt...) | 🟢 | ⬜ Chưa làm |
+| POST | `/api/v1/qa/chapters/{id}/reopen` | TE | Không mở lại được QA nếu phát hiện sót lỗi (Yêu cầu cập nhật status & notify liên quan) | 🟢 | ⬜ Chưa làm |
 | PATCH | `/api/v1/qa/pins/{pinId}` | TE | Không sửa được nội dung pin tạo nhầm | 🟢 | ⬜ Chưa làm |
 | DELETE | `/api/v1/qa/pins/{pinId}` | TE | Không xóa được pin tạo nhầm | 🟢 | ⬜ Chưa làm |
 | POST | `/api/v1/qa/pins/{pinId}/fixed` | Mangaka/Assistant | Không có nút báo cáo đã sửa lỗi (Bug pin status lifecycle) | 🟡 | ✅ Đã làm (trong `bach-v2`) |
@@ -390,7 +397,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 ## Core — Identity, Notifications & Infrastructure (Chia theo Owner)
 
-### B — Identity & Tài Khoản (Người làm: **Nam** — Core - Phần 1)
+### B — Identity & Tài Khoản (Người làm: **Bao** — Core - Phần 1)
 
 | Method | Route | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
 |---|---|---|---|---|
@@ -402,7 +409,7 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 > `POST /auth/logout` và `POST /auth/refresh` **đã có** — bỏ qua tài liệu cũ ghi là "thiếu".
 
-### B — Notifications (Người làm: **Nam** — Core - Phần 1)
+### B — Notifications (Người làm: **Bao** — Core - Phần 1)
 
 | Method | Route | Vấn đề nếu thiếu | Ưu tiên | Trạng thái |
 |---|---|---|---|---|
@@ -414,13 +421,13 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 
 | Service | Tình trạng hiện tại | Hậu quả nếu thiếu | Ưu tiên | Người làm BE |
 |---|---|---|---|---|
-| **SignalR Hub** | Logic có nhưng Hub chưa đăng ký endpoint | Notification chỉ thấy khi refresh trang, không real-time | ⚪ | **Nam** (Core - Phần 1) |
+| **SignalR Hub** | Logic có nhưng Hub chưa đăng ký endpoint | Notification chỉ thấy khi refresh trang, không real-time | ⚪ | **Bao** (Core - Phần 1) |
 | **Scheduled Publisher Job** | Lưu DB nhưng không có job trigger | Chapter lên lịch không bao giờ tự phát hành | ⚪ | **Bach** (Core - Phần 2) |
 | **File Storage (S3/Blob)** | FE tự nhập URL thủ công | Không upload được ảnh bìa, bản thảo, layer vẽ | ⚪ | **Bao** (Core - Phần 3) |
-| **Email Service** | Chỉ log ra console | Email kích hoạt & reset password không đến được user | ⚪ | **Nam** (Core - Phần 1) |
+| **Email Service** | Chỉ log ra console | Email kích hoạt & reset password không đến được user | ⚪ | **Bao** (Core - Elevate) |
 | **Global Exception Handler** | Mỗi controller tự try-catch riêng | FE nhận HTML error page thay vì JSON → app crash phía client | ⚪ | **Bao** (Core - Phần 3) |
 | **Audit Log** | Không có | Không điều tra được sự cố — ai làm gì, lúc mấy giờ | ⚪ | **Bao** (Core - Phần 3) |
-| **Rate Limiter** | Không có | Dễ bị spam login/vote — lỗ hổng bảo mật | ⚪ | **Nam** (Core - Phần 1) |
+| **Rate Limiter** | Không có | Dễ bị spam login/vote — lỗ hổng bảo mật | ⚪ | **Bao** (Core - Phần 1) |
 | **Health Check** | Không có `GET /health` | Deployment/monitoring không biết service có đang sống | ⚪ | **Bach** (Core - Phần 2) |
 
 ## 📌 Cập nhật — Media Upload (nối tiếp dòng 435)
@@ -436,13 +443,14 @@ localStorage.setItem("currentUser", JSON.stringify(account));
 | Phase | Nội dung | Luồng | Ưu tiên | Trạng thái |
 |---|---|---|---|---|
 | **Phase 0 — Quick Wins** | FE kết nối các trang đang gọi sai (Notifications, Board Voting, Editor Dashboard, Assistant pages, QA Canvas) — không cần code BE | MF1 + MF2 + MF3 + Core | 🔴 ROI cao nhất | ⬜ FE việc |
-| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me` (**Nam**); viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard (**Bao**) | Core + MF2 + MF3 | 🔴 | 🔄 Một phần: Admin Dashboard ✅ done Bao, Bugs #1 #2 + QA queue ✅ done Nam/Bach. Còn thiếu: users/me, publishing queue ⬜ |
+| **Phase 1 — Fix Bugs & Unblock Core** | Fix Bug #1 và #2 từ PR #19; viết `GET /users/me` (**Bao**); viết 2 queue TE (`/chapters/my-queue`, `/publishing/chapters/my-queue`); viết Admin Dashboard (**Bao**) | Core + MF2 + MF3 | 🔴 | 🔄 Một phần: Admin Dashboard ✅ done Bao, Bugs #1 #2 + QA queue ✅ done Nam/Bach. Còn thiếu: users/me, publishing queue ⬜ |
 | **Phase 2 — Ranking Module** | Toàn bộ Infrastructure + Application + Controller Ranking (Phương án A thủ công) (**Bach**) | Core | 🟡 Khối lượng lớn nhất | ⬜ Chưa bắt đầu |
 | **Phase 3 — Cancellation Flow** | request/approve/reject-cancellation đúng phân quyền EB/EIC; cancellation-queue; board/reports | MF1 | 🟡 | ✅ Hoàn thành (2026-07-01, Bao) |
 | **Phase 4 — CRUD Hoàn Chỉnh** | PUT/DELETE series, chapter; Studio members; Reassign trang; Task deadline; QA pins; Publishing schedule | MF1 + MF2 + MF3 | 🟡–🟢 | 🔄 Một phần: Studio members, Reassign trang, Task deadline, QA pins (assign/fixed), Publishing schedule (schedule/update/cancel) ✅. PUT/DELETE series/chapter/pins ⬜ chưa |
-| **Phase 5 — Identity & Notifications** | change-password, forgot/reset-password, avatar; notifications unread-count, delete (**Nam**) | Core | 🟢 | ⬜ Chưa bắt đầu |
+| **Phase 5 — Identity & Notifications** | change-password, forgot/reset-password, avatar; notifications unread-count, delete (**Bao**) | Core | 🟢 | ⬜ Chưa bắt đầu |
 | **Phase 6 — History & Transparency** | submissions/{id}/votes; QA history/reopen; tasks/{id} detail; publishing/{id} detail | MF1 + MF2 + MF3 | 🟢 | 🔄 Một phần: votes + delete draft ✅ done Bao, tasks/publishing detail ✅ done Nam/Bach. QA history/reopen ⬜ chưa |
-| **Phase 7 — Production Infrastructure** | SignalR Hub, Email SMTP, Rate Limiter (**Nam**) <br> Scheduled Publisher Job, Health Check (**Bach**) <br> File Storage thật, Global Exception Handler, Audit Log (**Bao**) | Infra | ⚪ Bắt buộc trước go-live | 🔄 Một phần: Audit Log cho Admin Dashboard ✅. Còn lại ⬜ |
+| **Phase 7 — Production Infrastructure** | SignalR Hub, Email SMTP, Rate Limiter (**Bao**) <br> Scheduled Publisher Job, Health Check (**Bach**) <br> File Storage thật, Global Exception Handler, Audit Log (**Bao**) | Infra | ⚪ Bắt buộc trước go-live | 🔄 Một phần: Audit Log cho Admin Dashboard ✅. Còn lại ⬜ |
+| **Phase 8 — Optional Extensions (Backlog)** | Các tính năng thảo luận task, gợi ý assistant (**Nam**); severity/categories cho QA pin, check xung đột lịch xuất bản (**Bach**) | Core / MF2 / MF3 | 🟢 Tùy chọn tăng commits | ⬜ Chưa bắt đầu |
 
 ---
 
@@ -509,3 +517,33 @@ localStorage.setItem("currentUser", JSON.stringify(account));
   - `SegmentationTaskAssignedHandler.cs` (module `MangaERP.Task`) — `INotificationHandler<SegmentationTaskAssignedEvent>` lắng nghe sự kiện, gọi `NotifySegmentationTaskAssignedAsync`; lỗi notification bị swallow (không rollback transaction Segmentation)
 - **Build:** ✅ 0 errors
 
+---
+
+## ➕ Các Tính Năng Bổ Trợ (Phần Hoàn Thiện Sau Cùng - Backlog Tùy Chọn Tăng Commits/Lines)
+
+> 💡 **Mục đích:** Tập trung hoàn thành Phase 1 - 7 trước để chạy ổn định luồng nghiệp vụ chính. Các tính năng này được xếp vào Backlog (Phase 8), nhóm sẽ phát triển sau khi hệ thống cốt lõi đã sẵn sàng.
+
+### 👤 Cho Nam (MF2 - Task & Studio)
+- **Task Comments (Thảo luận trên trang vẽ)**:
+  - `POST /api/v1/tasks/{id}/comments` (Thêm bình luận mới)
+  - `GET /api/v1/tasks/{id}/comments` (Lấy danh sách trao đổi ý kiến của trang vẽ)
+- **Assistant Recommendation (Gợi ý phân công tự động)**:
+  - `GET /api/v1/chapters/{id}/recommend-assistants?pageNum=X` (Thuật toán gợi ý người vẽ phù hợp dựa trên workload hiện tại và phần mềm sử dụng).
+
+### 👤 Cho Bach (MF3 - QA & Publishing)
+- **QA Pin Severity & Categories (Phân loại & Mức độ lỗi)**:
+  - Thêm thuộc tính `Severity` (Blocker, Major, Minor) và `Category` (LineArt, Coloring, Text) vào `QaPin`. Ngăn chặn xuất bản chapter nếu tồn tại lỗi ở mức `Blocker`.
+- **Publishing Conflict Checker (Kiểm soát xung đột lịch phát hành)**:
+  - Tích hợp logic kiểm tra ngày giờ xuất bản của chapter mới so với các chapter trước để tránh lỗi đảo lộn thứ tự chapter hiển thị.
+
+### 👤 Cho Bao (Core, Infra & MF1 Business Improvements)
+- **Token Blacklist Service (Bảo mật Logout)**:
+  - Triển khai `TokenBlacklistService` sử dụng cache để vô hiệu hóa ngay lập tức các JWT Access Token đã đăng xuất trước khi chúng hết hạn.
+- **Rate Limiting Policies (Giới hạn request phân tầng)**:
+  - Phân tách chính sách giới hạn request giữa API thông thường và API nhạy cảm (như Login, Reset Password để chống tấn công brute-force).
+- **Auto-Resolution for Vetting (Tự động quyết định duyệt truyện khi hết hạn)**:
+  - Viết background job quét các đề xuất truyện (Submission) quá hạn bỏ phiếu (ví dụ: 7 ngày). Nếu hết hạn, tự động giải quyết trạng thái (Resolve) dựa trên số phiếu đa số hiện tại và gửi thông báo cho tác giả.
+- **Submission Revisions (Ghi nhận phiên bản hiệu chỉnh đề xuất)**:
+  - Hỗ trợ Mangaka gửi lại bản thảo đã sửa đổi (`POST /api/v1/submissions/{id}/revisions`) sau khi bị từ chối thay vì phải tạo mới, giúp giữ nguyên lịch sử vote và ý kiến đánh giá trước đó của Biên tập viên.
+- **Dynamic Image Optimization (Tối ưu hóa ảnh tự động qua CDN)**:
+  - Bổ sung logic tự động chuyển hướng/sửa đổi URL trả về từ Cloudinary để áp dụng định dạng WebP nén tối ưu (`q_auto,f_auto`), giảm tải dung lượng khi FE hiển thị các trang truyện nặng.
