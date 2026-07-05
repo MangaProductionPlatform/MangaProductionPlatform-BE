@@ -8,6 +8,7 @@ using MangaERP.Chapter.Application.Commands.SetPageRegion;
 using MangaERP.Chapter.Application.Commands.SubmitForQA;
 using MangaERP.Chapter.Application.Commands.UpdateChapter;
 using MangaERP.Chapter.Application.Commands.DeleteChapter;
+using MangaERP.Chapter.Application.Commands.PatchChapter;
 using MangaERP.Chapter.Application.Queries.GetChapterDetail;
 using MangaERP.Chapter.Application.Queries.GetChaptersBySeries;
 using MangaERP.Chapter.Application.Queries.GetChapterPages;
@@ -289,7 +290,47 @@ public class ChaptersController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    [HttpPatch("{chapterId:guid}")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(PatchChapterResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> PatchChapter(
+        Guid chapterId,
+        [FromBody] PatchChapterRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new PatchChapterCommand(
+                GetUserId(),
+                chapterId,
+                request.Title,
+                request.ChapterNumber,
+                request.TotalPages,
+                request.AssignedEditorId,
+                request.CoverImageUrl,
+                request.UpdateAssignedEditor ?? false);
+
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
+
+public record PatchChapterRequest(
+    string? Title,
+    decimal? ChapterNumber,
+    int? TotalPages,
+    Guid? AssignedEditorId,
+    string? CoverImageUrl,
+    bool? UpdateAssignedEditor);
 
 public record UpdateChapterRequest(
     string Title,
