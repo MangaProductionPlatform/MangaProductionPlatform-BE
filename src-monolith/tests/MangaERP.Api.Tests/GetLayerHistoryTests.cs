@@ -143,7 +143,7 @@ public class GetLayerHistoryTests
     }
 
     [Fact]
-    public async STTask Handle_ValidQuery_ReturnsOnlyReviewedLayersSortedNewestFirst()
+    public async STTask Handle_ValidQuery_ReturnsAllLayersSortedNewestFirst()
     {
         // Arrange
         var mangakaId = Guid.NewGuid();
@@ -183,7 +183,7 @@ public class GetLayerHistoryTests
             FileUrlOriginal = "orig3.png",
             Version = 3,
             SubmittedAt = DateTime.UtcNow.AddMinutes(10),
-            ReviewedAt = null // Pending review (should be skipped)
+            ReviewedAt = null // Pending review
         };
 
         var query = new GetLayerHistoryQuery(mangakaId, PageTaskId: pageTaskId);
@@ -202,13 +202,16 @@ public class GetLayerHistoryTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(2, result.Count); // layer3 is skipped because ReviewedAt is null
+        Assert.Equal(3, result.Count); // All layers including pending are returned by default
 
-        // Order descending by SubmittedAt (layer2 submitted at DateTime.UtcNow, layer1 submitted at DateTime.UtcNow - 10 min)
-        Assert.Equal(layer2.Id, result[0].LayerId);
-        Assert.Equal("Accepted", result[0].Status);
+        // Order descending by SubmittedAt (layer3 submitted at DateTime.UtcNow + 10, layer2 submitted at DateTime.UtcNow, layer1 submitted at DateTime.UtcNow - 10 min)
+        Assert.Equal(layer3.Id, result[0].LayerId);
+        Assert.Equal("Pending", result[0].Status);
 
-        Assert.Equal(layer1.Id, result[1].LayerId);
-        Assert.Equal("Rejected", result[1].Status);
+        Assert.Equal(layer2.Id, result[1].LayerId);
+        Assert.Equal("Accepted", result[1].Status);
+
+        Assert.Equal(layer1.Id, result[2].LayerId);
+        Assert.Equal("Rejected", result[2].Status);
     }
 }

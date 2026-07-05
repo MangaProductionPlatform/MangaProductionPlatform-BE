@@ -6,6 +6,8 @@ using MangaERP.Chapter.Application.Commands.AddBasePage;
 using MangaERP.Chapter.Application.Commands.CreateChapter;
 using MangaERP.Chapter.Application.Commands.SetPageRegion;
 using MangaERP.Chapter.Application.Commands.SubmitForQA;
+using MangaERP.Chapter.Application.Commands.UpdateChapter;
+using MangaERP.Chapter.Application.Commands.DeleteChapter;
 using MangaERP.Chapter.Application.Queries.GetChapterDetail;
 using MangaERP.Chapter.Application.Queries.GetChaptersBySeries;
 using MangaERP.Chapter.Application.Queries.GetChapterPages;
@@ -237,7 +239,64 @@ public class ChaptersController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    [HttpPut("{chapterId:guid}")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(UpdateChapterResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> UpdateChapter(
+        Guid chapterId,
+        [FromBody] UpdateChapterRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateChapterCommand(
+                GetUserId(),
+                chapterId,
+                request.Title,
+                request.ChapterNumber,
+                request.TotalPages,
+                request.AssignedEditorId,
+                request.CoverImageUrl);
+
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpDelete("{chapterId:guid}")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> DeleteChapter(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new DeleteChapterCommand(GetUserId(), chapterId);
+            await _mediator.Send(command, ct);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
+
+public record UpdateChapterRequest(
+    string Title,
+    decimal ChapterNumber,
+    int TotalPages,
+    Guid? AssignedEditorId,
+    string? CoverImageUrl);
 
 public record CreateChapterRequest(
     Guid SeriesId,
