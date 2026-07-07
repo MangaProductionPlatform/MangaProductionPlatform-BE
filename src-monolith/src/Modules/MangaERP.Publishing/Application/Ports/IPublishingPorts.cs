@@ -28,4 +28,13 @@ public interface INotificationRepository
     /// Trả về số lượng thông báo đã được cập nhật.
     /// </summary>
     System.Threading.Tasks.Task<int> MarkAllAsReadAsync(Guid receiverId, CancellationToken ct = default);
+
+    /// <summary>Đếm số thông báo chưa đọc của receiver (dùng cho badge Navbar).</summary>
+    System.Threading.Tasks.Task<int> CountUnreadAsync(Guid receiverId, CancellationToken ct = default);
+
+    /// <summary>Xóa một thông báo cụ thể (chỉ xóa nếu thuộc về receiver).</summary>
+    System.Threading.Tasks.Task DeleteAsync(Guid notificationId, Guid receiverId, CancellationToken ct = default);
+
+    /// <summary>Xóa tất cả thông báo đã đọc của receiver (bulk cleanup).</summary>
+    System.Threading.Tasks.Task<int> DeleteAllReadAsync(Guid receiverId, CancellationToken ct = default);
 }

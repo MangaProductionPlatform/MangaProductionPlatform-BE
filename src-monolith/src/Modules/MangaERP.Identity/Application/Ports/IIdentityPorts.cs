@@ -56,6 +56,8 @@ public interface IEmailService
 
     Task SendUsernameUpdatedEmailAsync(string toEmail, string newUsername,
         string fullName, CancellationToken ct = default);
+
+    Task SendOtpEmailAsync(string toEmail, string otp, CancellationToken ct = default);
 }
 
 public interface IUsernameGenerator

@@ -12,6 +12,7 @@ using MangaERP.Task.Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MangaERP.Shared.Infrastructure.Middlewares;
 
 namespace MangaERP.Shared.Infrastructure;
 
@@ -67,6 +68,11 @@ public static class SharedInfrastructureExtensions
 
         // Shared Services
         services.AddScoped<INotificationService, NotificationService>();
+
+        // Infrastructure Reliability & Security services
+        services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
+        services.AddTransient<GlobalExceptionMiddleware>();
+        services.AddTransient<TokenBlacklistMiddleware>();
 
         return services;
     }

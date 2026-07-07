@@ -138,7 +138,58 @@ public class BrevoEmailService : IEmailService
         LogUsernameUpdateFallback(newUsername, fullName);
     }
 
+    public async Task SendOtpEmailAsync(string toEmail, string otp, CancellationToken ct = default)
+    {
+        var apiKey     = _config["Brevo:ApiKey"];
+        var fromEmail  = _config["Smtp:FromAddress"] ?? "noreply@company.com";
+        var fromName   = _config["Smtp:FromName"]   ?? "MangaERP";
+
+        // ── Local Dev: No API key configured → log to console ─────────────────
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            _logger.LogWarning("Brevo:ApiKey is not set. Falling back to console logging.");
+            LogOtpFallback(toEmail, otp);
+            return;
+        }
+
+        // ── Production: Call Brevo REST API ───────────────────────────────────
+        try
+        {
+            var payload = new
+            {
+                sender      = new { name = fromName, email = fromEmail },
+                to          = new[] { new { email = toEmail } },
+                subject     = "🔑 Mã xác thực OTP khôi phục mật khẩu MangaERP",
+                htmlContent = BuildOtpEmailHtml(otp),
+                textContent = $"Mã OTP khôi phục mật khẩu của bạn là: {otp}\n\nMã này có giá trị trong vòng 5 phút. Vui lòng không chia sẻ mã này cho bất kỳ ai."
+            };
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, BrevoApiUrl);
+            request.Headers.Add("api-key", apiKey);
+            request.Content = JsonContent.Create(payload);
+
+            var response = await _httpClient.SendAsync(request, ct);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation("[Brevo] OTP email sent successfully to {Email}", toEmail);
+                return;
+            }
+
+            var errorBody = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("[Brevo] API error {Status}: {Body}", response.StatusCode, errorBody);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Brevo] Failed to send OTP email. Falling back to console logging.");
+        }
+
+        // ── Fallback: Log OTP if Brevo call failed ─────────────────────────────
+        LogOtpFallback(toEmail, otp);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
+
 
     private void LogFallback(string username, string fullName, string activationLink)
     {
@@ -234,4 +285,47 @@ public class BrevoEmailService : IEmailService
             </div>
         </div>
         """;
+
+    private void LogOtpFallback(string email, string otp)
+    {
+        _logger.LogWarning("********************************************************************************");
+        _logger.LogWarning("OTP CODE FALLBACK:");
+        _logger.LogWarning("Send to PersonalEmail: {Email}", email);
+        _logger.LogWarning("OTP Code: {Otp}", otp);
+        _logger.LogWarning("********************************************************************************");
+    }
+
+    private static string BuildOtpEmailHtml(string otp)
+        => $"""
+        <div style="background-color: #f9f9f9; padding: 30px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; min-height: 100%;">
+            <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                
+                <div style="background: linear-gradient(135deg, #1f4037, #99f2c8); padding: 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; letter-spacing: 1px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.2);">
+                        MangaC&P
+                    </h1>
+                    <p style="color: #ffffff; margin: 5px 0 0 0; opacity: 0.9; font-size: 14px;">Hệ thống Sáng tác & Xuất bản Manga</p>
+                </div>
+
+                <div style="padding: 40px 30px; color: #333333; line-height: 1.6;">
+                    <h2 style="margin-top: 0; color: #222222; font-size: 20px;">Xin chào,</h2>
+                    <p style="font-size: 15px;">Chúng tôi nhận được yêu cầu khôi phục mật khẩu cho tài khoản MangaERP của bạn. Vui lòng sử dụng mã OTP dưới đây để hoàn tất quá trình:</p>
+                    
+                    <div style="text-align: center; margin: 30px 0; background-color: #f5f5f5; padding: 20px; border-radius: 8px; border: 1px dashed #1f4037;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #1f4037;">{otp}</span>
+                    </div>
+
+                    <p style="font-size: 14px; color: #666666;">Lưu ý: Mã OTP này có giá trị trong vòng <strong>5 phút</strong>. Vì lý do bảo mật, tuyệt đối không chia sẻ mã này cho bất kỳ ai.</p>
+                    <p style="font-size: 14px; color: #666666; margin-top: 20px;">Nếu bạn không yêu cầu thay đổi này, hãy bỏ qua email này.</p>
+                </div>
+
+                <div style="background-color: #f1f1f1; padding: 20px; text-align: center; font-size: 12px; color: #999999; border-top: 1px solid #eaeaea;">
+                    <p style="margin: 0 0 5px 0;">Đây là email tự động từ hệ thống MangaC&P, vui lòng không phản hồi thư này.</p>
+                    <p style="margin: 0;">© 2026 MangaC&P. All rights reserved.</p>
+                </div>
+
+            </div>
+        </div>
+        """;
 }
+
