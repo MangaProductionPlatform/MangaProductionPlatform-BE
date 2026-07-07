@@ -81,4 +81,30 @@ public class PublishingRepositories : IPublicationRecordRepository, INotificatio
         => await _db.Notifications
             .Where(n => n.ReceiverId == receiverId && !n.IsRead)
             .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true), ct);
+
+    async System.Threading.Tasks.Task<int> INotificationRepository.CountUnreadAsync(
+        Guid receiverId, CancellationToken ct)
+        => await _db.Notifications
+            .CountAsync(n => n.ReceiverId == receiverId && !n.IsRead, ct);
+
+    async System.Threading.Tasks.Task INotificationRepository.DeleteAsync(
+        Guid notificationId, Guid receiverId, CancellationToken ct)
+    {
+        var notification = await _db.Notifications
+            .FirstOrDefaultAsync(n => n.Id == notificationId && n.ReceiverId == receiverId, ct);
+
+        if (notification is null)
+            throw new KeyNotFoundException($"Thông báo {notificationId} không tồn tại hoặc không thuộc về bạn.");
+
+        _db.Notifications.Remove(notification);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    async System.Threading.Tasks.Task<int> INotificationRepository.DeleteAllReadAsync(
+        Guid receiverId, CancellationToken ct)
+        // ExecuteDeleteAsync: single bulk DELETE SQL
+        => await _db.Notifications
+            .Where(n => n.ReceiverId == receiverId && n.IsRead)
+            .ExecuteDeleteAsync(ct);
 }
+

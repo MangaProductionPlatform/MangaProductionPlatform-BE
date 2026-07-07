@@ -151,4 +151,61 @@ public class AdminDashboardController : ControllerBase
 
         return Ok(new { message = "SAM configuration updated successfully." });
     }
+
+    /// <summary>
+    /// [Admin] Thống kê hiệu suất vận hành luồng nghiệp vụ:
+    /// số chapter đang ở từng trạng thái QA, số task tồn đọng, số bản thảo pending...
+    /// </summary>
+    [HttpGet("workflow-stats")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(403)]
+    public async Task<IActionResult> GetWorkflowStats(CancellationToken ct)
+    {
+        // Tổng hợp nhanh từ DB trực tiếp — không cần qua từng module
+        var submissionStats = await _db.SeriesSubmissions
+            .GroupBy(s => s.Status)
+            .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
+            .ToListAsync(ct);
+
+        var chapterStats = await _db.Chapters
+            .GroupBy(c => c.Status)
+            .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
+            .ToListAsync(ct);
+
+        var taskStats = await _db.PageTasks
+            .GroupBy(t => t.TaskStatus)
+            .Select(g => new { Status = g.Key.ToString(), Count = g.Count() })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            generatedAt      = DateTime.UtcNow,
+            submissionStats,
+            chapterStats,
+            taskStats
+        });
+    }
+
+    /// <summary>
+    /// [Admin] Danh sách static roles của hệ thống — dùng cho FE dropdown khi provision account.
+    /// </summary>
+    [HttpGet("roles")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(403)]
+    public IActionResult GetRoles()
+    {
+        var roles = new[]
+        {
+            new { value = 0, name = "Admin",          description = "Quản trị hệ thống kỹ thuật" },
+            new { value = 1, name = "Mangaka",        description = "Tác giả manga" },
+            new { value = 2, name = "Assistant",      description = "Trợ lý vẽ" },
+            new { value = 3, name = "TantouEditor",   description = "Biên tập viên phụ trách 1-1 với Mangaka" },
+            new { value = 4, name = "EditorialBoard", description = "Ban biên tập — duyệt bản thảo & xuất bản" },
+            new { value = 5, name = "EditorInChief",  description = "Tổng biên tập — phân xử xung đột" },
+        };
+
+        return Ok(new { roles });
+    }
 }

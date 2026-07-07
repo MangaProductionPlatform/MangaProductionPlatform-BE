@@ -19,6 +19,8 @@ using Microsoft.OpenApi.Models;
 using MangaERP.Shared.Infrastructure.Hubs;
 using Polly;
 using Polly.Extensions.Http;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 // ── Load .env for local development (ignored in Docker / Render / Railway) ────
 // DotNetEnv tự động inject vào System.Environment → ASP.NET Core config sẽ đọc được
@@ -139,6 +141,51 @@ builder.Services.AddHttpClient<MangaERP.Api.Services.SamServiceClient>(client =>
 // Credential config via .env: Cloudinary__CloudName, Cloudinary__ApiKey, Cloudinary__ApiSecret
 builder.Services.AddSingleton<ICloudinaryService, CloudinaryService>();
 
+// ── Health Checks ─────────────────────────────────────────────────────────────
+builder.Services.AddHealthChecks()
+    .AddCheck<MangaERP.Shared.Infrastructure.HealthChecks.DbHealthCheck>("database", tags: new[] { "db", "ready" })
+    .AddCheck<MangaERP.Shared.Infrastructure.HealthChecks.CacheHealthCheck>("memory-cache", tags: new[] { "cache", "ready" });
+
+// ── Rate Limiting ─────────────────────────────────────────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        var payload = new
+        {
+            error = "TooManyRequests",
+            message = "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau ít phút."
+        };
+        await context.HttpContext.Response.WriteAsJsonAsync(payload, cancellationToken);
+    };
+
+    // Policy riêng cho các endpoint auth nhạy cảm (login, forgot-password, reset-password)
+    options.AddPolicy("AuthPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // Policy chung cho toàn bộ API còn lại (baseline chống spam/DOS cơ bản)
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 10,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -186,6 +233,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ── Middleware Pipeline ────────────────────────────────────────────────────────
+// 1. Global exception middleware (must be earliest to catch errors in other middlewares)
+app.UseMiddleware<MangaERP.Shared.Infrastructure.Middlewares.GlobalExceptionMiddleware>();
+
+// 2. Rate limiter
+app.UseRateLimiter();
+
 // Swagger available in Development only (or allow via env var for demo)
 if (app.Environment.IsDevelopment() ||
     Environment.GetEnvironmentVariable("ENABLE_SWAGGER") == "true")
@@ -213,7 +266,41 @@ if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();
 
 app.UseAuthentication();
+
+// 3. Token Blacklist middleware (runs after Authentication to access User claims, before Authorization)
+app.UseMiddleware<MangaERP.Shared.Infrastructure.Middlewares.TokenBlacklistMiddleware>();
+
 app.UseAuthorization();
+
+// ── Health Checks Routing ──────────────────────────────────────────────────────
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                durationMs = e.Value.Duration.TotalMilliseconds
+            }),
+            totalDurationMs = report.TotalDuration.TotalMilliseconds
+        };
+
+        await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response));
+    }
+});
+
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false // liveness probe: returns 200 immediately without running DB checks
+});
+
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.Run();

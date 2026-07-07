@@ -93,7 +93,7 @@ public class SeriesController : ControllerBase
     // ── ADMIN ────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// [Admin, EditorialBoard, EditorInChief] Xem toàn bộ series. Hỗ trợ filter theo status.
+    /// [Admin, EditorialBoard, EditorInChief] xem toàn bộ series. [TantouEditor] chỉ xem series được phân công quản lý.
     /// Dùng cho AdminSeriesMonitoringPage.
     /// </summary>
     /// <remarks>GET /api/v1/series?status=Active|Hiatus|Cancelled</remarks>
@@ -104,7 +104,7 @@ public class SeriesController : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] SeriesStatus? status, CancellationToken ct)
     {
-        var query  = new GetAllSeriesQuery(status);
+        var query  = new GetAllSeriesQuery(GetUserId(), GetUserRole(), status);
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }
@@ -163,7 +163,7 @@ public class SeriesController : ControllerBase
     /// Mangaka chỉ xem được series của mình. Staff xem được tất cả.
     /// </summary>
     [HttpGet("{id:guid}")]
-    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,Admin")]
+    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,EditorInChief,Admin")]
     [ProducesResponseType(typeof(SeriesDetailDto), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]

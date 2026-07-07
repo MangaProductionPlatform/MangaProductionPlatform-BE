@@ -3,10 +3,14 @@ using MangaERP.Identity.Application.Commands.Login;
 using MangaERP.Identity.Application.Commands.Logout;
 using MangaERP.Identity.Application.Commands.RefreshToken;
 using MangaERP.Identity.Application.Commands.ActivateAccount;
+using MangaERP.Identity.Application.Commands.ForgotPassword;
+using MangaERP.Identity.Application.Commands.ResetPassword;
+using MangaERP.Shared.Application.Ports;
 using MangaERP.Shared.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 
 namespace MangaERP.Identity.Presentation.Controllers;
@@ -17,11 +21,16 @@ public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly IConfiguration _config;
+    private readonly ITokenBlacklistService _blacklistService;
 
-    public AuthController(IMediator mediator, IConfiguration config)
+    public AuthController(
+        IMediator mediator,
+        IConfiguration config,
+        ITokenBlacklistService blacklistService)
     {
-        _mediator = mediator;
-        _config   = config;
+        _mediator         = mediator;
+        _config           = config;
+        _blacklistService = blacklistService;
     }
 
     // ── Cookie helpers ────────────────────────────────────────────────────────
@@ -40,11 +49,24 @@ public class AuthController : ControllerBase
     /// </summary>
     private void SetRefreshTokenCookie(string token)
     {
+        // Cookie SameSite strategy:
+        // - Development: SameSite=Lax + Secure=false
+        //     localhost:5173 (FE) and localhost:8080 (BE) share the same registrable domain (localhost).
+        //     Browsers treat them as same-site, so Lax works without requiring HTTPS.
+        //     Note: SameSite=None REQUIRES Secure=true — cannot use None+Secure=false (browsers reject it).
+        // - Production: SameSite=None + Secure=true
+        //     FE (Vercel) and BE (Railway) are on different domains → cross-site.
+        //     SameSite=None is mandatory. HTTPS is enforced by Railway, so Secure=true is safe.
+        var isDev = _config["ASPNETCORE_ENVIRONMENT"] == "Development" ||
+                    Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
+
         Response.Cookies.Append("refreshToken", token, new CookieOptions
         {
             HttpOnly  = true,
-            Secure    = true,   // set to false only in local HTTP dev if needed
-            SameSite  = SameSiteMode.Strict,
+            Secure    = !isDev,                    // false on HTTP localhost, true on HTTPS production
+            SameSite  = isDev
+                            ? SameSiteMode.Lax     // same registrable domain (localhost) → Lax is enough
+                            : SameSiteMode.None,   // cross-domain in prod → None required (HTTPS enforces Secure)
             Expires   = DateTimeOffset.UtcNow.AddDays(RefreshExpiryDays),
             Path      = "/"
         });
@@ -53,11 +75,14 @@ public class AuthController : ControllerBase
     /// <summary>Removes the refresh token cookie from the browser.</summary>
     private void DeleteRefreshTokenCookie()
     {
+        var isDev = _config["ASPNETCORE_ENVIRONMENT"] == "Development" ||
+                    Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development";
+
         Response.Cookies.Delete("refreshToken", new CookieOptions
         {
             HttpOnly = true,
-            Secure   = true,
-            SameSite = SameSiteMode.Strict,
+            Secure   = !isDev,
+            SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
             Path     = "/"
         });
     }
@@ -71,6 +96,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("AuthPolicy")]
     public async Task<IActionResult> Login([FromBody] LoginCommand command, CancellationToken ct)
     {
         try
@@ -151,6 +177,17 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Logout(CancellationToken ct)
     {
+        // Extract Access Token JTI and Expiration to blacklist it immediately upon logout
+        var jti = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value 
+                  ?? User.FindFirst("jti")?.Value;
+
+        var expClaim = User.FindFirst("exp")?.Value;
+        if (!string.IsNullOrEmpty(jti) && !string.IsNullOrEmpty(expClaim) && long.TryParse(expClaim, out var expSeconds))
+        {
+            var expiryUtc = DateTimeOffset.FromUnixTimeSeconds(expSeconds).UtcDateTime;
+            _blacklistService.Blacklist(jti, expiryUtc);
+        }
+
         var cookieToken = Request.Cookies["refreshToken"];
 
         if (!string.IsNullOrWhiteSpace(cookieToken))
@@ -164,4 +201,45 @@ public class AuthController : ControllerBase
 
         return Ok(new { message = "Logged out successfully." });
     }
+
+    /// <summary>
+    /// [AllowAnonymous] Yêu cầu gửi mã OTP khôi phục mật khẩu tới PersonalEmail đăng ký của người dùng.
+    /// Quyết định gửi dựa trên Email đăng nhập (Username) được cung cấp.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("AuthPolicy")]
+    [ProducesResponseType(typeof(ForgotPasswordResult), 200)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ForgotPasswordCommand(request.Username), ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [AllowAnonymous] Xác thực mã OTP và tiến hành thiết lập mật khẩu mới.
+    /// Đồng thời hủy toàn bộ phiên đăng nhập/refresh token cũ để đảm bảo an toàn.
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("AuthPolicy")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new ResetPasswordCommand(request.Username, request.Otp, request.NewPassword);
+            await _mediator.Send(command, ct);
+            return Ok(new { message = "Đổi mật khẩu thành công. Vui lòng đăng nhập lại." });
+        }
+        catch (ArgumentException ex)             { return BadRequest(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex)   { return BadRequest(new { message = ex.Message }); }
+        catch (EntityNotFoundException ex)       { return BadRequest(new { message = ex.Message }); }
+    }
 }
+
+// ── Request DTOs ──────────────────────────────────────────────────────────────
+public record ForgotPasswordRequest(string Username);
+public record ResetPasswordRequest(string Username, string Otp, string NewPassword);
+

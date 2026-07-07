@@ -28,3 +28,9 @@ public class EntityNotFoundException : DomainException
     public EntityNotFoundException(string entity, Guid id)
         : base($"{entity} with id '{id}' was not found.") { }
 }
+
+public class ConflictException : DomainException
+{
+    public ConflictException(string message) : base(message) { }
+}
+
