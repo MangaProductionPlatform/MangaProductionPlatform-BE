@@ -13,6 +13,7 @@ using MangaERP.Chapter.Application.Queries.GetChapterDetail;
 using MangaERP.Chapter.Application.Queries.GetChaptersBySeries;
 using MangaERP.Chapter.Application.Queries.GetChapterPages;
 using MangaERP.Chapter.Application.Queries.GetChaptersMyQueue;
+using MangaERP.Chapter.Application.Queries.RecommendAssistants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -331,6 +332,21 @@ public class ChaptersController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpGet("{chapterId:guid}/recommend-assistants")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(IEnumerable<RecommendedAssistantDto>), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> RecommendAssistants(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new RecommendAssistantsQuery(chapterId, GetUserId());
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
     }
 }
 

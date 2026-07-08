@@ -256,3 +256,14 @@ public class StudioInvitationConfiguration : IEntityTypeConfiguration<StudioInvi
         b.HasIndex(e => new { e.AssistantUserId, e.Status });
     }
 }
+
+public class TaskCommentConfiguration : IEntityTypeConfiguration<TaskComment>
+{
+    public void Configure(EntityTypeBuilder<TaskComment> b)
+    {
+        b.ToTable("TaskComments"); b.HasKey(e => e.Id);
+        b.Property(e => e.Content).IsRequired().HasMaxLength(2000);
+        b.Property(e => e.UserFullName).IsRequired().HasMaxLength(256);
+        b.HasIndex(e => e.PageTaskId);
+    }
+}

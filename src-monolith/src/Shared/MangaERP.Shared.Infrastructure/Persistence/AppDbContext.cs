@@ -51,6 +51,7 @@ public class AppDbContext : DbContext
     public DbSet<ArtworkLayer>        ArtworkLayers        => Set<ArtworkLayer>();
     public DbSet<AssistantInvitation> AssistantInvitations => Set<AssistantInvitation>();
     public DbSet<ChapterTeam>         ChapterTeams         => Set<ChapterTeam>();
+    public DbSet<TaskComment>         TaskComments         => Set<TaskComment>();
 
     // ── Studio ────────────────────────────────────────────────
     public DbSet<StudioInvitation> StudioInvitations => Set<StudioInvitation>();

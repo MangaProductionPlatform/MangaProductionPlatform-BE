@@ -13,3 +13,10 @@ public interface IArtworkLayerRepository
     System.Threading.Tasks.Task MarkPreviousVersionsNotCurrentAsync(Guid pageTaskId, CancellationToken ct = default);
     System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
+
+public interface ITaskCommentRepository
+{
+    System.Threading.Tasks.Task<IEnumerable<TaskComment>> GetByPageTaskIdAsync(Guid pageTaskId, CancellationToken ct = default);
+    System.Threading.Tasks.Task AddAsync(TaskComment comment, CancellationToken ct = default);
+    System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default);
+}
