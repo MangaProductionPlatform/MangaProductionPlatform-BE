@@ -45,15 +45,18 @@ public class StudiosController : ControllerBase
     [Authorize(Roles = "Mangaka,TantouEditor,Assistant")]
     [ProducesResponseType(typeof(StudioTasksBoardDto), 200)]
     [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetTasksBoard(Guid seriesId, CancellationToken ct)
     {
         try
         {
-            var query = new GetStudioTasksBoardQuery(seriesId);
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            var query = new GetStudioTasksBoardQuery(seriesId, GetUserId(), role);
             var result = await _mediator.Send(query, ct);
             return Ok(result);
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 }

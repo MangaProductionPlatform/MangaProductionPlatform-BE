@@ -123,24 +123,24 @@
 | `PUT /api/v1/series/{id}` | ✅ **Đã xong** | Sửa metadata series sau khi đã được approved |
 | `POST /api/v1/series/{id}/set-hiatus` | ✅ **Đã xong** | Chuyển series sang trạng thái tạm ngưng |
 | `POST /api/v1/series/{id}/reactivate` | ✅ **Đã xong** | Kích hoạt lại series từ Hiatus |
-| `DELETE /api/v1/studios/{seriesId}/members/{assistantId}` | 🟡 **Cần Nam hoàn thiện task-side** | Bao đã chuẩn bị `IStudioTaskRevocationService`; Nam thay no-op bằng logic revoke/deassign `PageTask` thật trước commit |
+| `DELETE /api/v1/studios/{seriesId}/members/{assistantId}` | ✅ **Đã xong** | Đã hoàn thiện logic revoke/deassign `PageTask` thật đồng bộ trong transaction |
 | `PUT/DELETE /api/v1/chapters/{id}` | ✅ **Đã xong** | Sửa hoặc xóa chapter (đã có từ trước) |
-| `GET /api/v1/studios/{seriesId}/tasks/board` | 🟡 **Cần fix authorization** | Kanban board đã có, nhưng phải check requester có quyền với series/studio |
-| `GET /api/v1/tasks/{pageTaskId}/layers/{layerType}/versions` | 🟡 **Cần fix authorization** | API đã có, nhưng phải check quyền theo task/series trước khi trả layer URLs/history |
-| `POST /api/v1/tasks/{pageTaskId}/layers/{layerType}/rollback` | 🟡 **Cần fix authorization** | API đã có, rollback chỉ cho Mangaka owner của series |
-| **Task Comments** | 🟡 **Cần fix authorization** | `GET/POST /tasks/{id}/comments` đã có, nhưng phải check user có quyền trên task |
-| **Assistant Recommendation** | 🟡 **Cần fix authorization** | `GET /chapters/{id}/recommend-assistants` đã có, nhưng phải check chapter thuộc Mangaka đang gọi |
+| `GET /api/v1/studios/{seriesId}/tasks/board` | ✅ **Đã fix** | Kanban board đã có, đã check requester có quyền với series/studio |
+| `GET /api/v1/tasks/{pageTaskId}/layers/{layerType}/versions` | ✅ **Đã fix** | API đã có, đã check quyền theo task/series trước khi trả layer URLs/history |
+| `POST /api/v1/tasks/{pageTaskId}/layers/{layerType}/rollback` | ✅ **Đã fix** | API đã có, rollback chỉ cho Mangaka owner của series |
+| **Task Comments** | ✅ **Đã fix** | `GET/POST /tasks/{id}/comments` đã có, đã check user có quyền trên task |
+| **Assistant Recommendation** | ✅ **Đã fix** | `GET /chapters/{id}/recommend-assistants` đã có, đã check chapter thuộc Mangaka đang gọi |
 
 ### 🔧 Logic / Authorization Nam cần fix
 
-| Hạng mục | Mức độ | Yêu cầu sửa |
-|---|---|---|
-| `PUT/PATCH /api/v1/chapters/{id}` | 🔴 | Không cho Mangaka truyền `AssignedEditorId` từ request để tự đổi Tantou Editor. Bỏ field này khỏi request/command hoặc luôn giữ/recompute từ `Mangaka.ManagingTantouId`. |
-| `GET /api/v1/studios/{seriesId}/tasks/board` | 🔴 | Query phải nhận requester context. Mangaka chỉ xem series của mình; Tantou chỉ xem series thuộc Mangaka mình quản lý; Assistant chỉ xem studio mà mình là accepted member hoặc chỉ task của mình theo rule nghiệp vụ. |
-| `GET /api/v1/chapters/{id}/recommend-assistants` | 🟡 | Load chapter -> series và check `series.AuthorId == RequesterId` trước khi trả danh sách assistant/workload. |
-| `GET/POST /api/v1/tasks/{id}/comments` | 🔴 | Cả read và add comment phải check quyền theo task: Mangaka owner, Assistant assigned/accepted member theo rule, Tantou quản lý series/chapter. User không liên quan trả 403. |
-| Layer versions / rollback | 🔴 | `GET /tasks/{pageTaskId}/layers/{layerType}/versions` và `POST /tasks/{pageTaskId}/layers/{layerType}/rollback` phải check quyền theo task/series. Rollback chỉ cho Mangaka owner. |
-| Remove Assistant task revocation | 🔴 | Thay `NoOpStudioTaskRevocationService` bằng implementation thật: tìm `PageTask` assigned cho `assistantId`, thuộc `seriesId`, bỏ qua `Approved`, gọi `task.Revoke()`, không `SaveChangesAsync` riêng để commit chung với Studio membership. |
+| Hạng mục | Mức độ | Trạng thái | Yêu cầu sửa |
+|---|---|---|---|
+| `PUT/PATCH /api/v1/chapters/{id}` | 🔴 | ✅ **Đã fix** | Không cho Mangaka truyền `AssignedEditorId` từ request để tự đổi Tantou Editor. Bỏ field này khỏi request/command hoặc luôn giữ/recompute từ `Mangaka.ManagingTantouId`. |
+| `GET /api/v1/studios/{seriesId}/tasks/board` | 🔴 | ✅ **Đã fix** | Query nhận requester context. Mangaka chỉ xem series của mình; Tantou chỉ xem series thuộc Mangaka mình quản lý; Assistant chỉ xem studio mà mình là accepted member. |
+| `GET /api/v1/chapters/{id}/recommend-assistants` | 🟡 | ✅ **Đã fix** | Load chapter -> series và check `series.AuthorId == RequesterId` trước khi trả danh sách assistant/workload. |
+| `GET/POST /api/v1/tasks/{id}/comments` | 🔴 | ✅ **Đã fix** | Cả read và add comment phải check quyền theo task: Mangaka owner, Assistant assigned/accepted member theo rule, Tantou quản lý series/chapter. User không liên quan trả 403. |
+| Layer versions / rollback | 🔴 | ✅ **Đã fix** | `GET /tasks/{pageTaskId}/layers/{layerType}/versions` và `POST /tasks/{pageTaskId}/layers/{layerType}/rollback` phải check quyền theo task/series. Rollback chỉ cho Mangaka owner. |
+| Remove Assistant task revocation | 🔴 | ✅ **Đã fix** | Thay `NoOpStudioTaskRevocationService` bằng implementation thật: tìm `PageTask` assigned cho `assistantId`, thuộc `seriesId`, bỏ qua `Approved`, gọi `task.Revoke()`, không `SaveChangesAsync` riêng để commit chung với Studio membership. |
 
 ---
 

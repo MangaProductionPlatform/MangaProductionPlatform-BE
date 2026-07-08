@@ -192,18 +192,26 @@ public class TasksController : ControllerBase
     [HttpGet("{pageTaskId:guid}/layers/{layerType}/versions")]
     [Authorize(Roles = "Mangaka,Assistant")]
     [ProducesResponseType(typeof(IEnumerable<LayerVersionDto>), 200)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetLayerVersions(Guid pageTaskId, string layerType, CancellationToken ct)
     {
-        var query = new GetLayerVersionsQuery(pageTaskId, layerType);
-        var result = await _mediator.Send(query, ct);
-        return Ok(result);
+        try
+        {
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            var query = new GetLayerVersionsQuery(pageTaskId, layerType, GetUserId(), role);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 
     [HttpPost("{pageTaskId:guid}/layers/{layerType}/rollback")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(RollbackLayerResult), 200)]
     [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> RollbackLayer(
         Guid pageTaskId, string layerType, [FromBody] RollbackLayerRequest request, CancellationToken ct)
@@ -222,28 +230,38 @@ public class TasksController : ControllerBase
     [HttpGet("{id:guid}/comments")]
     [Authorize(Roles = "Mangaka,Assistant,TantouEditor")]
     [ProducesResponseType(typeof(IEnumerable<TaskCommentDto>), 200)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetComments(Guid id, CancellationToken ct)
     {
-        var query = new GetTaskCommentsQuery(id);
-        var result = await _mediator.Send(query, ct);
-        return Ok(result);
+        try
+        {
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            var query = new GetTaskCommentsQuery(id, GetUserId(), role);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 
     [HttpPost("{id:guid}/comments")]
     [Authorize(Roles = "Mangaka,Assistant,TantouEditor")]
     [ProducesResponseType(typeof(TaskCommentDto), 200)]
     [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> AddComment(Guid id, [FromBody] AddCommentReq request, CancellationToken ct)
     {
         try
         {
-            var command = new AddCommentCommand(id, GetUserId(), request.Content);
+            var role = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+            var command = new AddCommentCommand(id, GetUserId(), role, request.Content);
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 }

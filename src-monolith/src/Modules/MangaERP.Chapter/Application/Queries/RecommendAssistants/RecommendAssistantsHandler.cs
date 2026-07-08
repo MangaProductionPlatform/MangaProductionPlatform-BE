@@ -3,6 +3,7 @@ using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Studio.Application.Ports;
 using MangaERP.Studio.Domain.Entities;
 using MangaERP.Identity.Application.Ports;
+using MangaERP.Series.Application.Ports;
 using MediatR;
 
 namespace MangaERP.Chapter.Application.Queries.RecommendAssistants;
@@ -22,23 +23,34 @@ public class RecommendAssistantsHandler : IRequestHandler<RecommendAssistantsQue
     private readonly IPageTaskRepository _pageTaskRepo;
     private readonly IStudioInvitationRepository _studioInvitationRepo;
     private readonly IUserRepository _userRepo;
+    private readonly ISeriesRepository _seriesRepo;
 
     public RecommendAssistantsHandler(
         IChapterRepository chapterRepo,
         IPageTaskRepository pageTaskRepo,
         IStudioInvitationRepository studioInvitationRepo,
-        IUserRepository userRepo)
+        IUserRepository userRepo,
+        ISeriesRepository seriesRepo)
     {
         _chapterRepo = chapterRepo;
         _pageTaskRepo = pageTaskRepo;
         _studioInvitationRepo = studioInvitationRepo;
         _userRepo = userRepo;
+        _seriesRepo = seriesRepo;
     }
 
     public async Task<IEnumerable<RecommendedAssistantDto>> Handle(RecommendAssistantsQuery query, CancellationToken ct)
     {
         var chapter = await _chapterRepo.GetByIdAsync(query.ChapterId, ct)
             ?? throw new KeyNotFoundException($"Chapter {query.ChapterId} not found.");
+
+        var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, ct)
+            ?? throw new KeyNotFoundException($"Series {chapter.SeriesId} not found.");
+
+        if (series.AuthorId != query.RequesterId)
+        {
+            throw new UnauthorizedAccessException("You are not the owner of the series for this chapter.");
+        }
 
         // Fetch all accepted studio members for this series
         var invitations = await _studioInvitationRepo.GetBySeriesIdAsync(chapter.SeriesId, ct);

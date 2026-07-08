@@ -271,7 +271,6 @@ public class ChaptersController : ControllerBase
                 request.Title,
                 request.ChapterNumber,
                 request.TotalPages,
-                request.AssignedEditorId,
                 request.CoverImageUrl);
 
             var result = await _mediator.Send(command, ct);
@@ -321,9 +320,7 @@ public class ChaptersController : ControllerBase
                 request.Title,
                 request.ChapterNumber,
                 request.TotalPages,
-                request.AssignedEditorId,
-                request.CoverImageUrl,
-                request.UpdateAssignedEditor ?? false);
+                request.CoverImageUrl);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -347,6 +344,7 @@ public class ChaptersController : ControllerBase
             return Ok(result);
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 }
 
@@ -354,15 +352,12 @@ public record PatchChapterRequest(
     string? Title,
     decimal? ChapterNumber,
     int? TotalPages,
-    Guid? AssignedEditorId,
-    string? CoverImageUrl,
-    bool? UpdateAssignedEditor);
+    string? CoverImageUrl);
 
 public record UpdateChapterRequest(
     string Title,
     decimal ChapterNumber,
     int TotalPages,
-    Guid? AssignedEditorId,
     string? CoverImageUrl);
 
 public record CreateChapterRequest(
