@@ -1,6 +1,7 @@
 using FluentValidation;
 using MangaERP.Chapter.Application.Ports;
 using MangaERP.Series.Application.Ports;
+using MangaERP.Identity.Application.Ports;
 using MediatR;
 
 namespace MangaERP.Chapter.Application.Commands.UpdateChapter;
@@ -11,7 +12,6 @@ public record UpdateChapterCommand(
     string Title,
     decimal ChapterNumber,
     int TotalPages,
-    Guid? AssignedEditorId,
     string? CoverImageUrl = null
 ) : IRequest<UpdateChapterResult>;
 
@@ -28,11 +28,16 @@ public class UpdateChapterHandler : IRequestHandler<UpdateChapterCommand, Update
 {
     private readonly IChapterRepository _chapterRepo;
     private readonly ISeriesRepository _seriesRepo;
+    private readonly IUserRepository _userRepo;
 
-    public UpdateChapterHandler(IChapterRepository chapterRepo, ISeriesRepository seriesRepo)
+    public UpdateChapterHandler(
+        IChapterRepository chapterRepo,
+        ISeriesRepository seriesRepo,
+        IUserRepository userRepo)
     {
         _chapterRepo = chapterRepo;
         _seriesRepo = seriesRepo;
+        _userRepo = userRepo;
     }
 
     public async Task<UpdateChapterResult> Handle(UpdateChapterCommand cmd, CancellationToken ct)
@@ -46,12 +51,19 @@ public class UpdateChapterHandler : IRequestHandler<UpdateChapterCommand, Update
         // Verify ownership
         chapter.EnsureOwnedBy(cmd.MangakaId, series.AuthorId);
 
+        var editorId = chapter.AssignedEditorId;
+        if (!editorId.HasValue)
+        {
+            var mangaka = await _userRepo.GetByIdAsync(cmd.MangakaId, ct);
+            editorId = mangaka?.ManagingTantouId;
+        }
+
         // Update metadata using domain method
         chapter.UpdateMetadata(
             cmd.Title,
             cmd.ChapterNumber,
             cmd.TotalPages,
-            cmd.AssignedEditorId,
+            editorId,
             cmd.CoverImageUrl);
 
         await _chapterRepo.UpdateAsync(chapter, ct);

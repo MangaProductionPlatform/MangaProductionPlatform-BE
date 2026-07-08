@@ -1,6 +1,7 @@
 using FluentValidation;
 using MangaERP.Chapter.Application.Ports;
 using MangaERP.Series.Application.Ports;
+using MangaERP.Identity.Application.Ports;
 using MediatR;
 
 namespace MangaERP.Chapter.Application.Commands.PatchChapter;
@@ -11,9 +12,7 @@ public record PatchChapterCommand(
     string? Title = null,
     decimal? ChapterNumber = null,
     int? TotalPages = null,
-    Guid? AssignedEditorId = null,
-    string? CoverImageUrl = null,
-    bool UpdateAssignedEditor = false
+    string? CoverImageUrl = null
 ) : IRequest<PatchChapterResult>;
 
 public record PatchChapterResult(
@@ -30,11 +29,16 @@ public class PatchChapterHandler : IRequestHandler<PatchChapterCommand, PatchCha
 {
     private readonly IChapterRepository _chapterRepo;
     private readonly ISeriesRepository _seriesRepo;
+    private readonly IUserRepository _userRepo;
 
-    public PatchChapterHandler(IChapterRepository chapterRepo, ISeriesRepository seriesRepo)
+    public PatchChapterHandler(
+        IChapterRepository chapterRepo,
+        ISeriesRepository seriesRepo,
+        IUserRepository userRepo)
     {
         _chapterRepo = chapterRepo;
         _seriesRepo = seriesRepo;
+        _userRepo = userRepo;
     }
 
     public async Task<PatchChapterResult> Handle(PatchChapterCommand cmd, CancellationToken ct)
@@ -53,7 +57,13 @@ public class PatchChapterHandler : IRequestHandler<PatchChapterCommand, PatchCha
         var newChapterNumber = cmd.ChapterNumber ?? chapter.ChapterNumber;
         var newTotalPages = cmd.TotalPages ?? chapter.TotalPages;
         var newCoverImageUrl = cmd.CoverImageUrl ?? chapter.CoverImageUrl;
-        var newAssignedEditorId = cmd.UpdateAssignedEditor ? cmd.AssignedEditorId : chapter.AssignedEditorId;
+
+        var newAssignedEditorId = chapter.AssignedEditorId;
+        if (!newAssignedEditorId.HasValue)
+        {
+            var mangaka = await _userRepo.GetByIdAsync(cmd.MangakaId, ct);
+            newAssignedEditorId = mangaka?.ManagingTantouId;
+        }
 
         // Update metadata using domain method
         chapter.UpdateMetadata(

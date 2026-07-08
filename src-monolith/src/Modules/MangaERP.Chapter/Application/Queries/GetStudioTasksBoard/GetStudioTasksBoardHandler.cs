@@ -2,11 +2,13 @@ using MangaERP.Chapter.Application.Ports;
 using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Identity.Application.Ports;
+using MangaERP.Studio.Application.Ports;
+using MangaERP.Studio.Domain.Entities;
 using MediatR;
 
 namespace MangaERP.Chapter.Application.Queries.GetStudioTasksBoard;
 
-public record GetStudioTasksBoardQuery(Guid SeriesId) : IRequest<StudioTasksBoardDto>;
+public record GetStudioTasksBoardQuery(Guid SeriesId, Guid RequesterId, string RequesterRole) : IRequest<StudioTasksBoardDto>;
 
 public record StudioTasksBoardDto(
     Guid SeriesId,
@@ -35,23 +37,55 @@ public class GetStudioTasksBoardHandler : IRequestHandler<GetStudioTasksBoardQue
     private readonly IPageTaskRepository _pageTaskRepo;
     private readonly IUserRepository _userRepo;
     private readonly ISeriesRepository _seriesRepo;
+    private readonly IStudioInvitationRepository _studioInvitationRepo;
 
     public GetStudioTasksBoardHandler(
         IChapterRepository chapterRepo,
         IPageTaskRepository pageTaskRepo,
         IUserRepository userRepo,
-        ISeriesRepository seriesRepo)
+        ISeriesRepository seriesRepo,
+        IStudioInvitationRepository studioInvitationRepo)
     {
         _chapterRepo = chapterRepo;
         _pageTaskRepo = pageTaskRepo;
         _userRepo = userRepo;
         _seriesRepo = seriesRepo;
+        _studioInvitationRepo = studioInvitationRepo;
     }
 
     public async Task<StudioTasksBoardDto> Handle(GetStudioTasksBoardQuery query, CancellationToken ct)
     {
         var series = await _seriesRepo.GetByIdAsync(query.SeriesId, ct)
             ?? throw new KeyNotFoundException($"Series {query.SeriesId} not found.");
+
+        // Authorization check
+        var isAuthorized = false;
+        if (query.RequesterRole.Equals("Mangaka", StringComparison.OrdinalIgnoreCase))
+        {
+            isAuthorized = (series.AuthorId == query.RequesterId);
+        }
+        else if (query.RequesterRole.Equals("TantouEditor", StringComparison.OrdinalIgnoreCase))
+        {
+            var mangaka = await _userRepo.GetByIdAsync(series.AuthorId, ct);
+            isAuthorized = (mangaka != null && mangaka.ManagingTantouId == query.RequesterId);
+        }
+        else if (query.RequesterRole.Equals("Assistant", StringComparison.OrdinalIgnoreCase))
+        {
+            var invitations = await _studioInvitationRepo.GetBySeriesIdAsync(series.Id, ct);
+            isAuthorized = invitations.Any(i => i.AssistantUserId == query.RequesterId &&
+                                                i.Status == StudioInvitationStatus.Accepted);
+        }
+        else if (query.RequesterRole.Equals("EditorInChief", StringComparison.OrdinalIgnoreCase) ||
+                 query.RequesterRole.Equals("EditorialBoard", StringComparison.OrdinalIgnoreCase) ||
+                 query.RequesterRole.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+        {
+            isAuthorized = true;
+        }
+
+        if (!isAuthorized)
+        {
+            throw new UnauthorizedAccessException("You are not authorized to view this studio board.");
+        }
 
         var chapters = await _chapterRepo.GetBySeriesIdAsync(query.SeriesId, ct);
         var boardChapters = new List<BoardChapterDto>();
