@@ -7,6 +7,8 @@ using MangaERP.Task.Application.Queries.GetChapterTasks;
 using MangaERP.Task.Application.Queries.GetLayerHistory;
 using MangaERP.Chapter.Application.Queries.GetTaskDetail;
 using MangaERP.Chapter.Application.Commands.UpdateTaskDeadline;
+using MangaERP.Task.Application.Queries.GetLayerVersions;
+using MangaERP.Task.Application.Commands.RollbackLayer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -184,7 +186,39 @@ public class TasksController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    [HttpGet("{pageTaskId:guid}/layers/{layerType}/versions")]
+    [Authorize(Roles = "Mangaka,Assistant")]
+    [ProducesResponseType(typeof(IEnumerable<LayerVersionDto>), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetLayerVersions(Guid pageTaskId, string layerType, CancellationToken ct)
+    {
+        var query = new GetLayerVersionsQuery(pageTaskId, layerType);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    [HttpPost("{pageTaskId:guid}/layers/{layerType}/rollback")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(RollbackLayerResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> RollbackLayer(
+        Guid pageTaskId, string layerType, [FromBody] RollbackLayerRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new RollbackLayerCommand(pageTaskId, layerType, request.Version, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
+
+public record RollbackLayerRequest(int Version);
 
 public record SubmitArtworkLayerRequest(
     string LayerType,

@@ -6,6 +6,9 @@ using MangaERP.Series.Application.Queries.GetCancellationQueue;
 using MangaERP.Series.Application.Commands.RequestCancellation;
 using MangaERP.Series.Application.Commands.ApproveCancellation;
 using MangaERP.Series.Application.Commands.RejectCancellation;
+using MangaERP.Series.Application.Commands.UpdateSeries;
+using MangaERP.Series.Application.Commands.SetSeriesHiatus;
+using MangaERP.Series.Application.Commands.ReactivateSeries;
 using MangaERP.Series.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -45,6 +48,75 @@ public class SeriesController : ControllerBase
         var query  = new GetMySeriesQuery(GetUserId());
         var result = await _mediator.Send(query, ct);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// [Mangaka] Cập nhật thông tin series.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(UpdateSeriesResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> UpdateSeries(
+        Guid id, [FromBody] UpdateSeriesReq request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateSeriesCommand(
+                id, GetUserId(), request.Title, request.Description, request.Genre, request.CoverImageUrl);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [Mangaka] Chuyển series sang trạng thái Hiatus.
+    /// </summary>
+    [HttpPost("{id:guid}/set-hiatus")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(SetSeriesHiatusResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> SetHiatus(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var command = new SetSeriesHiatusCommand(id, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [Mangaka] Kích hoạt lại series đang Hiatus.
+    /// </summary>
+    [HttpPost("{id:guid}/reactivate")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(ReactivateSeriesResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> Reactivate(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var command = new ReactivateSeriesCommand(id, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
     /// <summary>
@@ -183,4 +255,6 @@ public class SeriesController : ControllerBase
 // ── Request Models ────────────────────────────────────────────────────────────
 
 public record CancellationReasonRequest(string Reason);
+
+public record UpdateSeriesReq(string Title, string? Description, string? Genre, string? CoverImageUrl);
 
