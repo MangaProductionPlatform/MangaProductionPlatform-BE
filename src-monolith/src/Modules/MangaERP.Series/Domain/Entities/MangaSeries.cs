@@ -50,6 +50,18 @@ public class MangaSeries : AggregateRoot, ISoftDeletable
     public void SetHiatus() => Status = SeriesStatus.Hiatus;
     public void Reactivate() => Status = SeriesStatus.Active;
 
+    public void UpdateMetadata(string title, string? description, string? genre, string? coverImageUrl)
+    {
+        if (Status == SeriesStatus.Cancelled)
+            throw new InvalidOperationException("Cannot update metadata of a cancelled series.");
+        if (string.IsNullOrWhiteSpace(title))
+            throw new ArgumentException("Title cannot be empty.");
+        Title = title;
+        Description = description;
+        Genre = genre;
+        CoverImageUrl = coverImageUrl;
+    }
+
     // ── Cancellation Request Flow (MF1) ───────────────────────────────────────
 
     /// <summary>Mangaka gửi yêu cầu hủy series.</summary>

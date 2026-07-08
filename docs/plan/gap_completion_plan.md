@@ -110,21 +110,21 @@
 
 | Hạng mục | Trạng thái | Ghi chú |
 |---|---|---|
-| `GET /api/v1/chapters/my-queue` | ❌ **Chưa làm** | Hàng đợi chapter Tantou Editor cần duyệt — **Blocker** |
-| **Logic Bug: `CreateChapter`** | ❌ **Chưa fix** | Phải tự động gán `AssignedEditorId` từ `ManagingTantouId` của Mangaka, không để Mangaka chọn thủ công |
-| **Authorization Fix: `TasksController`** | ❌ **Chưa fix** | `GET /tasks/layers/history` thiếu role `TantouEditor` — TE không xem được lịch sử layer khi review |
-| **Authorization Fix: `ChaptersController`** | ❌ **Chưa fix** | `GET /chapters/series/{seriesId}` thiếu role `EditorInChief` |
-| `GET /api/v1/assistant/tasks/income` | ❌ **Chưa làm** | Thống kê hoàn thành task + thu nhập của Assistant |
-| `PUT /api/v1/series/{id}` | ❌ **Chưa làm** | Sửa metadata series sau khi đã được approved |
-| `POST /api/v1/series/{id}/set-hiatus` | ❌ **Chưa làm** | Chuyển series sang trạng thái tạm ngưng |
-| `POST /api/v1/series/{id}/reactivate` | ❌ **Chưa làm** | Kích hoạt lại series từ Hiatus |
-| `DELETE /api/v1/studios/{seriesId}/members/{assistantId}` | ❌ **Chưa làm** | Khai trừ assistant (tự động thu hồi task đang làm dở) |
-| `PUT/DELETE /api/v1/chapters/{id}` | ❌ **Chưa làm** | Sửa hoặc xóa chapter |
-| `GET /api/v1/studios/{seriesId}/tasks/board` | ❌ **Chưa làm** | Kanban board danh sách nhiệm vụ |
-| `GET /api/v1/tasks/{pageTaskId}/layers/{layerType}/versions` | ❌ **Chưa làm** | Xem lịch sử các phiên bản layer cũ |
-| `POST /api/v1/tasks/{pageTaskId}/layers/{layerType}/rollback` | ❌ **Chưa làm** | Rollback layer về bản cũ |
-| **Task Comments** | ⬜ **Backlog** | `GET/POST /tasks/{id}/comments` — thảo luận nội bộ trên trang vẽ |
-| **Assistant Recommendation** | ⬜ **Backlog** | `GET /chapters/{id}/recommend-assistants` — gợi ý phân công tự động |
+| `GET /api/v1/chapters/my-queue` | ✅ **Đã xong** | Hàng đợi chapter Tantou Editor cần duyệt — **Blocker** |
+| **Logic Bug: `CreateChapter`** | ✅ **Đã fix** | Phải tự động gán `AssignedEditorId` từ `ManagingTantouId` của Mangaka, không để Mangaka chọn thủ công |
+| **Authorization Fix: `TasksController`** | ✅ **Đã fix** | `GET /tasks/layers/history` thiếu role `TantouEditor` — TE không xem được lịch sử layer khi review |
+| **Authorization Fix: `ChaptersController`** | ✅ **Đã fix** | `GET /chapters/series/{seriesId}` thiếu role `EditorInChief` |
+| `GET /api/v1/assistant/tasks/income` | ✅ **Đã xong** | Thống kê hoàn thành task + thu nhập của Assistant |
+| `PUT /api/v1/series/{id}` | ✅ **Đã xong** | Sửa metadata series sau khi đã được approved |
+| `POST /api/v1/series/{id}/set-hiatus` | ✅ **Đã xong** | Chuyển series sang trạng thái tạm ngưng |
+| `POST /api/v1/series/{id}/reactivate` | ✅ **Đã xong** | Kích hoạt lại series từ Hiatus |
+| `DELETE /api/v1/studios/{seriesId}/members/{assistantId}` | ✅ **Đã xong** | Khai trừ assistant (tự động thu hồi task đang làm dở) |
+| `PUT/DELETE /api/v1/chapters/{id}` | ✅ **Đã xong** | Sửa hoặc xóa chapter (đã có từ trước) |
+| `GET /api/v1/studios/{seriesId}/tasks/board` | ✅ **Đã xong** | Kanban board danh sách nhiệm vụ |
+| `GET /api/v1/tasks/{pageTaskId}/layers/{layerType}/versions` | ✅ **Đã xong** | Xem lịch sử các phiên bản layer cũ |
+| `POST /api/v1/tasks/{pageTaskId}/layers/{layerType}/rollback` | ✅ **Đã xong** | Rollback layer về bản cũ |
+| **Task Comments** | ✅ **Đã xong** | `GET/POST /tasks/{id}/comments` — thảo luận nội bộ trên trang vẽ |
+| **Assistant Recommendation** | ✅ **Đã xong** | `GET /chapters/{id}/recommend-assistants` — gợi ý phân công tự động |
 
 ---
 
