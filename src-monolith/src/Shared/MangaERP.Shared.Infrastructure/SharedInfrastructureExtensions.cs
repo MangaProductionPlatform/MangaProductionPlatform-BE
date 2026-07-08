@@ -59,6 +59,7 @@ public static class SharedInfrastructureExtensions
         // Studio module infrastructure (here to avoid circular dependency)
         services.AddScoped<IStudioInvitationRepository, StudioInvitationRepository>();
         services.AddScoped<IStudioIdentityService, StudioIdentityService>();
+        services.AddScoped<IStudioTaskRevocationService, NoOpStudioTaskRevocationService>();
 
         // Chapter / Task / Notification infrastructure (MF2)
         services.AddScoped<IChapterRepository, ChapterRepository>();

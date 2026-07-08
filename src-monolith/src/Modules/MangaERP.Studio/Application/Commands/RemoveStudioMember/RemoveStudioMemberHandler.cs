@@ -13,16 +13,16 @@ public class RemoveStudioMemberHandler : IRequestHandler<RemoveStudioMemberComma
 {
     private readonly IStudioInvitationRepository _repo;
     private readonly ISeriesRepository _seriesRepo;
-    private readonly IMediator _mediator;
+    private readonly IStudioTaskRevocationService _taskRevocationService;
 
     public RemoveStudioMemberHandler(
         IStudioInvitationRepository repo,
         ISeriesRepository seriesRepo,
-        IMediator mediator)
+        IStudioTaskRevocationService taskRevocationService)
     {
         _repo = repo;
         _seriesRepo = seriesRepo;
-        _mediator = mediator;
+        _taskRevocationService = taskRevocationService;
     }
 
     public async Task<Unit> Handle(RemoveStudioMemberCommand request, CancellationToken ct)
@@ -48,10 +48,14 @@ public class RemoveStudioMemberHandler : IRequestHandler<RemoveStudioMemberComma
         activeInvitation.RespondedAt = DateTime.UtcNow;
 
         await _repo.UpdateAsync(activeInvitation, ct);
-        await _repo.SaveChangesAsync(ct);
 
-        // 4. Publish notification to revoke tasks in MangaERP.Chapter module
-        await _mediator.Publish(new StudioMemberRemovedNotification(request.SeriesId, request.AssistantId), ct);
+        // 4. Stage production-task revocation before committing membership removal.
+        await _taskRevocationService.RevokeActiveTasksForRemovedMemberAsync(
+            request.SeriesId,
+            request.AssistantId,
+            ct);
+
+        await _repo.SaveChangesAsync(ct);
 
         return Unit.Value;
     }

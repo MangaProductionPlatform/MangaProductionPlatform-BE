@@ -18,6 +18,18 @@ public interface IStudioInvitationRepository
 }
 
 /// <summary>
+/// Port for production-task cleanup triggered by Studio membership changes.
+/// Implemented by the task/chapter side so Studio does not depend on task internals.
+/// </summary>
+public interface IStudioTaskRevocationService
+{
+    System.Threading.Tasks.Task RevokeActiveTasksForRemovedMemberAsync(
+        Guid seriesId,
+        Guid assistantId,
+        CancellationToken ct = default);
+}
+
+/// <summary>
 /// Projection kết hợp thông tin invitation + user profile của Assistant đang hoạt động trong studio.
 /// </summary>
 public record StudioMemberInfo(
