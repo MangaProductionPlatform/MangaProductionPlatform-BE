@@ -43,6 +43,21 @@ public class Chapter : AggregateRoot, ISoftDeletable
             throw new UnauthorizedAccessException("You do not own this chapter's series.");
     }
 
+    public void UpdateMetadata(string title, decimal chapterNumber, int totalPages, Guid? assignedEditorId, string? coverImageUrl)
+    {
+        if (Status != ChapterStatus.Draft && Status != ChapterStatus.Rejected)
+            throw new InvalidOperationException("Only Draft or Rejected chapters can have their metadata updated.");
+
+        if (totalPages <= 0)
+            throw new ArgumentException("TotalPages must be > 0.");
+
+        Title = title;
+        ChapterNumber = chapterNumber;
+        TotalPages = totalPages;
+        AssignedEditorId = assignedEditorId;
+        CoverImageUrl = coverImageUrl;
+    }
+
     public bool CanSubmitForQA()
     {
         var activePages = PageTasks.Where(p => !p.IsDeleted).ToList();
@@ -67,6 +82,15 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public void Approve() => Status = ChapterStatus.Approved;
     public void Reject() => Status = ChapterStatus.Rejected;
     public void Archive() => Status = ChapterStatus.Archived;
+
+    public void Delete()
+    {
+        if (Status != ChapterStatus.Draft)
+            throw new InvalidOperationException("Only Draft chapters can be deleted.");
+
+        IsDeleted = true;
+        DeletedAt = DateTime.UtcNow;
+    }
 
     public void Publish(string? issueType = null)
     {
@@ -182,6 +206,13 @@ public class PageTask : AggregateRoot, ISoftDeletable
             throw new InvalidOperationException("Only Reviewing page tasks can be sent for revision.");
 
         TaskStatus = PageTaskStatus.RevisionAlert;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Revoke()
+    {
+        AssignedAssistantId = null;
+        TaskStatus = PageTaskStatus.Pending;
         UpdatedAt = DateTime.UtcNow;
     }
 

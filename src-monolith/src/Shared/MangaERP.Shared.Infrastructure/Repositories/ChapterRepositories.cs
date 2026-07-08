@@ -58,6 +58,12 @@ public class ChapterRepository : IChapterRepository
             .Where(c => c.Status == ChapterStatus.ReadyForQA && c.AssignedEditorId == editorId)
             .OrderBy(c => c.CreatedAt)
             .ToListAsync(ct);
+
+    public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetByEditorIdAsync(Guid editorId, CancellationToken ct = default)
+        => await _db.Chapters
+            .Where(c => c.AssignedEditorId == editorId)
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(ct);
 }
 
 public class PageTaskRepository : IPageTaskRepository

@@ -3,6 +3,7 @@ using MangaERP.Chapter.Application.Ports;
 using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Series.Domain.Entities;
+using MangaERP.Identity.Application.Ports;
 using MediatR;
 using ChapterEntity = MangaERP.Chapter.Domain.Entities.Chapter;
 
@@ -14,7 +15,6 @@ public record CreateChapterCommand(
     string Title,
     decimal ChapterNumber,
     int TotalPages,
-    Guid? AssignedEditorId,
     string? CoverImageUrl = null
 ) : IRequest<CreateChapterResult>;
 
@@ -29,11 +29,13 @@ public class CreateChapterHandler : IRequestHandler<CreateChapterCommand, Create
 {
     private readonly IChapterRepository _chapterRepo;
     private readonly ISeriesRepository _seriesRepo;
+    private readonly IUserRepository _userRepo;
 
-    public CreateChapterHandler(IChapterRepository chapterRepo, ISeriesRepository seriesRepo)
+    public CreateChapterHandler(IChapterRepository chapterRepo, ISeriesRepository seriesRepo, IUserRepository userRepo)
     {
         _chapterRepo = chapterRepo;
         _seriesRepo = seriesRepo;
+        _userRepo = userRepo;
     }
 
     public async Task<CreateChapterResult> Handle(CreateChapterCommand cmd, CancellationToken ct)
@@ -47,12 +49,15 @@ public class CreateChapterHandler : IRequestHandler<CreateChapterCommand, Create
         if (series.Status != SeriesStatus.Active)
             throw new InvalidOperationException("Chapters can only be created for Active series.");
 
+        var mangaka = await _userRepo.GetByIdAsync(cmd.MangakaId, ct)
+            ?? throw new KeyNotFoundException($"Mangaka {cmd.MangakaId} not found.");
+
         var chapter = ChapterEntity.Create(
             cmd.SeriesId,
             cmd.Title,
             cmd.ChapterNumber,
             cmd.TotalPages,
-            cmd.AssignedEditorId,
+            mangaka.ManagingTantouId,
             cmd.CoverImageUrl);
 
         await _chapterRepo.AddAsync(chapter, ct);

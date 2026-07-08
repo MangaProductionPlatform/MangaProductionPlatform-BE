@@ -111,11 +111,6 @@ public class GetLayerHistoryHandler : IRequestHandler<GetLayerHistoryQuery, IEnu
                     if (string.Equals(query.Status, "Pending", StringComparison.OrdinalIgnoreCase) && layer.ReviewedAt != null)
                         continue;
                 }
-                else
-                {
-                    if (layer.ReviewedAt == null)
-                        continue;
-                }
 
                 results.Add(new LayerHistoryDto(
                     layer.Id,
