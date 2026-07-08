@@ -13,6 +13,7 @@ public interface IChapterRepository
     Task UpdateAsync(ChapterEntity chapter, CancellationToken ct = default);
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     Task<IEnumerable<ChapterEntity>> GetScheduledChaptersAsync(DateTime threshold, CancellationToken ct = default);
+    Task<IEnumerable<ChapterEntity>> GetQAQueueAsync(Guid editorId, CancellationToken ct = default);
 }
 
 public interface IPageTaskRepository

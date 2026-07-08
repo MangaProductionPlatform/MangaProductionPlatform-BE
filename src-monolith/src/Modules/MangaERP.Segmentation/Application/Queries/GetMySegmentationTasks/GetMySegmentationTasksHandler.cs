@@ -23,7 +23,9 @@ public record SegmentationTaskDto(
     string? AssignedToUserRole,
     Guid CreatedByUserId,
     DateTime CreatedAt,
-    DateTime? CompletedAt);
+    DateTime? CompletedAt,
+    int? OriginalWidth,
+    int? OriginalHeight);
 
 public record PagedSegmentationTaskResult(
     IEnumerable<SegmentationTaskDto> Items,
@@ -69,7 +71,9 @@ public class GetMySegmentationTasksHandler
             t.AssignedToUserRole,
             t.CreatedByUserId,
             t.CreatedAt,
-            t.CompletedAt));
+            t.CompletedAt,
+            t.OriginalWidth,
+            t.OriginalHeight));
 
         return new PagedSegmentationTaskResult(dtos, page, safePageSize, totalCount, totalPages);
     }

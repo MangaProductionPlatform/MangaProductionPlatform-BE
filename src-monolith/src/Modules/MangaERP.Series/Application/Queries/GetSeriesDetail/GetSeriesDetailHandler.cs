@@ -9,7 +9,7 @@ namespace MangaERP.Series.Application.Queries.GetSeriesDetail;
 /// <summary>
 /// Lấy chi tiết một MangaSeries theo Id.
 /// Mangaka chỉ có thể xem series của mình (authorId guard trong handler).
-/// Staff (Admin, TantouEditor, EditorialBoard) có thể xem tất cả.
+/// Admin/EditorialBoard/EditorInChief có thể xem tất cả. TantouEditor chỉ xem series của Mangaka mình quản lý.
 /// </summary>
 public record GetSeriesDetailQuery(
     Guid   SeriesId,
@@ -43,10 +43,18 @@ public class GetSeriesDetailHandler
         var series = await _repo.GetByIdAsync(query.SeriesId, ct)
             ?? throw new KeyNotFoundException($"Series {query.SeriesId} not found.");
 
-        // Mangaka chỉ được xem series của chính mình
-        var isStaff = query.RequesterRole is "Admin" or "TantouEditor" or "EditorialBoard";
-        if (!isStaff && series.AuthorId != query.RequesterId)
-            throw new UnauthorizedAccessException("You are not allowed to view this series.");
+        if (query.RequesterRole == "TantouEditor")
+        {
+            var isManaged = await _repo.IsManagedByTantouAsync(query.SeriesId, query.RequesterId, ct);
+            if (!isManaged)
+                throw new UnauthorizedAccessException("You are not assigned to manage this series.");
+        }
+        else
+        {
+            var canViewAll = query.RequesterRole is "Admin" or "EditorialBoard" or "EditorInChief";
+            if (!canViewAll && series.AuthorId != query.RequesterId)
+                throw new UnauthorizedAccessException("You are not allowed to view this series.");
+        }
 
         return new SeriesDetailDto(
             series.Id,

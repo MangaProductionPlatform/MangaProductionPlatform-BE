@@ -54,6 +54,12 @@ namespace MangaERP.Segmentation.Migrations
                     b.Property<string>("Note")
                         .HasColumnType("text");
 
+                    b.Property<int?>("OriginalHeight")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("OriginalWidth")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("PageId")
                         .HasColumnType("uuid");
 

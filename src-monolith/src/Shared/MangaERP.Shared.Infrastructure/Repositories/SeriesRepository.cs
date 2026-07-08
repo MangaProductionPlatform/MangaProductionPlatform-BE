@@ -19,6 +19,16 @@ public class SeriesRepository : ISeriesRepository
     public async System.Threading.Tasks.Task<IEnumerable<MangaSeries>> GetByAuthorIdAsync(Guid authorId, CancellationToken ct = default)
         => await _db.MangaSeries.Where(s => s.AuthorId == authorId).ToListAsync(ct);
 
+    public async System.Threading.Tasks.Task<IEnumerable<MangaSeries>> GetByManagingTantouIdAsync(Guid tantouEditorId, CancellationToken ct = default)
+        => await _db.MangaSeries
+            .Where(s => _db.Users.Any(u => u.Id == s.AuthorId && u.ManagingTantouId == tantouEditorId))
+            .ToListAsync(ct);
+
+    public async System.Threading.Tasks.Task<bool> IsManagedByTantouAsync(Guid seriesId, Guid tantouEditorId, CancellationToken ct = default)
+        => await _db.MangaSeries
+            .Where(s => s.Id == seriesId)
+            .AnyAsync(s => _db.Users.Any(u => u.Id == s.AuthorId && u.ManagingTantouId == tantouEditorId), ct);
+
     public async System.Threading.Tasks.Task<IEnumerable<MangaSeries>> GetAllAsync(CancellationToken ct = default)
         => await _db.MangaSeries.ToListAsync(ct);
 

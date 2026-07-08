@@ -76,4 +76,12 @@ public interface INotificationService
     Task NotifyTantouEditorAssignedAsync(
         Guid tantouEditorId, Guid submissionId, string seriesTitle,
         string authorName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Thông báo cho Assistant khi được giao một Segmentation Task mới.
+    /// Gửi cả in-app notification và push SignalR realtime.
+    /// </summary>
+    Task NotifySegmentationTaskAssignedAsync(
+        Guid assistantId, Guid segmentationTaskId, string taskType,
+        CancellationToken ct = default);
 }

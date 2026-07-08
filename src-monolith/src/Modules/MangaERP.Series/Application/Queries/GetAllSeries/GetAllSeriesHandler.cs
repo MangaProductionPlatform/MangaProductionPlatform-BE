@@ -8,11 +8,14 @@ namespace MangaERP.Series.Application.Queries.GetAllSeries;
 // ── Query ─────────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Admin/EB/EIC xem toàn bộ series — không filter theo authorId.
+/// Admin/EB/EIC xem toàn bộ series. TantouEditor chỉ xem series của Mangaka mình quản lý.
 /// Hỗ trợ filter tùy chọn theo SeriesStatus.
 /// Route: GET /api/v1/series?status=Active|Hiatus|Cancelled
 /// </summary>
-public record GetAllSeriesQuery(SeriesStatus? StatusFilter = null)
+public record GetAllSeriesQuery(
+    Guid RequesterId,
+    string RequesterRole,
+    SeriesStatus? StatusFilter = null)
     : IRequest<IEnumerable<SeriesSummaryDto>>;
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -27,7 +30,9 @@ public class GetAllSeriesHandler
     public async Task<IEnumerable<SeriesSummaryDto>> Handle(
         GetAllSeriesQuery query, CancellationToken ct)
     {
-        var all = await _repo.GetAllAsync(ct);
+        var all = query.RequesterRole == "TantouEditor"
+            ? await _repo.GetByManagingTantouIdAsync(query.RequesterId, ct)
+            : await _repo.GetAllAsync(ct);
 
         if (query.StatusFilter.HasValue)
             all = all.Where(s => s.Status == query.StatusFilter.Value);

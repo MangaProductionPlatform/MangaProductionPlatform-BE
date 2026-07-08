@@ -14,6 +14,12 @@ public interface ISeriesRepository
     /// <summary>Lấy tất cả series của một Mangaka (authorId).</summary>
     Task<IEnumerable<MangaSeries>> GetByAuthorIdAsync(Guid authorId, CancellationToken ct = default);
 
+    /// <summary>Lấy tất cả series thuộc các Mangaka do một Tantou Editor quản lý.</summary>
+    Task<IEnumerable<MangaSeries>> GetByManagingTantouIdAsync(Guid tantouEditorId, CancellationToken ct = default);
+
+    /// <summary>Kiểm tra series có thuộc Mangaka do Tantou Editor này quản lý hay không.</summary>
+    Task<bool> IsManagedByTantouAsync(Guid seriesId, Guid tantouEditorId, CancellationToken ct = default);
+
     /// <summary>Lấy tất cả series (Admin / EB view).</summary>
     Task<IEnumerable<MangaSeries>> GetAllAsync(CancellationToken ct = default);
 

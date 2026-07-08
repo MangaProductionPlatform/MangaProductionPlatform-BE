@@ -104,6 +104,11 @@ public class Chapter : AggregateRoot, ISoftDeletable
         IssueType = issueType;
         ScheduledPublishAt = scheduledPublishAt;
     }
+
+    public void CancelPublishSchedule()
+    {
+        ScheduledPublishAt = null;
+    }
 }
 
 public class PageTask : AggregateRoot, ISoftDeletable
@@ -184,6 +189,14 @@ public class PageTask : AggregateRoot, ISoftDeletable
             throw new InvalidOperationException("Only Reviewing page tasks can be accepted.");
 
         TaskStatus = PageTaskStatus.Approved;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void ReopenForFix(Guid assistantId, string? description = null)
+    {
+        AssignedAssistantId = assistantId;
+        if (description != null) Description = description;
+        TaskStatus = PageTaskStatus.Incomplete;
         UpdatedAt = DateTime.UtcNow;
     }
 

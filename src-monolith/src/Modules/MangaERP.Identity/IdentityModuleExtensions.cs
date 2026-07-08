@@ -13,6 +13,9 @@ public static class IdentityModuleExtensions
     {
         var assembly = Assembly.GetExecutingAssembly();
 
+        // Framework services
+        services.AddMemoryCache();
+
         // MediatR — scan this assembly for all handlers
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(assembly));

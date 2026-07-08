@@ -258,10 +258,9 @@ public class SubmissionsController : ControllerBase
     // ── EDITORIAL BOARD VETTING FLOWS ────────────────────────────────────────
 
     /// <summary>
-    /// [EditorialBoard / EditorInChief / Admin] Get the active vetting queue.
+    /// [EditorialBoard / EditorInChief] Get the active vetting queue.
     /// - EB: only shows Pending_EB_Review submissions they have NOT yet voted on this round.
-    /// - EIC: Conflict_Escalated first (priority), then Pending_EB_Review.
-    /// - Admin: all Pending_EB_Review submissions.
+    /// - EiC: Conflict_Escalated first (priority), then Pending_EB_Review.
     /// Role is determined from RBAC via JWT claim.
     /// </summary>
     [HttpGet("queue")]
@@ -283,12 +282,12 @@ public class SubmissionsController : ControllerBase
     // ── LEGACY SINGLE-VOTE ENDPOINTS (DEPRECATED — kept for Admin/backward compat) ──
 
     /// <summary>
-    /// [DEPRECATED] [EditorialBoard] Request revision for a submission with visual feedback pins.
+    /// [DEPRECATED] [EditorialBoard / EditorInChief] Request revision for a submission with visual feedback pins.
     /// Use POST /{id}/vote instead for normal EB voting.
-    /// Kept for Admin override scenarios.
+    /// TantouEditor is NOT authorized — TE has no business with the Submission vetting flow.
     /// </summary>
     [HttpPost("{id:guid}/request-revision")]
-    [Authorize(Roles = "EditorialBoard,EditorInChief,TantouEditor")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief")]
     [ProducesResponseType(typeof(RequestRevisionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -310,7 +309,8 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [DEPRECATED] [Admin only] Reject a submission permanently. Use POST /{id}/vote for EB members.
+    /// [DEPRECATED] [EditorInChief override / Legacy] Reject a submission permanently.
+    /// Use POST /{id}/vote for normal EB voting flow.
     /// </summary>
     [HttpPost("{id:guid}/reject")]
     [Authorize(Roles = "EditorInChief")]
@@ -331,8 +331,9 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [DEPRECATED] [Admin only] Approve a submission directly. Use POST /{id}/vote for EB members.
+    /// [DEPRECATED] [EditorInChief override / Legacy] Approve a submission directly.
     /// Pending_EB_Review → EB_Approved + MangaSeries created + Mangaka assigned to TE.
+    /// Use POST /{id}/vote for normal EB voting flow.
     /// </summary>
     [HttpPost("{id:guid}/approve")]
     [Authorize(Roles = "EditorInChief")]

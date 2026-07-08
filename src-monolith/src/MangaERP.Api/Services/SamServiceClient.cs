@@ -104,8 +104,8 @@ public class SamServiceClient
         using var req = new HttpRequestMessage(HttpMethod.Post, targetUri) { Content = form };
         AttachInternalApiKey(req, apiKey);
 
-        _logger.LogInformation("[SAM] Requesting embedding for file: {FileName} ({Size} bytes) at {Url}",
-            file.FileName, file.Length, targetUri);
+        _logger.LogInformation("[SAM] Requesting embedding for file: {FileName} ({Size} bytes)",
+            file.FileName, file.Length);
 
         var response = await _httpClient.SendAsync(req, ct);
         response.EnsureSuccessStatusCode();
@@ -117,6 +117,99 @@ public class SamServiceClient
             string.Join(", ", result.Shape));
 
         return result;
+    }
+
+    /// <summary>
+    /// Checks the validity of an uploaded image by sending it to the SAM service to generate its embedding.
+    /// Calls POST /embedding on the SAM Python service using the image downloaded from storage.
+    /// </summary>
+    /// <param name="fileKey">The public ID/key of the uploaded image.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Embedding response if successful.</returns>
+    public async Task<EmbeddingResponse> GetEmbeddingAsync(string fileKey, CancellationToken ct = default)
+    {
+        // NOTE: basic validity check only, not full content moderation
+        var (samUrl, apiKey) = await GetSamConfigAsync(ct);
+        var targetUri = new Uri(new Uri(samUrl.TrimEnd('/') + "/"), "embedding");
+
+        var cloudName = _config["Cloudinary__CloudName"] ?? _config["Cloudinary:CloudName"];
+        if (string.IsNullOrEmpty(cloudName))
+        {
+            throw new InvalidOperationException("Cloudinary cloud name is not configured.");
+        }
+
+        var imageUrl = $"https://res.cloudinary.com/{cloudName}/image/upload/{fileKey}";
+
+        // Download image bytes
+        byte[] imageBytes;
+        try
+        {
+            using var downloadCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            downloadCts.CancelAfter(TimeSpan.FromSeconds(15));
+            imageBytes = await _httpClient.GetByteArrayAsync(imageUrl, downloadCts.Token);
+        }
+        catch (Exception ex) when (ex is Polly.CircuitBreaker.BrokenCircuitException ||
+                                   ex.InnerException is Polly.CircuitBreaker.BrokenCircuitException ||
+                                   (ex is HttpRequestException hre && hre.InnerException is Polly.CircuitBreaker.BrokenCircuitException))
+        {
+            if (ex is Polly.CircuitBreaker.BrokenCircuitException) throw;
+            throw ex.InnerException!;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("[SAM] Validation fail - Image download failed for fileKey: {FileKey}. Error: {Error}", fileKey, ex.Message);
+            throw new InvalidOperationException($"Failed to download image from storage for key: {fileKey}", ex);
+        }
+
+        // Retry logic: timeout 10-15s, retry max 2-3 times
+        int maxAttempts = 3; // 1 initial attempt + 2 retries
+        Exception? lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(TimeSpan.FromSeconds(15)); // Timeout 15s per attempt
+
+                using var form = new MultipartFormDataContent();
+                using var stream = new MemoryStream(imageBytes);
+                using var fileContent = new StreamContent(stream);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+                form.Add(fileContent, "file", "image.png");
+
+                using var req = new HttpRequestMessage(HttpMethod.Post, targetUri) { Content = form };
+                AttachInternalApiKey(req, apiKey);
+
+                // Note: Only log pass/fail + fileKey, do NOT log full URL or raw response
+                using var response = await _httpClient.SendAsync(req, cts.Token);
+                response.EnsureSuccessStatusCode();
+
+                var result = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(cancellationToken: cts.Token)
+                    ?? throw new InvalidOperationException("SAM /embedding returned an empty response.");
+
+                _logger.LogInformation("[SAM] Validation pass for fileKey: {FileKey}", fileKey);
+                return result;
+            }
+            catch (Polly.CircuitBreaker.BrokenCircuitException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+                _logger.LogWarning("[SAM] Attempt {Attempt} failed for fileKey: {FileKey}. Error: {Error}", attempt, fileKey, ex.Message);
+                
+                if (attempt < maxAttempts)
+                {
+                    // Delay before retry
+                    await System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(2), ct);
+                }
+            }
+        }
+
+        _logger.LogWarning("[SAM] Validation fail for fileKey: {FileKey}. Final error: {Error}", fileKey, lastException?.Message);
+        throw lastException ?? new InvalidOperationException("Failed to get embedding from SAM service.");
     }
 
     /// <summary>
@@ -132,7 +225,7 @@ public class SamServiceClient
         var (samUrl, apiKey) = await GetSamConfigAsync(ct);
         var targetUri = new Uri(new Uri(samUrl.TrimEnd('/') + "/"), "predict");
 
-        _logger.LogInformation("[SAM] Requesting mask prediction at ({X}, {Y}) at {Url}", request.X, request.Y, targetUri);
+        _logger.LogInformation("[SAM] Requesting mask prediction at ({X}, {Y})", request.X, request.Y);
 
         using var req = new HttpRequestMessage(HttpMethod.Post, targetUri)
         {

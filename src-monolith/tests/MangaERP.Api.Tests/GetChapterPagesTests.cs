@@ -63,4 +63,44 @@ public class GetChapterPagesTests
         Assert.Equal(page1.Id, result[0].PageTaskId);
         Assert.Equal(page2.Id, result[1].PageTaskId);
     }
+
+    [Fact]
+    public async STTask Handle_AssignedEditor_ReturnsPages()
+    {
+        var authorId = Guid.NewGuid();
+        var editorId = Guid.NewGuid();
+        var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
+        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3, editorId);
+        var page1 = PageTask.CreatePending(chapter.Id, 1);
+        var query = new GetChapterPagesQuery(editorId, chapter.Id);
+
+        _chapterRepoMock.Setup(r => r.GetByIdAsync(chapter.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(chapter);
+        _seriesRepoMock.Setup(r => r.GetByIdAsync(series.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(series);
+        _pageTaskRepoMock.Setup(r => r.GetByChapterIdAsync(chapter.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<PageTask> { page1 });
+
+        var result = (await _handler.Handle(query, CancellationToken.None)).ToList();
+
+        Assert.NotNull(result);
+        Assert.Single(result);
+        Assert.Equal(page1.Id, result[0].PageTaskId);
+    }
+
+    [Fact]
+    public async STTask Handle_UnauthorizedUser_ThrowsUnauthorizedAccessException()
+    {
+        var authorId = Guid.NewGuid();
+        var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
+        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3, Guid.NewGuid());
+        var query = new GetChapterPagesQuery(Guid.NewGuid(), chapter.Id);
+
+        _chapterRepoMock.Setup(r => r.GetByIdAsync(chapter.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(chapter);
+        _seriesRepoMock.Setup(r => r.GetByIdAsync(series.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(series);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _handler.Handle(query, CancellationToken.None));
+    }
 }
