@@ -125,7 +125,7 @@ public class TasksController : ControllerBase
     }
 
     [HttpGet("layers/history")]
-    [Authorize(Roles = "Mangaka")]
+    [Authorize(Roles = "Mangaka,TantouEditor")]
     [ProducesResponseType(typeof(IEnumerable<LayerHistoryDto>), 200)]
     public async Task<IActionResult> GetLayersHistory(
         [FromQuery] Guid? seriesId,

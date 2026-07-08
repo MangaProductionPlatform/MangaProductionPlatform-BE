@@ -46,7 +46,6 @@ public class ChaptersController : ControllerBase
                 request.Title,
                 request.ChapterNumber,
                 request.TotalPages,
-                request.AssignedEditorId,
                 request.CoverImageUrl);
 
             var result = await _mediator.Send(command, ct);
@@ -58,7 +57,7 @@ public class ChaptersController : ControllerBase
     }
 
     [HttpGet("series/{seriesId:guid}")]
-    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard")]
+    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,EditorInChief")]
     [ProducesResponseType(typeof(IEnumerable<ChapterListItemDto>), 200)]
     public async Task<IActionResult> GetChaptersBySeries(Guid seriesId, CancellationToken ct)
     {
@@ -344,7 +343,6 @@ public record CreateChapterRequest(
     string Title,
     decimal ChapterNumber,
     int TotalPages,
-    Guid? AssignedEditorId,
     string? CoverImageUrl);
 
 public record AddBasePageRequest(int PageNumber);
