@@ -12,6 +12,7 @@ using MangaERP.Chapter.Application.Commands.PatchChapter;
 using MangaERP.Chapter.Application.Queries.GetChapterDetail;
 using MangaERP.Chapter.Application.Queries.GetChaptersBySeries;
 using MangaERP.Chapter.Application.Queries.GetChapterPages;
+using MangaERP.Chapter.Application.Queries.GetChaptersMyQueue;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -54,6 +55,16 @@ public class ChaptersController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpGet("my-queue")]
+    [Authorize(Roles = "TantouEditor")]
+    [ProducesResponseType(typeof(IEnumerable<ChapterQueueItemDto>), 200)]
+    public async Task<IActionResult> GetMyQueue(CancellationToken ct)
+    {
+        var query = new GetChaptersMyQueueQuery(GetUserId());
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
     }
 
     [HttpGet("series/{seriesId:guid}")]
