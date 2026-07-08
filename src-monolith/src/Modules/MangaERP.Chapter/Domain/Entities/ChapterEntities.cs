@@ -209,6 +209,13 @@ public class PageTask : AggregateRoot, ISoftDeletable
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void Revoke()
+    {
+        AssignedAssistantId = null;
+        TaskStatus = PageTaskStatus.Pending;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public bool CanSubmitLayer(Guid assistantId)
     {
         return AssignedAssistantId == assistantId
