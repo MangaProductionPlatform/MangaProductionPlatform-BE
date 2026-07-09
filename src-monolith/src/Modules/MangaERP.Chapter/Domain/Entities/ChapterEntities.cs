@@ -45,8 +45,8 @@ public class Chapter : AggregateRoot, ISoftDeletable
 
     public void UpdateMetadata(string title, decimal chapterNumber, int totalPages, Guid? assignedEditorId, string? coverImageUrl)
     {
-        if (Status != ChapterStatus.Draft && Status != ChapterStatus.Rejected)
-            throw new InvalidOperationException("Only Draft or Rejected chapters can have their metadata updated.");
+        if (Status != ChapterStatus.Draft && Status != ChapterStatus.QaRevisionRequired)
+            throw new InvalidOperationException("Only Draft or QaRevisionRequired chapters can have their metadata updated.");
 
         if (totalPages <= 0)
             throw new ArgumentException("TotalPages must be > 0.");

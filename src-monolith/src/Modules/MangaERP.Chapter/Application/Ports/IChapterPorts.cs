@@ -14,11 +14,8 @@ public interface IChapterRepository
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     Task<IEnumerable<ChapterEntity>> GetScheduledChaptersAsync(DateTime threshold, CancellationToken ct = default);
     Task<IEnumerable<ChapterEntity>> GetQAQueueAsync(Guid editorId, CancellationToken ct = default);
-<<<<<<< HEAD
     Task<IEnumerable<ChapterEntity>> GetApprovedChaptersAsync(bool? scheduledOnly, CancellationToken ct = default);
-=======
     Task<IEnumerable<ChapterEntity>> GetByEditorIdAsync(Guid editorId, CancellationToken ct = default);
->>>>>>> origin/bao
 }
 
 public interface IPageTaskRepository
