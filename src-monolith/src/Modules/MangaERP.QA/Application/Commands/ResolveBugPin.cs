@@ -4,7 +4,7 @@ using MangaERP.QA.Application.Ports;
 
 namespace MangaERP.QA.Application.Commands;
 
-public record ResolveBugPinCommand(Guid PinId, Guid EditorId) : IRequest<bool>;
+public record ResolveBugPinCommand(Guid PinId, Guid EditorId, string? Note = null, Guid? ReviewedLayerId = null) : IRequest<bool>;
 
 public class ResolveBugPinHandler : IRequestHandler<ResolveBugPinCommand, bool>
 {
@@ -20,11 +20,10 @@ public class ResolveBugPinHandler : IRequestHandler<ResolveBugPinCommand, bool>
         var pin = await _bugPinRepo.GetByIdAsync(request.PinId, cancellationToken)
             ?? throw new KeyNotFoundException($"BugPin {request.PinId} not found.");
 
-        if (pin.Status == "Resolved")
-            return true;
-
         pin.Status = "Resolved";
         pin.ResolvedAt = DateTime.UtcNow;
+        if (request.Note != null) pin.ResolvedNote = request.Note;
+        if (request.ReviewedLayerId != null) pin.ReviewedLayerId = request.ReviewedLayerId;
 
         await _bugPinRepo.UpdateAsync(pin, cancellationToken);
         return true;
