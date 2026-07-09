@@ -32,7 +32,7 @@ public class MarkNotificationReadHandler
 
         notification.IsRead = true;
         await _repo.UpdateAsync(notification, ct);
-        await _repo.SaveChangesAsync(ct);
+        // NOTE: UpdateAsync already calls SaveChangesAsync internally — no need to call again.
         return true;
     }
 }

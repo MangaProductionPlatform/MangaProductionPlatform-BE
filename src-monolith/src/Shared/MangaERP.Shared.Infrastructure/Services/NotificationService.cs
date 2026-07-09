@@ -247,7 +247,7 @@ public class NotificationService : INotificationService
                 NotifyType        = "NewSubmissionPendingReview",
                 RelatedEntityId   = submissionId,
                 RelatedEntityType = "Submission",
-                TargetUrl         = "/editorial/queue"
+                TargetUrl         = "/app/board/submissions"
             };
 
             await _notificationRepo.AddAsync(notification, ct);
@@ -296,7 +296,7 @@ public class NotificationService : INotificationService
                 NotifyType        = "SubmissionVoteCast",
                 RelatedEntityId   = submissionId,
                 RelatedEntityType = "Submission",
-                TargetUrl         = "/editorial/queue"
+                TargetUrl         = "/app/board/submissions"
             };
 
             await _notificationRepo.AddAsync(notification, ct);
@@ -348,7 +348,7 @@ public class NotificationService : INotificationService
                 NotifyType        = "SubmissionConflictEscalated",
                 RelatedEntityId   = submissionId,
                 RelatedEntityType = "Submission",
-                TargetUrl         = $"/eic/conflict/{submissionId}"
+                TargetUrl         = $"/app/board/submissions?filter=conflict&id={submissionId}"
             };
 
             await _notificationRepo.AddAsync(notification, ct);
@@ -389,7 +389,7 @@ public class NotificationService : INotificationService
             NotifyType        = "TantouEditorAssigned",
             RelatedEntityId   = submissionId,
             RelatedEntityType = "Submission",
-            TargetUrl         = "/te/dashboard"
+            TargetUrl         = "/app/editor/dashboard"
         };
 
         await _notificationRepo.AddAsync(notification, ct);
@@ -407,6 +407,38 @@ public class NotificationService : INotificationService
                 authorName,
                 targetUrl   = notification.TargetUrl,
                 createdAt   = notification.CreatedAt
+            }, ct);
+    }
+
+    public async System.Threading.Tasks.Task NotifySegmentationTaskAssignedAsync(
+        Guid assistantId, Guid segmentationTaskId, string taskType,
+        CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId        = assistantId,
+            Title             = "Bạn được giao một nhiệm vụ phân vùng mới",
+            Message           = $"Bạn vừa được giao một Segmentation Task loại '{taskType}'. Hãy kiểm tra workspace để bắt đầu.",
+            NotifyType        = "SegmentationTaskAssigned",
+            RelatedEntityId   = segmentationTaskId,
+            RelatedEntityType = "SegmentationTask",
+            TargetUrl         = "/app/assistant/tasks"
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(assistantId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id                  = notification.Id,
+                title               = notification.Title,
+                message             = notification.Message,
+                notifyType          = notification.NotifyType,
+                segmentationTaskId,
+                taskType,
+                targetUrl           = notification.TargetUrl,
+                createdAt           = notification.CreatedAt
             }, ct);
     }
 }

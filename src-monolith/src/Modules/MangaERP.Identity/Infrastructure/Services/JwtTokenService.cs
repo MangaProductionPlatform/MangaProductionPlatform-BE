@@ -23,7 +23,8 @@ public class JwtTokenService : ITokenService
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Role, user.Role.ToString()),
             new Claim("username", user.Username),
-            new Claim("fullName", user.FullName ?? string.Empty)
+            new Claim("fullName", user.FullName ?? string.Empty),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
         var token = new JwtSecurityToken(
             issuer: _config["Jwt:Issuer"],

@@ -106,6 +106,9 @@ public class PageTaskConfiguration : IEntityTypeConfiguration<PageTask>
         b.Property(e => e.Description).HasMaxLength(2000);
         b.Property(e => e.TaskStatus).HasConversion(v => v.ToString(),
             v => Enum.Parse<PageTaskStatus>(v)).HasMaxLength(50);
+        b.Property(e => e.TaskType).HasConversion(v => v.ToString(),
+            v => Enum.Parse<PageTaskType>(v)).HasMaxLength(50).HasDefaultValue(PageTaskType.General);
+        b.Property(e => e.RegionMask).HasColumnType("text").IsRequired(false);
         b.HasOne(pt => pt.PreviewPage).WithOne(pp => pp.PageTask)
             .HasForeignKey<PreviewPage>(pp => pp.PageTaskId).OnDelete(DeleteBehavior.Cascade);
         b.HasQueryFilter(e => !e.IsDeleted);
@@ -251,5 +254,16 @@ public class StudioInvitationConfiguration : IEntityTypeConfiguration<StudioInvi
         b.Property(e => e.ActivationToken).HasMaxLength(2048);
         b.HasIndex(e => new { e.SeriesId, e.AssistantEmail });
         b.HasIndex(e => new { e.AssistantUserId, e.Status });
+    }
+}
+
+public class TaskCommentConfiguration : IEntityTypeConfiguration<TaskComment>
+{
+    public void Configure(EntityTypeBuilder<TaskComment> b)
+    {
+        b.ToTable("TaskComments"); b.HasKey(e => e.Id);
+        b.Property(e => e.Content).IsRequired().HasMaxLength(2000);
+        b.Property(e => e.UserFullName).IsRequired().HasMaxLength(256);
+        b.HasIndex(e => e.PageTaskId);
     }
 }

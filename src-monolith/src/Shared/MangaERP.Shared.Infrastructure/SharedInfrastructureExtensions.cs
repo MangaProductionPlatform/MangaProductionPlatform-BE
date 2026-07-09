@@ -12,6 +12,7 @@ using MangaERP.Task.Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MangaERP.Shared.Infrastructure.Middlewares;
 
 namespace MangaERP.Shared.Infrastructure;
 
@@ -58,15 +59,22 @@ public static class SharedInfrastructureExtensions
         // Studio module infrastructure (here to avoid circular dependency)
         services.AddScoped<IStudioInvitationRepository, StudioInvitationRepository>();
         services.AddScoped<IStudioIdentityService, StudioIdentityService>();
+        services.AddScoped<IStudioTaskRevocationService, NoOpStudioTaskRevocationService>();
 
         // Chapter / Task / Notification infrastructure (MF2)
         services.AddScoped<IChapterRepository, ChapterRepository>();
         services.AddScoped<IPageTaskRepository, PageTaskRepository>();
         services.AddScoped<IPreviewPageRepository, PreviewPageRepository>();
         services.AddScoped<IArtworkLayerRepository, ArtworkLayerRepository>();
+        services.AddScoped<ITaskCommentRepository, TaskCommentRepository>();
 
         // Shared Services
         services.AddScoped<INotificationService, NotificationService>();
+
+        // Infrastructure Reliability & Security services
+        services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
+        services.AddTransient<GlobalExceptionMiddleware>();
+        services.AddTransient<TokenBlacklistMiddleware>();
 
         return services;
     }

@@ -61,3 +61,23 @@ public class ArtworkLayerRepository : IArtworkLayerRepository
         => _db.SaveChangesAsync(ct);
 }
 
+public class TaskCommentRepository : ITaskCommentRepository
+{
+    private readonly AppDbContext _db;
+
+    public TaskCommentRepository(IDbContextProvider provider)
+        => _db = (AppDbContext)provider.GetDbContext();
+
+    public async System.Threading.Tasks.Task<IEnumerable<TaskComment>> GetByPageTaskIdAsync(Guid pageTaskId, CancellationToken ct = default)
+        => await _db.TaskComments
+            .Where(c => c.PageTaskId == pageTaskId)
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(ct);
+
+    public async System.Threading.Tasks.Task AddAsync(TaskComment comment, CancellationToken ct = default)
+        => await _db.TaskComments.AddAsync(comment, ct);
+
+    public System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default)
+        => _db.SaveChangesAsync(ct);
+}
+

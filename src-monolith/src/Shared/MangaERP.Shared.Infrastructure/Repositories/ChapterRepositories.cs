@@ -59,6 +59,7 @@ public class ChapterRepository : IChapterRepository
             .OrderBy(c => c.CreatedAt)
             .ToListAsync(ct);
 
+<<<<<<< HEAD
     public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetApprovedChaptersAsync(bool? scheduledOnly, CancellationToken ct = default)
     {
         var query = _db.Chapters.Where(c => c.Status == ChapterStatus.Approved);
@@ -72,6 +73,13 @@ public class ChapterRepository : IChapterRepository
             .ThenBy(c => c.CreatedAt)
             .ToListAsync(ct);
     }
+=======
+    public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetByEditorIdAsync(Guid editorId, CancellationToken ct = default)
+        => await _db.Chapters
+            .Where(c => c.AssignedEditorId == editorId)
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(ct);
+>>>>>>> origin/bao
 }
 
 public class PageTaskRepository : IPageTaskRepository
@@ -91,6 +99,13 @@ public class PageTaskRepository : IPageTaskRepository
         => await _db.PageTasks
             .IgnoreQueryFilters() // Bỏ qua soft-delete filter để tránh unique index violation khi trang đã bị xóa mềm
             .FirstOrDefaultAsync(p => p.ChapterId == chapterId && p.PageNumber == pageNumber, ct);
+
+    public async System.Threading.Tasks.Task<IEnumerable<PageTask>> GetByChapterAndPageNumbersAsync(
+        Guid chapterId, IEnumerable<int> pageNumbers, CancellationToken ct = default)
+        => await _db.PageTasks
+            .IgnoreQueryFilters()
+            .Where(p => p.ChapterId == chapterId && pageNumbers.Contains(p.PageNumber))
+            .ToListAsync(ct);
 
     public async System.Threading.Tasks.Task<IEnumerable<PageTask>> GetByChapterIdAsync(Guid chapterId, CancellationToken ct = default)
         => await _db.PageTasks

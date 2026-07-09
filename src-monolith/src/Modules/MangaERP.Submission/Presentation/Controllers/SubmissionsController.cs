@@ -9,10 +9,12 @@ using MangaERP.Submission.Application.Commands.RequestRevision;
 using MangaERP.Submission.Application.Commands.ApproveSubmission;
 using MangaERP.Submission.Application.Commands.CastVote;
 using MangaERP.Submission.Application.Commands.ResolveConflict;
+using MangaERP.Submission.Application.Commands.DeleteDraft;
 using MangaERP.Submission.Application.Queries.GetMySubmissions;
 using MangaERP.Submission.Application.Queries.GetSubmissionDetail;
 using MangaERP.Submission.Application.Queries.GetSubmissionQueue;
 using MangaERP.Submission.Application.Queries.GetFeedbackPins;
+using MangaERP.Submission.Application.Queries.GetSubmissionVotes;
 using MangaERP.Identity.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -209,17 +211,60 @@ public class SubmissionsController : ControllerBase
         catch (Exception ex) { return StatusCode(500, new { error = "Internal error", message = ex.Message }); }
     }
 
+    /// <summary>
+    /// [Mangaka] Xóa mềm (soft delete) một Draft submission của mình.
+    /// Chỉ được phép khi status == Draft.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(DeleteDraftResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> DeleteDraft(Guid id, CancellationToken ct)
+    {
+        try
+        {
+            var command = new DeleteDraftCommand(id, GetUserId());
+            var result  = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)        { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex)   { return BadRequest(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [EditorialBoard, EditorInChief, Admin] Xem kết quả phiếu bầu của một submission.
+    /// </summary>
+    /// <remarks>GET /api/v1/submissions/{id}/votes?round=1 (bỏ round = lấy vòng hiện tại)</remarks>
+    [HttpGet("{id:guid}/votes")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief")]
+    [ProducesResponseType(typeof(SubmissionVotesDto), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetVotes(Guid id, [FromQuery] int? round, CancellationToken ct)
+    {
+        try
+        {
+            var query  = new GetSubmissionVotesQuery(id, GetUserId(), GetUserRole(), round);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)        { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
+
     // ── EDITORIAL BOARD VETTING FLOWS ────────────────────────────────────────
 
     /// <summary>
-    /// [EditorialBoard / EditorInChief / Admin] Get the active vetting queue.
+    /// [EditorialBoard / EditorInChief] Get the active vetting queue.
     /// - EB: only shows Pending_EB_Review submissions they have NOT yet voted on this round.
-    /// - EIC: Conflict_Escalated first (priority), then Pending_EB_Review.
-    /// - Admin: all Pending_EB_Review submissions.
+    /// - EiC: Conflict_Escalated first (priority), then Pending_EB_Review.
     /// Role is determined from RBAC via JWT claim.
     /// </summary>
     [HttpGet("queue")]
-    [Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief")]
     [ProducesResponseType(typeof(IEnumerable<SubmissionSummaryDto>), 200)]
     public async Task<IActionResult> GetQueue(CancellationToken ct)
     {
@@ -237,12 +282,12 @@ public class SubmissionsController : ControllerBase
     // ── LEGACY SINGLE-VOTE ENDPOINTS (DEPRECATED — kept for Admin/backward compat) ──
 
     /// <summary>
-    /// [DEPRECATED] [EditorialBoard] Request revision for a submission with visual feedback pins.
+    /// [DEPRECATED] [EditorialBoard / EditorInChief] Request revision for a submission with visual feedback pins.
     /// Use POST /{id}/vote instead for normal EB voting.
-    /// Kept for Admin override scenarios.
+    /// TantouEditor is NOT authorized — TE has no business with the Submission vetting flow.
     /// </summary>
     [HttpPost("{id:guid}/request-revision")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief")]
     [ProducesResponseType(typeof(RequestRevisionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -264,10 +309,11 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [DEPRECATED] [Admin only] Reject a submission permanently. Use POST /{id}/vote for EB members.
+    /// [DEPRECATED] [EditorInChief override / Legacy] Reject a submission permanently.
+    /// Use POST /{id}/vote for normal EB voting flow.
     /// </summary>
     [HttpPost("{id:guid}/reject")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "EditorInChief")]
     [ProducesResponseType(typeof(RejectSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -285,11 +331,12 @@ public class SubmissionsController : ControllerBase
     }
 
     /// <summary>
-    /// [DEPRECATED] [Admin only] Approve a submission directly. Use POST /{id}/vote for EB members.
+    /// [DEPRECATED] [EditorInChief override / Legacy] Approve a submission directly.
     /// Pending_EB_Review → EB_Approved + MangaSeries created + Mangaka assigned to TE.
+    /// Use POST /{id}/vote for normal EB voting flow.
     /// </summary>
     [HttpPost("{id:guid}/approve")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "EditorInChief")]
     [ProducesResponseType(typeof(ApproveSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]

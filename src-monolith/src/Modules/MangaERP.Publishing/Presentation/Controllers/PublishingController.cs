@@ -103,7 +103,7 @@ public class PublishingController : ControllerBase
     /// [EditorialBoard] Publish an approved chapter immediately.
     /// </summary>
     [HttpPost("publish")]
-    [Authorize(Roles = "EditorialBoard,Admin")]
+    [Authorize(Roles = "EditorialBoard")]
     [ProducesResponseType(typeof(PublishChapterResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(403)]

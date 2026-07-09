@@ -1,4 +1,5 @@
 using System.Text;
+using MangaERP.Api.Services;
 using DotNetEnv;
 using MangaERP.Identity;
 using MangaERP.Submission;
@@ -8,6 +9,7 @@ using MangaERP.Chapter;
 using MangaERP.Task;
 using MangaERP.QA;
 using MangaERP.Publishing;
+using MangaERP.Segmentation;
 using MangaERP.Shared.Infrastructure;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -15,6 +17,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MangaERP.Shared.Infrastructure.Hubs;
+using Polly;
+using Polly.Extensions.Http;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 // ── Load .env for local development (ignored in Docker / Render / Railway) ────
 // DotNetEnv tự động inject vào System.Environment → ASP.NET Core config sẽ đọc được
@@ -75,9 +81,15 @@ builder.Services.AddSeriesModule();
 builder.Services.AddStudioModule();
 builder.Services.AddChapterModule();
 builder.Services.AddTaskModule();
+builder.Services.AddSegmentationModule(builder.Configuration);
 builder.Services.AddQaModule();
 builder.Services.AddPublishingModule();
 // builder.Services.AddRankingModule();
+
+// ── Api-level MediatR Handlers (cross-module queries) ────────────────────────
+// GetAdminDashboardHandler cần inject từ nhiều module → đặt ở Composition Root (Api)
+builder.Services.AddMediatR(cfg =>
+    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
 
 // ── JWT Authentication ─────────────────────────────────────────────────────────
 var jwtKey = builder.Configuration["Jwt:Key"]
@@ -109,6 +121,71 @@ builder.Services.AddControllers()
             new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 builder.Services.AddSignalR();
+
+// ── SAM (Segment Anything Model) Service ──────────────────────────────────────
+// Typed HttpClient — base URL comes from "SamService:Url" in appsettings / env var.
+// Override SAM URL via env: SamService__Url=https://your-ngrok-url.ngrok-free.app
+var samUrl = builder.Configuration["SamService:Url"]
+    ?? throw new InvalidOperationException("SamService:Url is not configured.");
+builder.Services.AddHttpClient<MangaERP.Api.Services.SamServiceClient>(client =>
+{
+    client.BaseAddress = new Uri(samUrl);
+    // vit_b cold start on Colab T4 (first embedding) can take ~2 min.
+    // Predict calls are fast (~2-5s) but we use one shared timeout for simplicity.
+    client.Timeout = TimeSpan.FromSeconds(180);
+})
+.AddPolicyHandler(GetRetryPolicy())
+.AddPolicyHandler(GetCircuitBreakerPolicy());
+
+// ── Cloudinary Image Storage ──────────────────────────────────────────────────
+// Credential config via .env: Cloudinary__CloudName, Cloudinary__ApiKey, Cloudinary__ApiSecret
+builder.Services.AddSingleton<ICloudinaryService, CloudinaryService>();
+
+// ── Health Checks ─────────────────────────────────────────────────────────────
+builder.Services.AddHealthChecks()
+    .AddCheck<MangaERP.Shared.Infrastructure.HealthChecks.DbHealthCheck>("database", tags: new[] { "db", "ready" })
+    .AddCheck<MangaERP.Shared.Infrastructure.HealthChecks.CacheHealthCheck>("memory-cache", tags: new[] { "cache", "ready" });
+
+// ── Rate Limiting ─────────────────────────────────────────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        var payload = new
+        {
+            error = "TooManyRequests",
+            message = "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau ít phút."
+        };
+        await context.HttpContext.Response.WriteAsJsonAsync(payload, cancellationToken);
+    };
+
+    // Policy riêng cho các endpoint auth nhạy cảm (login, forgot-password, reset-password)
+    options.AddPolicy("AuthPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // Policy chung cho toàn bộ API còn lại (baseline chống spam/DOS cơ bản)
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 10,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -156,6 +233,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ── Middleware Pipeline ────────────────────────────────────────────────────────
+// 1. Global exception middleware (must be earliest to catch errors in other middlewares)
+app.UseMiddleware<MangaERP.Shared.Infrastructure.Middlewares.GlobalExceptionMiddleware>();
+
+// 2. Rate limiter
+app.UseRateLimiter();
+
 // Swagger available in Development only (or allow via env var for demo)
 if (app.Environment.IsDevelopment() ||
     Environment.GetEnvironmentVariable("ENABLE_SWAGGER") == "true")
@@ -165,13 +248,81 @@ if (app.Environment.IsDevelopment() ||
 }
 
 app.UseCors(CorsPolicyName);
+// Static files for public uploads (local/demo only).
+// Skipped when directory doesn't exist (e.g. fresh Docker container on Render).
+// Production uploads go to Cloudinary — this block is a no-op in that case.
+var publicUploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "public");
+if (Directory.Exists(publicUploadsPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(publicUploadsPath),
+        RequestPath  = "/uploads/public"
+    });
+}
 
 // Skip HTTPS redirect in Railway (Railway handles TLS at the gateway level)
 if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();
 
 app.UseAuthentication();
+
+// 3. Token Blacklist middleware (runs after Authentication to access User claims, before Authorization)
+app.UseMiddleware<MangaERP.Shared.Infrastructure.Middlewares.TokenBlacklistMiddleware>();
+
 app.UseAuthorization();
+
+// ── Health Checks Routing ──────────────────────────────────────────────────────
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+
+        var response = new
+        {
+            status = report.Status.ToString(),
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                durationMs = e.Value.Duration.TotalMilliseconds
+            }),
+            totalDurationMs = report.TotalDuration.TotalMilliseconds
+        };
+
+        await context.Response.WriteAsync(System.Text.Json.JsonSerializer.Serialize(response));
+    }
+});
+
+app.MapHealthChecks("/health/live", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    Predicate = _ => false // liveness probe: returns 200 immediately without running DB checks
+});
+
 app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 app.Run();
+
+#pragma warning disable CA1050 // Declare types in namespaces
+public partial class Program
+{
+    public static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy() =>
+        HttpPolicyExtensions
+            .HandleTransientHttpError() // 5xx, 408
+            .WaitAndRetryAsync(2, i => TimeSpan.FromSeconds(2 * i),
+                onRetry: (outcome, delay, attempt, ctx) =>
+                    Console.WriteLine($"[SAM] Retry {attempt} sau {delay.TotalSeconds}s — lý do: {outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()}"));
+
+    public static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy() =>
+        HttpPolicyExtensions
+            .HandleTransientHttpError()
+            .CircuitBreakerAsync(
+                handledEventsAllowedBeforeBreaking: 4, // 4 lần fail liên tiếp
+                durationOfBreak: TimeSpan.FromMinutes(2), // tạm ngưng 2 phút rồi thử lại
+                onBreak: (outcome, duration) =>
+                    Console.WriteLine($"[SAM] Circuit OPEN — tạm ngưng gọi SAM {duration.TotalSeconds}s"),
+                onReset: () => Console.WriteLine("[SAM] Circuit CLOSED — SAM service đã phục hồi"));
+}
+#pragma warning restore CA1050

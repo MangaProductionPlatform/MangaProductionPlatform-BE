@@ -157,7 +157,9 @@ public class ResolveConflictHandler : IRequestHandler<ResolveConflictCommand, Re
 
         await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            // Serializable isolation: prevents two concurrent conflict-resolutions from reading
+            // the same stale TE load data and assigning to the same editor.
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
             var allTE = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
             var activeTE = allTE.Where(u => u.AccountStatus == AccountStatus.Active).ToList();

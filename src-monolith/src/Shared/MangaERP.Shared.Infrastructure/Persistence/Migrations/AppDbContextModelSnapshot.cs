@@ -93,6 +93,9 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("Deadline")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -106,10 +109,20 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<int>("PageNumber")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RegionMask")
+                        .HasColumnType("text");
+
                     b.Property<string>("TaskStatus")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TaskType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("General");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -644,6 +657,27 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("AuthorId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CancellationReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CancellationRejectReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("CancellationRequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CancellationRequestedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CancellationReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CancellationReviewedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CancellationStatus")
+                        .HasColumnType("integer");
+
                     b.Property<string>("CoverImageUrl")
                         .HasColumnType("text");
 
@@ -681,6 +715,25 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("MangaSeries", (string)null);
+                });
+
+            modelBuilder.Entity("MangaERP.Shared.Domain.Entities.SystemConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SystemConfigs");
                 });
 
             modelBuilder.Entity("MangaERP.Studio.Domain.Entities.StudioInvitation", b =>
@@ -1009,6 +1062,38 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("ChapterTeams", (string)null);
+                });
+
+            modelBuilder.Entity("MangaERP.Task.Domain.Entities.TaskComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PageTaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserFullName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PageTaskId");
+
+                    b.ToTable("TaskComments", (string)null);
                 });
 
             modelBuilder.Entity("MangaERP.Chapter.Domain.Entities.PageTask", b =>

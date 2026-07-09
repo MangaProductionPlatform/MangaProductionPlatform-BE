@@ -4,7 +4,7 @@ namespace MangaERP.Series.Application.Ports;
 
 /// <summary>
 /// Port (interface) định nghĩa data access contract cho Series module.
-/// Được implement bởi SeriesRepository trong Infrastructure layer (Chunk 5).
+/// Được implement bởi SeriesRepository trong Infrastructure layer.
 /// </summary>
 public interface ISeriesRepository
 {
@@ -13,6 +13,21 @@ public interface ISeriesRepository
 
     /// <summary>Lấy tất cả series của một Mangaka (authorId).</summary>
     Task<IEnumerable<MangaSeries>> GetByAuthorIdAsync(Guid authorId, CancellationToken ct = default);
+
+    /// <summary>Lấy tất cả series thuộc các Mangaka do một Tantou Editor quản lý.</summary>
+    Task<IEnumerable<MangaSeries>> GetByManagingTantouIdAsync(Guid tantouEditorId, CancellationToken ct = default);
+
+    /// <summary>Kiểm tra series có thuộc Mangaka do Tantou Editor này quản lý hay không.</summary>
+    Task<bool> IsManagedByTantouAsync(Guid seriesId, Guid tantouEditorId, CancellationToken ct = default);
+
+    /// <summary>Lấy tất cả series (Admin / EB view).</summary>
+    Task<IEnumerable<MangaSeries>> GetAllAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Lấy danh sách series đang có yêu cầu hủy chờ duyệt (CancellationStatus == Pending).
+    /// Dùng cho Board EB/EIC cancellation-queue.
+    /// </summary>
+    Task<IEnumerable<MangaSeries>> GetCancellationQueueAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Lấy series theo submissionId — dùng để kiểm tra series đã được tạo chưa
@@ -26,3 +41,4 @@ public interface ISeriesRepository
     /// <summary>Persist tất cả thay đổi đang tracked.</summary>
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
+

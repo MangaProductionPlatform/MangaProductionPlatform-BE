@@ -5,6 +5,9 @@ namespace MangaERP.Chapter.Domain.Entities;
 public enum ChapterStatus { Draft, ReadyForQA, QaRevisionRequired, Approved, Published, Archived }
 public enum PageTaskStatus { Pending, Incomplete, Reviewing, RevisionAlert, Approved }
 
+/// <summary>Type of artwork work assigned to the assistant for this page region.</summary>
+public enum PageTaskType { General, Background, Shading, Inking, Effect, Coloring }
+
 public class Chapter : AggregateRoot, ISoftDeletable
 {
     public Guid SeriesId { get; private set; }
@@ -40,6 +43,21 @@ public class Chapter : AggregateRoot, ISoftDeletable
             throw new UnauthorizedAccessException("You do not own this chapter's series.");
     }
 
+    public void UpdateMetadata(string title, decimal chapterNumber, int totalPages, Guid? assignedEditorId, string? coverImageUrl)
+    {
+        if (Status != ChapterStatus.Draft && Status != ChapterStatus.Rejected)
+            throw new InvalidOperationException("Only Draft or Rejected chapters can have their metadata updated.");
+
+        if (totalPages <= 0)
+            throw new ArgumentException("TotalPages must be > 0.");
+
+        Title = title;
+        ChapterNumber = chapterNumber;
+        TotalPages = totalPages;
+        AssignedEditorId = assignedEditorId;
+        CoverImageUrl = coverImageUrl;
+    }
+
     public bool CanSubmitForQA()
     {
         var activePages = PageTasks.Where(p => !p.IsDeleted).ToList();
@@ -64,6 +82,15 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public void Approve() => Status = ChapterStatus.Approved;
     public void RequestQaRevision() => Status = ChapterStatus.QaRevisionRequired;
     public void Archive() => Status = ChapterStatus.Archived;
+
+    public void Delete()
+    {
+        if (Status != ChapterStatus.Draft)
+            throw new InvalidOperationException("Only Draft chapters can be deleted.");
+
+        IsDeleted = true;
+        DeletedAt = DateTime.UtcNow;
+    }
 
     public void Publish(string? issueType = null)
     {
@@ -91,11 +118,22 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public Guid? AssignedAssistantId { get; set; }
     public string? Description { get; set; }
     public PageTaskStatus TaskStatus { get; set; } = PageTaskStatus.Pending;
+    /// <summary>SAM-generated mask polygon stored as JSON (array of [x,y] points).</summary>
+    public string? RegionMask { get; set; }
+    /// <summary>Type of artwork work for this region (Background, Shading, etc.).</summary>
+    public PageTaskType TaskType { get; set; } = PageTaskType.General;
+    public DateTime? Deadline { get; set; }
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public virtual Chapter Chapter { get; set; } = null!;
+
+    public void SetDeadline(DateTime? deadline)
+    {
+        Deadline = deadline;
+        UpdatedAt = DateTime.UtcNow;
+    }
     public virtual PreviewPage? PreviewPage { get; set; }
 
     public static PageTask CreatePending(Guid chapterId, int pageNumber)
@@ -113,13 +151,25 @@ public class PageTask : AggregateRoot, ISoftDeletable
         };
     }
 
-    public void Activate(Guid assistantId, string? description = null)
+    public void Activate(Guid assistantId, string? description = null, DateTime? deadline = null)
     {
         if (TaskStatus != PageTaskStatus.Pending)
             throw new InvalidOperationException("Only Pending page tasks can be activated.");
 
         AssignedAssistantId = assistantId;
         Description = description;
+        Deadline = deadline;
+        TaskStatus = PageTaskStatus.Incomplete;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void Reassign(Guid assistantId, string? description = null)
+    {
+        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+            throw new InvalidOperationException("Only Incomplete or RevisionAlert page tasks can be reassigned.");
+
+        AssignedAssistantId = assistantId;
+        Description = description ?? Description;
         TaskStatus = PageTaskStatus.Incomplete;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -159,10 +209,28 @@ public class PageTask : AggregateRoot, ISoftDeletable
         UpdatedAt = DateTime.UtcNow;
     }
 
+    public void Revoke()
+    {
+        AssignedAssistantId = null;
+        TaskStatus = PageTaskStatus.Pending;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public bool CanSubmitLayer(Guid assistantId)
     {
         return AssignedAssistantId == assistantId
             && (TaskStatus == PageTaskStatus.Incomplete || TaskStatus == PageTaskStatus.RevisionAlert);
+    }
+
+    /// <summary>
+    /// Sets the SAM segmentation region and work type for this page task.
+    /// Called after Mangaka selects a region on the canvas and assigns a task type.
+    /// </summary>
+    public void SetRegion(string regionMaskJson, PageTaskType taskType)
+    {
+        RegionMask = regionMaskJson;
+        TaskType   = taskType;
+        UpdatedAt  = DateTime.UtcNow;
     }
 }
 

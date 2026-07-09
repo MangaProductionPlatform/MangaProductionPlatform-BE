@@ -16,7 +16,8 @@ public record ActivatePageTaskCommand(
     Guid ChapterId,
     int PageNumber,
     Guid AssignedAssistantId,
-    string? Description = null
+    string? Description = null,
+    DateTime? Deadline = null
 ) : IRequest<ActivatePageTaskResult>;
 
 public record ActivatePageTaskResult(
@@ -24,7 +25,8 @@ public record ActivatePageTaskResult(
     int PageNumber,
     Guid AssignedAssistantId,
     string TaskStatus,
-    string? Description);
+    string? Description,
+    DateTime? Deadline);
 
 public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, ActivatePageTaskResult>
 {
@@ -72,7 +74,7 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
 
         await EnsureAssistantInStudioAsync(series.Id, cmd.AssignedAssistantId, ct);
 
-        pageTask.Activate(cmd.AssignedAssistantId, cmd.Description);
+        pageTask.Activate(cmd.AssignedAssistantId, cmd.Description, cmd.Deadline);
         await _pageTaskRepo.UpdateAsync(pageTask, ct);
         await _pageTaskRepo.SaveChangesAsync(ct);
 
@@ -84,7 +86,8 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
             pageTask.PageNumber,
             pageTask.AssignedAssistantId!.Value,
             pageTask.TaskStatus.ToString(),
-            pageTask.Description);
+            pageTask.Description,
+            pageTask.Deadline);
     }
 
     private async Task EnsureAssistantInStudioAsync(Guid seriesId, Guid assistantId, CancellationToken ct)
@@ -109,5 +112,8 @@ public class ActivatePageTaskValidator : AbstractValidator<ActivatePageTaskComma
         RuleFor(x => x.PageNumber).GreaterThan(0);
         RuleFor(x => x.AssignedAssistantId).NotEmpty();
         RuleFor(x => x.Description).MaximumLength(2000).When(x => x.Description != null);
+        RuleFor(x => x.Deadline)
+            .Must(d => !d.HasValue || d.Value > DateTime.UtcNow.AddMinutes(-5))
+            .WithMessage("Deadline must be in the future.");
     }
 }
