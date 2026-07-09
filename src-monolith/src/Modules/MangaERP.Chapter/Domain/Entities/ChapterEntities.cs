@@ -2,7 +2,7 @@ using MangaERP.Shared.Domain.Abstractions;
 
 namespace MangaERP.Chapter.Domain.Entities;
 
-public enum ChapterStatus { Draft, ReadyForQA, Rejected, Approved, Published, Archived }
+public enum ChapterStatus { Draft, ReadyForQA, QaRevisionRequired, Approved, Published, Archived }
 public enum PageTaskStatus { Pending, Incomplete, Reviewing, RevisionAlert, Approved }
 
 /// <summary>Type of artwork work assigned to the assistant for this page region.</summary>
@@ -69,8 +69,8 @@ public class Chapter : AggregateRoot, ISoftDeletable
 
     public void SubmitForQA()
     {
-        if (Status != ChapterStatus.Draft && Status != ChapterStatus.Rejected)
-            throw new InvalidOperationException("Only Draft or Rejected chapters can be submitted for QA.");
+        if (Status != ChapterStatus.Draft && Status != ChapterStatus.QaRevisionRequired)
+            throw new InvalidOperationException("Only Draft or QaRevisionRequired chapters can be submitted for QA.");
 
         if (!CanSubmitForQA())
             throw new InvalidOperationException(
@@ -80,7 +80,7 @@ public class Chapter : AggregateRoot, ISoftDeletable
     }
 
     public void Approve() => Status = ChapterStatus.Approved;
-    public void Reject() => Status = ChapterStatus.Rejected;
+    public void RequestQaRevision() => Status = ChapterStatus.QaRevisionRequired;
     public void Archive() => Status = ChapterStatus.Archived;
 
     public void Delete()

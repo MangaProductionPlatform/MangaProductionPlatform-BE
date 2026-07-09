@@ -40,8 +40,8 @@ public class AddBasePageHandler : IRequestHandler<AddBasePageCommand, AddBasePag
 
         chapter.EnsureOwnedBy(cmd.MangakaId, series.AuthorId);
 
-        if (chapter.Status != ChapterStatus.Draft && chapter.Status != ChapterStatus.Rejected)
-            throw new InvalidOperationException("Pages can only be added to Draft or Rejected chapters.");
+        if (chapter.Status != ChapterStatus.Draft && chapter.Status != ChapterStatus.QaRevisionRequired)
+            throw new InvalidOperationException("Pages can only be added to Draft or QaRevisionRequired chapters.");
 
         if (cmd.PageNumber > chapter.TotalPages)
             throw new InvalidOperationException($"PageNumber cannot exceed TotalPages ({chapter.TotalPages}).");
