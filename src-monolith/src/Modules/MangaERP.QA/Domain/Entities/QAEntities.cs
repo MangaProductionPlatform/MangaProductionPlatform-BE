@@ -17,6 +17,8 @@ public class BugPin
     public Guid BatchToken { get; set; }
     public string Status { get; set; } = "Open";  // Open | InFixing | Fixed | Resolved
     public DateTime? ResolvedAt { get; set; }
+    public string? ResolvedNote { get; set; }
+    public Guid? ReviewedLayerId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

@@ -136,11 +136,30 @@ public class QasController : ControllerBase
     [ProducesResponseType(typeof(bool), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
-    public async Task<IActionResult> ResolvePin(Guid pinId, CancellationToken ct)
+    public async Task<IActionResult> ResolvePin(Guid pinId, [FromBody] ResolvePinRequest? request, CancellationToken ct)
     {
         try
         {
-            var command = new ResolveBugPinCommand(pinId, GetUserId());
+            var command = new ResolveBugPinCommand(pinId, GetUserId(), request?.Note, request?.ReviewedLayerId);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [TantouEditor] Mark a specific bug pin as unresolved / reopen.
+    /// </summary>
+    [HttpPost("pins/{pinId:guid}/unresolve")]
+    [Authorize(Roles = "TantouEditor")]
+    [ProducesResponseType(typeof(bool), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> UnresolvePin(Guid pinId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new UnresolveBugPinCommand(pinId, GetUserId());
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
@@ -379,3 +398,4 @@ public record UpdatePinRequest(
     string? Category
 );
 
+public record ResolvePinRequest(string? Note, Guid? ReviewedLayerId);
