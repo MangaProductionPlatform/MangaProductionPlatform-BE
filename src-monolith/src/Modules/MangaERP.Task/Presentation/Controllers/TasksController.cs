@@ -42,6 +42,22 @@ public class TasksController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet]
+    [Authorize(Roles = "Mangaka,Assistant,TantouEditor")]
+    [ProducesResponseType(typeof(IEnumerable<AssignedTaskDto>), 200)]
+    public async Task<IActionResult> GetTasks([FromQuery] string? type, [FromQuery] string? status, CancellationToken ct)
+    {
+        var queryStatus = status;
+        if (string.Equals(type, "Revision", StringComparison.OrdinalIgnoreCase))
+        {
+            queryStatus = "Incomplete";
+        }
+        
+        var query = new GetAssignedTasksQuery(GetUserId(), queryStatus);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
     [HttpGet("chapter/{chapterId:guid}")]
     [Authorize(Roles = "Mangaka")]
     [ProducesResponseType(typeof(IEnumerable<ChapterTaskDto>), 200)]
