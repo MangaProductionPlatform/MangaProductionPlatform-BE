@@ -190,6 +190,7 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
+    c.CustomSchemaIds(type => type.FullName);
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "MangaERP API", Version = "v1",
         Description = "Manga Production Platform — Modular Monolith" });
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
