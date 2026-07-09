@@ -83,6 +83,13 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public void RequestQaRevision() => Status = ChapterStatus.QaRevisionRequired;
     public void Archive() => Status = ChapterStatus.Archived;
 
+    public void Reopen()
+    {
+        if (Status != ChapterStatus.Approved)
+            throw new InvalidOperationException("Only Approved chapters can be reopened for QA.");
+        Status = ChapterStatus.ReadyForQA;
+    }
+
     public void Delete()
     {
         if (Status != ChapterStatus.Draft)

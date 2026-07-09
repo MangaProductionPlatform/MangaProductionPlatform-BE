@@ -2,6 +2,7 @@ using MediatR;
 using FluentValidation;
 using MangaERP.Chapter.Application.Ports;
 using MangaERP.Chapter.Domain.Entities;
+using MangaERP.Publishing.Application.Services;
 
 namespace MangaERP.Publishing.Application.Commands;
 
@@ -17,10 +18,12 @@ public record SchedulePublishResult(Guid ChapterId, string Status, string IssueT
 public class SchedulePublishHandler : IRequestHandler<SchedulePublishCommand, SchedulePublishResult>
 {
     private readonly IChapterRepository _chapterRepo;
+    private readonly IPublishingConflictChecker _conflictChecker;
 
-    public SchedulePublishHandler(IChapterRepository chapterRepo)
+    public SchedulePublishHandler(IChapterRepository chapterRepo, IPublishingConflictChecker conflictChecker)
     {
         _chapterRepo = chapterRepo;
+        _conflictChecker = conflictChecker;
     }
 
     public async Task<SchedulePublishResult> Handle(SchedulePublishCommand request, CancellationToken cancellationToken)
@@ -28,8 +31,15 @@ public class SchedulePublishHandler : IRequestHandler<SchedulePublishCommand, Sc
         var chapter = await _chapterRepo.GetByIdAsync(request.ChapterId, cancellationToken)
             ?? throw new KeyNotFoundException($"Chapter {request.ChapterId} not found.");
 
+        if (chapter.SeriesId != request.SeriesId)
+            throw new InvalidOperationException("SeriesId không khớp với chapter. Vui lòng kiểm tra lại.");
+
         if (chapter.Status != ChapterStatus.Approved)
             throw new InvalidOperationException("Chỉ có thể lên lịch phát hành cho chương truyện đã được duyệt (Status = Approved).");
+
+        var conflict = await _conflictChecker.CheckAsync(request.SeriesId, request.ScheduledPublishAt, request.ChapterId, cancellationToken);
+        if (conflict.HasConflict)
+            throw new InvalidOperationException(conflict.ConflictMessage);
 
         if (request.ScheduledPublishAt <= DateTime.UtcNow)
             throw new ArgumentException("Thời gian lên lịch phát hành phải lớn hơn thời gian hiện tại.");

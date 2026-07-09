@@ -158,6 +158,36 @@ public class PublishingController : ControllerBase
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// [EditorialBoard, TantouEditor] Get chapters in publishing queue (ready or scheduled).
+    /// </summary>
+    [HttpGet("chapters/my-queue")]
+    [Authorize(Roles = "EditorialBoard,TantouEditor,EditorInChief")]
+    [ProducesResponseType(typeof(IEnumerable<MangaERP.Publishing.Application.Queries.GetMyPublishingQueue.PublishingQueueChapterDto>), 200)]
+    public async Task<IActionResult> GetMyQueue(CancellationToken ct)
+    {
+        var query = new MangaERP.Publishing.Application.Queries.GetMyPublishingQueue.GetMyPublishingQueueQuery(GetUserId());
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [EditorialBoard, TantouEditor, Admin] Get chapter publishing detail.
+    /// </summary>
+    [HttpGet("chapters/{chapterId:guid}")]
+    [Authorize(Roles = "EditorialBoard,TantouEditor,Admin,EditorInChief")]
+    [ProducesResponseType(typeof(MangaERP.Publishing.Application.Queries.GetPublishingChapterDetail.PublishingChapterDetailDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetChapterDetail(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _mediator.Send(new MangaERP.Publishing.Application.Queries.GetPublishingChapterDetail.GetPublishingChapterDetailQuery(chapterId), ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+    }
 }
 
 public record ScheduleRequest(

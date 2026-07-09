@@ -56,6 +56,12 @@ public class QARepositories : IBugPinRepository, IQASessionRepository
     async System.Threading.Tasks.Task<QASession?> IQASessionRepository.GetByChapterIdAsync(Guid chapterId, CancellationToken ct)
         => await _db.QASessions.FirstOrDefaultAsync(q => q.ChapterId == chapterId, ct);
 
+    async System.Threading.Tasks.Task<IEnumerable<QASession>> IQASessionRepository.GetAllByChapterIdAsync(Guid chapterId, CancellationToken ct)
+        => await _db.QASessions
+            .Where(q => q.ChapterId == chapterId)
+            .OrderByDescending(q => q.CreatedAt)
+            .ToListAsync(ct);
+
     async System.Threading.Tasks.Task IQASessionRepository.AddAsync(QASession session, CancellationToken ct)
     {
         await _db.QASessions.AddAsync(session, ct);
