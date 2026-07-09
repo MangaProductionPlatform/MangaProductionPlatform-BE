@@ -127,7 +127,7 @@ public class ApproveSubmissionHandler
             // Serializable isolation: prevents two concurrent approvals from reading
             // the same stale TE load data and assigning to the same editor.
             // PostgreSQL will serialize conflicting transactions automatically.
-            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
 
             // ── STATE CLEANUP: purge dangling in-progress votes ───────────────
             // Count them first so we can report back how many were cleaned.
