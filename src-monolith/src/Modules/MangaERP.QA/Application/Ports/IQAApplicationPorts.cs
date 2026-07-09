@@ -18,6 +18,7 @@ public interface IQASessionRepository
 {
     System.Threading.Tasks.Task<QASession?> GetByIdAsync(Guid id, CancellationToken ct = default);
     System.Threading.Tasks.Task<QASession?> GetByChapterIdAsync(Guid chapterId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<QASession>> GetAllByChapterIdAsync(Guid chapterId, CancellationToken ct = default);
     System.Threading.Tasks.Task AddAsync(QASession session, CancellationToken ct = default);
     System.Threading.Tasks.Task UpdateAsync(QASession session, CancellationToken ct = default);
 }

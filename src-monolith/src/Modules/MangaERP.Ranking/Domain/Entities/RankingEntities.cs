@@ -1,5 +1,13 @@
 namespace MangaERP.Ranking.Domain.Entities;
 
+public enum RankingPeriod
+{
+    Daily,
+    Weekly,
+    Monthly,
+    AllTime
+}
+
 public class VoteData
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -14,9 +22,15 @@ public class RankingSnapshot
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid SeriesId { get; set; }
-    public string VotePeriod { get; set; } = string.Empty;
     public int Rank { get; set; }
-    public int TotalVotes { get; set; } = 0;
+    public double Score { get; set; }
+    public int Views { get; set; }
+    public int Likes { get; set; }
+    public int Favorites { get; set; }
+    public int Comments { get; set; }
+    public double TrendScore { get; set; }
+    public RankingPeriod Period { get; set; }
+    public DateTime SnapshotDate { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

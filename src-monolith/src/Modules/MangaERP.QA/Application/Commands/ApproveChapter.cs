@@ -40,6 +40,9 @@ public class ApproveChapterHandler : IRequestHandler<ApproveChapterCommand, Appr
         var chapter = await _chapterRepo.GetByIdAsync(request.ChapterId, cancellationToken)
             ?? throw new KeyNotFoundException($"Chapter {request.ChapterId} not found.");
 
+        if (chapter.AssignedEditorId != request.EditorId)
+            throw new UnauthorizedAccessException("Bạn không phải Tantou Editor được giao cho chương truyện này.");
+
         if (chapter.Status == ChapterStatus.Approved)
             return new ApproveChapterResult(chapter.Id, chapter.Status.ToString(), DateTime.UtcNow);
 

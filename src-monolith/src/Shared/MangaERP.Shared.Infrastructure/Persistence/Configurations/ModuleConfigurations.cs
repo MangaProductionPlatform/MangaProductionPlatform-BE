@@ -223,9 +223,10 @@ public class RankingSnapshotConfiguration : IEntityTypeConfiguration<RankingSnap
     public void Configure(EntityTypeBuilder<RankingSnapshot> b)
     {
         b.ToTable("RankingSnapshots"); b.HasKey(e => e.Id);
-        b.HasIndex(e => new { e.SeriesId, e.VotePeriod }).IsUnique();
-        b.Property(e => e.VotePeriod).IsRequired().HasMaxLength(50);
-        b.HasIndex(e => new { e.VotePeriod, e.Rank });
+        // Period is an enum. You can store it as string or int. Let's store as string for readability
+        b.Property(e => e.Period).HasConversion<string>().IsRequired().HasMaxLength(50);
+        b.HasIndex(e => new { e.SeriesId, e.Period, e.SnapshotDate });
+        b.HasIndex(e => new { e.Period, e.Rank, e.SnapshotDate });
     }
 }
 

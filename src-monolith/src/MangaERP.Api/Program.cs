@@ -10,6 +10,7 @@ using MangaERP.Task;
 using MangaERP.QA;
 using MangaERP.Publishing;
 using MangaERP.Segmentation;
+using MangaERP.Ranking;
 using MangaERP.Shared.Infrastructure;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -84,7 +85,7 @@ builder.Services.AddTaskModule();
 builder.Services.AddSegmentationModule(builder.Configuration);
 builder.Services.AddQaModule();
 builder.Services.AddPublishingModule();
-// builder.Services.AddRankingModule();
+builder.Services.AddRankingModule();
 
 // ── Api-level MediatR Handlers (cross-module queries) ────────────────────────
 // GetAdminDashboardHandler cần inject từ nhiều module → đặt ở Composition Root (Api)

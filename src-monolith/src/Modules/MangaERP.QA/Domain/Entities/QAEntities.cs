@@ -12,6 +12,8 @@ public class BugPin
     public decimal CoordinateY { get; set; }
     public string NoteMessage { get; set; } = string.Empty;
     public string? IssueType { get; set; }  // Visual | Content | Text | Layout
+    public string Severity { get; set; } = "Medium";  // Low | Medium | High | Critical
+    public string? Category { get; set; }  // Art | Dialogue | Lettering | Composition | Continuity
     public Guid BatchToken { get; set; }
     public string Status { get; set; } = "Open";  // Open | InFixing | Fixed | Resolved
     public DateTime? ResolvedAt { get; set; }

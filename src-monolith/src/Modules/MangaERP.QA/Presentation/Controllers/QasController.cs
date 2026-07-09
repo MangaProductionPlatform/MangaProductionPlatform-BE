@@ -80,6 +80,8 @@ public class QasController : ControllerBase
                 CoordinateY: request.CoordinateY,
                 NoteMessage: request.NoteMessage,
                 IssueType: request.IssueType,
+                Severity: request.Severity ?? "Medium",
+                Category: request.Category,
                 BatchToken: request.BatchToken
             );
 
@@ -271,6 +273,86 @@ public class QasController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
+
+    /// <summary>
+    /// [TantouEditor, Mangaka] Get QA history for a chapter (sessions and bug pins).
+    /// </summary>
+    [HttpGet("chapters/{chapterId:guid}/history")]
+    [Authorize(Roles = "TantouEditor,Mangaka")]
+    [ProducesResponseType(typeof(MangaERP.QA.Application.Queries.GetQAHistory.QAHistoryDto), 200)]
+    public async Task<IActionResult> GetHistory(Guid chapterId, CancellationToken ct)
+    {
+        var query = new MangaERP.QA.Application.Queries.GetQAHistory.GetQAHistoryQuery(chapterId);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [TantouEditor] Reopen an Approved chapter back to ReadyForQA for a new review round.
+    /// </summary>
+    [HttpPost("chapters/{chapterId:guid}/reopen")]
+    [Authorize(Roles = "TantouEditor")]
+    [ProducesResponseType(typeof(MangaERP.QA.Application.Commands.ReopenChapter.ReopenChapterResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ReopenChapter(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new MangaERP.QA.Application.Commands.ReopenChapter.ReopenChapterCommand(chapterId, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [TantouEditor] Update an existing open bug pin.
+    /// </summary>
+    [HttpPatch("pins/{pinId:guid}")]
+    [Authorize(Roles = "TantouEditor")]
+    [ProducesResponseType(typeof(bool), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> UpdatePin(Guid pinId, [FromBody] UpdatePinRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var command = new MangaERP.QA.Application.Commands.UpdateBugPin.UpdateBugPinCommand(
+                pinId, GetUserId(), request.NoteMessage, request.IssueType,
+                request.CoordinateX, request.CoordinateY, request.Severity, request.Category);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// [TantouEditor] Delete an existing open bug pin.
+    /// </summary>
+    [HttpDelete("pins/{pinId:guid}")]
+    [Authorize(Roles = "TantouEditor")]
+    [ProducesResponseType(typeof(bool), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> DeletePin(Guid pinId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new MangaERP.QA.Application.Commands.DeleteBugPin.DeleteBugPinCommand(pinId, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
+    }
 }
 
 public record AddPinRequest(
@@ -279,10 +361,21 @@ public record AddPinRequest(
     decimal CoordinateY,
     string NoteMessage,
     string IssueType,
+    string? Severity,
+    string? Category,
     Guid BatchToken
 );
 
 public record SendFeedbackRequest(Guid BatchToken);
 
 public record AssignFixRequest(Guid AssistantId, string? Instructions);
+
+public record UpdatePinRequest(
+    string? NoteMessage,
+    string? IssueType,
+    decimal? CoordinateX,
+    decimal? CoordinateY,
+    string? Severity,
+    string? Category
+);
 

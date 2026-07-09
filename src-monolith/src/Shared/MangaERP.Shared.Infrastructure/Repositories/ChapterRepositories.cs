@@ -80,6 +80,10 @@ public class ChapterRepository : IChapterRepository
             .OrderBy(c => c.CreatedAt)
             .ToListAsync(ct);
 
+    public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetScheduledBySeriesAsync(Guid seriesId, CancellationToken ct = default)
+        => await _db.Chapters
+            .Where(c => c.SeriesId == seriesId && c.Status == ChapterStatus.Approved && c.ScheduledPublishAt.HasValue)
+            .ToListAsync(ct);
 }
 
 public class PageTaskRepository : IPageTaskRepository

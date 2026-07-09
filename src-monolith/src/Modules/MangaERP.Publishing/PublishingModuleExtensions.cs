@@ -16,6 +16,8 @@ public static class PublishingModuleExtensions
 
         // Register FluentValidation validators in this assembly
         services.AddValidatorsFromAssembly(assembly);
+        // Register services
+        services.AddScoped<MangaERP.Publishing.Application.Services.IPublishingConflictChecker, MangaERP.Publishing.Application.Services.PublishingConflictChecker>();
 
         // Register Background Scheduler Service
         services.AddHostedService<PublishingSchedulerService>();

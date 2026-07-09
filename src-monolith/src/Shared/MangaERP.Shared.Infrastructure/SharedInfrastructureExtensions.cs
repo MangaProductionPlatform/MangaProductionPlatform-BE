@@ -8,6 +8,7 @@ using MangaERP.Submission.Application.Ports;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Studio.Application.Ports;
 using MangaERP.QA.Application.Ports;
+using MangaERP.Ranking.Application.Ports;
 using MangaERP.Task.Application.Ports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -67,6 +68,9 @@ public static class SharedInfrastructureExtensions
         services.AddScoped<IPreviewPageRepository, PreviewPageRepository>();
         services.AddScoped<IArtworkLayerRepository, ArtworkLayerRepository>();
         services.AddScoped<ITaskCommentRepository, TaskCommentRepository>();
+
+        // Ranking module infrastructure
+        services.AddScoped<IRankingRepository, RankingRepository>();
 
         // Shared Services
         services.AddScoped<INotificationService, NotificationService>();
