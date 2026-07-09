@@ -92,7 +92,7 @@ public class QasController : ControllerBase
     }
 
     /// <summary>
-    /// [TantouEditor] Send feedback batch, changing Chapter status to Rejected.
+    /// [TantouEditor] Send feedback batch, changing Chapter status to QaRevisionRequired.
     /// </summary>
     [HttpPost("chapters/{chapterId:guid}/send-feedback")]
     [Authorize(Roles = "TantouEditor")]
@@ -220,6 +220,56 @@ public class QasController : ControllerBase
 
         if (result == null) return NotFound(new { message = "QA Session not found." });
         return Ok(result);
+    }
+
+    /// <summary>
+    /// [TantouEditor, Mangaka] Get feedback batches for a chapter (pins grouped by batch token).
+    /// </summary>
+    [HttpGet("chapters/{chapterId:guid}/feedback")]
+    [Authorize(Roles = "TantouEditor,Mangaka")]
+    [ProducesResponseType(typeof(MangaERP.QA.Application.Queries.GetChapterFeedback.ChapterFeedbackDto), 200)]
+    public async Task<IActionResult> GetFeedback(Guid chapterId, CancellationToken ct)
+    {
+        var query = new MangaERP.QA.Application.Queries.GetChapterFeedback.GetChapterFeedbackQuery(chapterId);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [TantouEditor, Mangaka] Get QA summary (pin statistics and canApprove status).
+    /// </summary>
+    [HttpGet("chapters/{chapterId:guid}/summary")]
+    [Authorize(Roles = "TantouEditor,Mangaka")]
+    [ProducesResponseType(typeof(MangaERP.QA.Application.Queries.GetChapterQaSummary.ChapterQaSummaryDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetSummary(Guid chapterId, CancellationToken ct)
+    {
+        var query = new MangaERP.QA.Application.Queries.GetChapterQaSummary.GetChapterQaSummaryQuery(chapterId);
+        var result = await _mediator.Send(query, ct);
+
+        if (result == null) return NotFound(new { message = "No QA data found for this chapter." });
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [TantouEditor] Start a QA review session for a chapter (locks it for this editor).
+    /// </summary>
+    [HttpPost("chapters/{chapterId:guid}/start")]
+    [Authorize(Roles = "TantouEditor")]
+    [ProducesResponseType(typeof(MangaERP.QA.Application.Commands.StartQaReview.StartQaReviewResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> StartReview(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new MangaERP.QA.Application.Commands.StartQaReview.StartQaReviewCommand(chapterId, GetUserId());
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
     }
 }
 

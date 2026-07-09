@@ -132,6 +132,32 @@ public class PublishingController : ControllerBase
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// [EditorialBoard, Admin] Get all approved chapters ready for publishing.
+    /// </summary>
+    [HttpGet("chapters/ready")]
+    [Authorize(Roles = "EditorialBoard,Admin")]
+    [ProducesResponseType(typeof(IEnumerable<MangaERP.Publishing.Application.Queries.GetReadyForPublish.ReadyForPublishChapterDto>), 200)]
+    public async Task<IActionResult> GetReadyForPublish(CancellationToken ct)
+    {
+        var query = new MangaERP.Publishing.Application.Queries.GetReadyForPublish.GetReadyForPublishQuery();
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [EditorialBoard, Admin] Get publishing schedule (approved chapters with scheduled publish date).
+    /// </summary>
+    [HttpGet("schedule")]
+    [Authorize(Roles = "EditorialBoard,Admin")]
+    [ProducesResponseType(typeof(IEnumerable<MangaERP.Publishing.Application.Queries.GetPublishingSchedule.ScheduledChapterDto>), 200)]
+    public async Task<IActionResult> GetPublishingSchedule(CancellationToken ct)
+    {
+        var query = new MangaERP.Publishing.Application.Queries.GetPublishingSchedule.GetPublishingScheduleQuery();
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
 }
 
 public record ScheduleRequest(

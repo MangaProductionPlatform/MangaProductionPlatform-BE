@@ -58,6 +58,20 @@ public class ChapterRepository : IChapterRepository
             .Where(c => c.Status == ChapterStatus.ReadyForQA && c.AssignedEditorId == editorId)
             .OrderBy(c => c.CreatedAt)
             .ToListAsync(ct);
+
+    public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetApprovedChaptersAsync(bool? scheduledOnly, CancellationToken ct = default)
+    {
+        var query = _db.Chapters.Where(c => c.Status == ChapterStatus.Approved);
+
+        if (scheduledOnly == true)
+            query = query.Where(c => c.ScheduledPublishAt.HasValue);
+        else if (scheduledOnly == false)
+            query = query.Where(c => !c.ScheduledPublishAt.HasValue);
+
+        return await query.OrderBy(c => c.ScheduledPublishAt ?? DateTime.MaxValue)
+            .ThenBy(c => c.CreatedAt)
+            .ToListAsync(ct);
+    }
 }
 
 public class PageTaskRepository : IPageTaskRepository

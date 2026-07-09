@@ -48,8 +48,8 @@ public class SendFeedbackBatchHandler : IRequestHandler<SendFeedbackBatchCommand
         var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, cancellationToken)
             ?? throw new KeyNotFoundException($"Series {chapter.SeriesId} not found.");
 
-        // 3. Update chapter status to Rejected
-        chapter.Reject();
+        // 3. Update chapter status to QaRevisionRequired
+        chapter.RequestQaRevision();
         await _chapterRepo.UpdateAsync(chapter, cancellationToken);
 
         // 4. Update the Bug Pins status associated with this batch token
