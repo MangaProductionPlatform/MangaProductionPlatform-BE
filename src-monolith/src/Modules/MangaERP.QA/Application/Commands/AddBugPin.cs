@@ -24,11 +24,16 @@ public class AddBugPinHandler : IRequestHandler<AddBugPinCommand, Guid>
 {
     private readonly IBugPinRepository _bugPinRepo;
     private readonly IChapterRepository _chapterRepo;
+    private readonly IPageTaskRepository _pageTaskRepo;
 
-    public AddBugPinHandler(IBugPinRepository bugPinRepo, IChapterRepository chapterRepo)
+    public AddBugPinHandler(
+        IBugPinRepository bugPinRepo, 
+        IChapterRepository chapterRepo,
+        IPageTaskRepository pageTaskRepo)
     {
         _bugPinRepo = bugPinRepo;
         _chapterRepo = chapterRepo;
+        _pageTaskRepo = pageTaskRepo;
     }
 
     public async Task<Guid> Handle(AddBugPinCommand request, CancellationToken cancellationToken)
@@ -42,6 +47,12 @@ public class AddBugPinHandler : IRequestHandler<AddBugPinCommand, Guid>
 
         if (chapter.Status != ChapterStatus.ReadyForQA)
             throw new InvalidOperationException("Chỉ có thể thêm ghim lỗi cho chương truyện đang trong trạng thái ReadyForQA.");
+
+        var pageTask = await _pageTaskRepo.GetByIdAsync(request.PageTaskId, cancellationToken)
+            ?? throw new KeyNotFoundException($"PageTask {request.PageTaskId} not found.");
+            
+        if (pageTask.ChapterId != request.ChapterId)
+            throw new ArgumentException("PageTask này không thuộc về chương truyện đang được QA.");
 
         // 2. Validate coordinates (0.00% to 100.00%)
         if (request.CoordinateX < 0 || request.CoordinateX > 100 || request.CoordinateY < 0 || request.CoordinateY > 100)

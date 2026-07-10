@@ -1,5 +1,6 @@
 using MediatR;
 using MangaERP.Chapter.Application.Ports;
+using MangaERP.Series.Application.Ports;
 using MangaERP.QA.Application.Ports;
 
 namespace MangaERP.QA.Application.Queries.GetQAChapterPages;
@@ -28,15 +29,18 @@ public class GetQAChapterPagesHandler : IRequestHandler<GetQAChapterPagesQuery, 
     private readonly IChapterRepository _chapterRepo;
     private readonly IPageTaskRepository _pageTaskRepo;
     private readonly IQASessionRepository _qaSessionRepo;
+    private readonly ISeriesRepository _seriesRepo;
 
     public GetQAChapterPagesHandler(
         IChapterRepository chapterRepo,
         IPageTaskRepository pageTaskRepo,
-        IQASessionRepository qaSessionRepo)
+        IQASessionRepository qaSessionRepo,
+        ISeriesRepository seriesRepo)
     {
         _chapterRepo = chapterRepo;
         _pageTaskRepo = pageTaskRepo;
         _qaSessionRepo = qaSessionRepo;
+        _seriesRepo = seriesRepo;
     }
 
     public async Task<IEnumerable<QAChapterPageDto>> Handle(GetQAChapterPagesQuery query, CancellationToken ct)
@@ -44,10 +48,14 @@ public class GetQAChapterPagesHandler : IRequestHandler<GetQAChapterPagesQuery, 
         var chapter = await _chapterRepo.GetByIdAsync(query.ChapterId, ct)
             ?? throw new KeyNotFoundException($"Chapter {query.ChapterId} not found.");
 
-        // Authorization: allow if editor is assigned to chapter OR has an active QA session
+        // Authorization: allow if editor is assigned to chapter, mangaka of series, OR has an active QA session
         var isAssignedEditor = chapter.AssignedEditorId == query.RequesterId;
+        
+        var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, ct)
+            ?? throw new KeyNotFoundException($"Series {chapter.SeriesId} not found.");
+        var isAuthor = series.AuthorId == query.RequesterId;
 
-        if (!isAssignedEditor)
+        if (!isAssignedEditor && !isAuthor)
         {
             var session = await _qaSessionRepo.GetByChapterIdAsync(query.ChapterId, ct);
             var hasActiveSession = session is not null
@@ -58,7 +66,7 @@ public class GetQAChapterPagesHandler : IRequestHandler<GetQAChapterPagesQuery, 
             {
                 throw new UnauthorizedAccessException(
                     "You are not authorized to view this chapter's pages. " +
-                    "You must be the assigned editor or have an active QA session.");
+                    "You must be the assigned editor, the mangaka, or have an active QA session.");
             }
         }
 

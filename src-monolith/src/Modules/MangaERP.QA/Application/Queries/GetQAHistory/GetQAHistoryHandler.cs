@@ -1,9 +1,11 @@
 using MediatR;
 using MangaERP.QA.Application.Ports;
+using MangaERP.Chapter.Application.Ports;
+using MangaERP.Series.Application.Ports;
 
 namespace MangaERP.QA.Application.Queries.GetQAHistory;
 
-public record GetQAHistoryQuery(Guid ChapterId) : IRequest<QAHistoryDto>;
+public record GetQAHistoryQuery(Guid ChapterId, Guid RequesterId) : IRequest<QAHistoryDto>;
 
 public record QAHistoryDto(
     Guid ChapterId,
@@ -41,15 +43,36 @@ public class GetQAHistoryHandler : IRequestHandler<GetQAHistoryQuery, QAHistoryD
 {
     private readonly IQASessionRepository _qaSessionRepo;
     private readonly IBugPinRepository _bugPinRepo;
+    private readonly IChapterRepository _chapterRepo;
+    private readonly ISeriesRepository _seriesRepo;
 
-    public GetQAHistoryHandler(IQASessionRepository qaSessionRepo, IBugPinRepository bugPinRepo)
+    public GetQAHistoryHandler(
+        IQASessionRepository qaSessionRepo,
+        IBugPinRepository bugPinRepo,
+        IChapterRepository chapterRepo,
+        ISeriesRepository seriesRepo)
     {
         _qaSessionRepo = qaSessionRepo;
         _bugPinRepo = bugPinRepo;
+        _chapterRepo = chapterRepo;
+        _seriesRepo = seriesRepo;
     }
 
     public async Task<QAHistoryDto> Handle(GetQAHistoryQuery request, CancellationToken cancellationToken)
     {
+        var chapter = await _chapterRepo.GetByIdAsync(request.ChapterId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Chapter {request.ChapterId} not found.");
+        var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Series {chapter.SeriesId} not found.");
+        var session = await _qaSessionRepo.GetByChapterIdAsync(request.ChapterId, cancellationToken);
+
+        var isAssignedEditor = chapter.AssignedEditorId == request.RequesterId;
+        var isAuthor = series.AuthorId == request.RequesterId;
+        var hasActiveSession = session != null && session.EditorId == request.RequesterId && session.Status == "InProgress";
+
+        if (!isAssignedEditor && !isAuthor && !hasActiveSession)
+            throw new UnauthorizedAccessException("Bạn không có quyền truy cập thông tin QA của chương này.");
+
         var sessions = await _qaSessionRepo.GetAllByChapterIdAsync(request.ChapterId, cancellationToken);
         var pins = await _bugPinRepo.GetByChapterIdAsync(request.ChapterId, cancellationToken);
 

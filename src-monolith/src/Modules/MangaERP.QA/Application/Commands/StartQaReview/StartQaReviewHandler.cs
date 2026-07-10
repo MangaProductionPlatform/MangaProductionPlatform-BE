@@ -41,6 +41,9 @@ public class StartQaReviewHandler : IRequestHandler<StartQaReviewCommand, StartQ
         if (chapter.Status != ChapterStatus.ReadyForQA)
             throw new InvalidOperationException("Chỉ có thể bắt đầu QA review cho chương truyện đang ở trạng thái ReadyForQA.");
 
+        if (chapter.AssignedEditorId != request.EditorId)
+            throw new UnauthorizedAccessException("Bạn không phải Tantou Editor được giao cho chương truyện này.");
+
         // 2. Check for existing active session
         var existingSession = await _qaSessionRepo.GetByChapterIdAsync(request.ChapterId, cancellationToken);
 
