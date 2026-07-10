@@ -23,6 +23,13 @@ public class PublishingController : ControllerBase
         return Guid.TryParse(idClaim, out var guid) ? guid : Guid.Empty;
     }
 
+    private bool CanViewAllPublishingData()
+    {
+        return User.IsInRole("EditorialBoard") ||
+               User.IsInRole("EditorInChief") ||
+               User.IsInRole("Admin");
+    }
+
     /// <summary>
     /// [EditorialBoard] Set publish schedule for an approved chapter.
     /// </summary>
@@ -128,7 +135,10 @@ public class PublishingController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<MangaERP.Publishing.Application.Queries.GetPublicationHistory.PublicationRecordDto>), 200)]
     public async Task<IActionResult> GetPublicationHistory(Guid seriesId, CancellationToken ct)
     {
-        var query = new MangaERP.Publishing.Application.Queries.GetPublicationHistory.GetPublicationHistoryQuery(seriesId);
+        var query = new MangaERP.Publishing.Application.Queries.GetPublicationHistory.GetPublicationHistoryQuery(
+            seriesId,
+            GetUserId(),
+            CanViewAllPublishingData());
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }
@@ -183,7 +193,12 @@ public class PublishingController : ControllerBase
     {
         try
         {
-            var result = await _mediator.Send(new MangaERP.Publishing.Application.Queries.GetPublishingChapterDetail.GetPublishingChapterDetailQuery(chapterId), ct);
+            var result = await _mediator.Send(
+                new MangaERP.Publishing.Application.Queries.GetPublishingChapterDetail.GetPublishingChapterDetailQuery(
+                    chapterId,
+                    GetUserId(),
+                    CanViewAllPublishingData()),
+                ct);
             return Ok(result);
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }

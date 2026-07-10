@@ -51,18 +51,24 @@ public class SendFeedbackBatchHandler : IRequestHandler<SendFeedbackBatchCommand
         var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, cancellationToken)
             ?? throw new KeyNotFoundException($"Series {chapter.SeriesId} not found.");
 
-        // 3. Update chapter status to QaRevisionRequired
-        chapter.RequestQaRevision();
-        await _chapterRepo.UpdateAsync(chapter, cancellationToken);
-
-        // 4. Update the Bug Pins status associated with this batch token
+        // 3. Validate and update the Bug Pins status associated with this batch token
         var pins = await _bugPinRepo.GetByChapterIdAsync(request.ChapterId, cancellationToken);
-        var batchPins = pins.Where(p => p.BatchToken == request.BatchToken && p.Status == "Open");
+        var batchPins = pins
+            .Where(p => p.BatchToken == request.BatchToken && p.Status == "Open")
+            .ToList();
+
+        if (!batchPins.Any())
+            throw new InvalidOperationException("Không thể gửi phản hồi vì batch không có ghim lỗi Open nào.");
+
         foreach (var pin in batchPins)
         {
             pin.Status = "InFixing";
             await _bugPinRepo.UpdateAsync(pin, cancellationToken);
         }
+
+        // 4. Update chapter status after confirming a valid feedback batch.
+        chapter.RequestQaRevision();
+        await _chapterRepo.UpdateAsync(chapter, cancellationToken);
 
         // 5. Publish event to alert Mangaka (via Notification system)
         await _publisher.Publish(new FeedbackBatchSentNotification(chapter.Id, series.AuthorId, request.BatchToken), cancellationToken);

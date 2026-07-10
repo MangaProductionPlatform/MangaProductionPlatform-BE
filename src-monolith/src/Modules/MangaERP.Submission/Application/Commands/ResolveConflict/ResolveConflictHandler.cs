@@ -68,7 +68,7 @@ public class ResolveConflictHandler : IRequestHandler<ResolveConflictCommand, Re
 
         await strategy.ExecuteAsync(async () =>
         {
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
             // ── 1. Validate EIC role via RBAC ──────────────────────────────────
             var hasRole = await _userRepo.HasRbacRoleAsync(cmd.EicId, RoleNames.EditorInChief, ct);
@@ -76,7 +76,7 @@ public class ResolveConflictHandler : IRequestHandler<ResolveConflictCommand, Re
                 throw new UnauthorizedAccessException("Chỉ Editor-in-Chief mới có thể phân xử tranh chấp.");
 
             // ── 2. Load submission ────────────────────────────────────────────
-            var submission = await _submissionRepo.GetByIdAsync(cmd.SubmissionId, ct)
+            var submission = await _submissionRepo.GetByIdForUpdateAsync(cmd.SubmissionId, ct)
                 ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
             // ── 3. Validate status ────────────────────────────────────────────
@@ -159,7 +159,7 @@ public class ResolveConflictHandler : IRequestHandler<ResolveConflictCommand, Re
         {
             // Serializable isolation: prevents two concurrent conflict-resolutions from reading
             // the same stale TE load data and assigning to the same editor.
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
             var allTE = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
             var activeTE = allTE.Where(u => u.AccountStatus == AccountStatus.Active).ToList();

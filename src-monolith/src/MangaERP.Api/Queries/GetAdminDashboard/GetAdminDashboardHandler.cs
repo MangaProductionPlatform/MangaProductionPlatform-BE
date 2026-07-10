@@ -2,7 +2,6 @@ using MangaERP.Identity.Application.Queries.GetUserStats;
 using MangaERP.Submission.Application.Queries.GetSubmissionStats;
 using MangaERP.Series.Application.Queries.GetSeriesStats;
 using MediatR;
-using SystemTask = System.Threading.Tasks.Task;
 
 namespace MangaERP.Api.Queries.GetAdminDashboard;
 
@@ -51,16 +50,10 @@ public class GetAdminDashboardHandler : IRequestHandler<GetAdminDashboardQuery, 
     public async Task<AdminDashboardDto> Handle(
         GetAdminDashboardQuery request, CancellationToken ct)
     {
-        // Gọi song song 3 module-internal queries — không biết repository tồn tại
-        var userTask       = _mediator.Send(new GetUserStatsQuery(), ct);
-        var submissionTask = _mediator.Send(new GetSubmissionStatsQuery(), ct);
-        var seriesTask     = _mediator.Send(new GetSeriesStatsQuery(), ct);
-
-        await SystemTask.WhenAll(userTask, submissionTask, seriesTask);
-
-        var userResult       = userTask.Result;
-        var submissionResult = submissionTask.Result;
-        var seriesResult     = seriesTask.Result;
+        // Run sequentially because these module queries share the same scoped DbContext.
+        var userResult       = await _mediator.Send(new GetUserStatsQuery(), ct);
+        var submissionResult = await _mediator.Send(new GetSubmissionStatsQuery(), ct);
+        var seriesResult     = await _mediator.Send(new GetSeriesStatsQuery(), ct);
 
         return new AdminDashboardDto(
             new UserStatsDto(

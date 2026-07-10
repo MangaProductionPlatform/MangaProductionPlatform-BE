@@ -25,6 +25,8 @@ public class UnresolveBugPinHandler : IRequestHandler<UnresolveBugPinCommand, bo
 
         pin.Status = "Open";
         pin.ResolvedAt = null;
+        pin.ResolvedNote = null;
+        pin.ReviewedLayerId = null;
 
         await _bugPinRepo.UpdateAsync(pin, cancellationToken);
         return true;
