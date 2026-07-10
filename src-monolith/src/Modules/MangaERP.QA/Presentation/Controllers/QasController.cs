@@ -244,6 +244,27 @@ public class QasController : ControllerBase
     }
 
     /// <summary>
+    /// [TantouEditor, Mangaka] Get chapter pages with preview images for QA annotation.
+    /// Authorizes via active QA session — not just AssignedEditorId.
+    /// </summary>
+    [HttpGet("chapters/{chapterId:guid}/pages")]
+    [Authorize(Roles = "TantouEditor,Mangaka")]
+    [ProducesResponseType(typeof(IEnumerable<MangaERP.QA.Application.Queries.GetQAChapterPages.QAChapterPageDto>), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetChapterPages(Guid chapterId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new MangaERP.QA.Application.Queries.GetQAChapterPages.GetQAChapterPagesQuery(chapterId, GetUserId());
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
+
+    /// <summary>
     /// [TantouEditor, Mangaka] Get feedback batches for a chapter (pins grouped by batch token).
     /// </summary>
     [HttpGet("chapters/{chapterId:guid}/feedback")]
