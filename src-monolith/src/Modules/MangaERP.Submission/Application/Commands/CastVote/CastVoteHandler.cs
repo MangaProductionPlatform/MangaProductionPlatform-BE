@@ -131,9 +131,6 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
             // Save feedback pins for REQ_REVISION votes
             if (cmd.VoteType == VoteType.REQ_REVISION && cmd.FeedbackPins.Count > 0)
             {
-                var existingPins = await _submissionRepo.GetActivePinsBySubmissionIdAsync(cmd.SubmissionId, ct);
-                foreach (var pin in existingPins) pin.Archive();
-
                 foreach (var p in cmd.FeedbackPins)
                 {
                     var pin = SubmissionFeedbackPin.Create(
@@ -291,18 +288,46 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
             // the same stale TE load data and assigning to the same editor.
             await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-            var allTE = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
-            var activeTE = allTE.Where(u => u.AccountStatus == AccountStatus.Active).ToList();
-            if (!activeTE.Any())
-                throw new InvalidOperationException("Không có Tantou Editor nào đang hoạt động để gán.");
+            var mangaka = await _userRepo.GetByIdAsync(submission.SubmitterId, ct)
+                ?? throw new InvalidOperationException($"Mangaka {submission.SubmitterId} not found.");
 
-            var activeTeIds = activeTE.Select(te => te.Id).ToList();
-            var loads = await _userRepo.GetTantouEditorsLoadAsync(activeTeIds, ct);
-            var selectedTe = activeTE
-                .Select(te => new { Editor = te, Load = loads.GetValueOrDefault(te.Id, 0) })
-                .OrderBy(x => x.Load).ThenBy(x => x.Editor.CreatedAt)
-                .Select(x => x.Editor)
-                .First();
+            var needsNewTantou = false;
+            if (mangaka.ManagingTantouId == null || mangaka.ManagingTantouId == Guid.Empty)
+            {
+                needsNewTantou = true;
+            }
+            else
+            {
+                var currentTe = await _userRepo.GetByIdAsync(mangaka.ManagingTantouId.Value, ct);
+                if (currentTe == null || currentTe.AccountStatus != AccountStatus.Active)
+                {
+                    needsNewTantou = true;
+                }
+            }
+
+            if (needsNewTantou)
+            {
+                var allTE = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
+                var activeTE = allTE.Where(u => u.AccountStatus == AccountStatus.Active).ToList();
+                if (!activeTE.Any())
+                    throw new InvalidOperationException("Không có Tantou Editor nào đang hoạt động để gán.");
+
+                var activeTeIds = activeTE.Select(te => te.Id).ToList();
+                var loads = await _userRepo.GetTantouEditorsLoadAsync(activeTeIds, ct);
+                var selectedTe = activeTE
+                    .Select(te => new { Editor = te, Load = loads.GetValueOrDefault(te.Id, 0) })
+                    .OrderBy(x => x.Load).ThenBy(x => x.Editor.CreatedAt)
+                    .Select(x => x.Editor)
+                    .First();
+
+                mangaka.ManagingTantouId = selectedTe.Id;
+                await _userRepo.UpdateAsync(mangaka, ct);
+                selectedTeId = selectedTe.Id;
+            }
+            else
+            {
+                selectedTeId = mangaka.ManagingTantouId.Value;
+            }
 
             var series = MangaSeries.Create(
                 authorId:      submission.SubmitterId,
@@ -312,15 +337,10 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
                 genre:         submission.Genre,
                 coverImageUrl: submission.CoverImageUrl);
 
-            var mangaka = await _userRepo.GetByIdAsync(submission.SubmitterId, ct)
-                ?? throw new InvalidOperationException($"Mangaka {submission.SubmitterId} not found.");
-            mangaka.ManagingTantouId = selectedTe.Id;
-
             await _seriesRepo.AddAsync(series, ct);
-            await _userRepo.UpdateAsync(mangaka, ct);
 
             seriesId = series.Id;
-            selectedTeId = selectedTe.Id;
+            // selectedTeId is already set correctly above
 
             await tx.CommitAsync(ct);
         });

@@ -12,7 +12,7 @@ namespace MangaERP.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v1/board")]
-[Authorize(Roles = "EditorialBoard,EditorInChief")]
+[Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
 public class BoardReportsController : ControllerBase
 {
     private readonly AppDbContext _db;

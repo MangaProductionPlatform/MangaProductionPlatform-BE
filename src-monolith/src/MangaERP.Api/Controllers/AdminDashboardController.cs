@@ -199,10 +199,10 @@ public class AdminDashboardController : ControllerBase
         var roles = new[]
         {
             new { value = 0, name = "Admin",          description = "Quản trị hệ thống kỹ thuật" },
-            new { value = 1, name = "Mangaka",        description = "Tác giả manga" },
-            new { value = 2, name = "Assistant",      description = "Trợ lý vẽ" },
-            new { value = 3, name = "TantouEditor",   description = "Biên tập viên phụ trách 1-1 với Mangaka" },
-            new { value = 4, name = "EditorialBoard", description = "Ban biên tập — duyệt bản thảo & xuất bản" },
+            new { value = 1, name = "EditorialBoard", description = "Ban biên tập — duyệt bản thảo & xuất bản" },
+            new { value = 2, name = "TantouEditor",   description = "Biên tập viên phụ trách 1-1 với Mangaka" },
+            new { value = 3, name = "Mangaka",        description = "Tác giả manga" },
+            new { value = 4, name = "Assistant",      description = "Trợ lý vẽ" },
             new { value = 5, name = "EditorInChief",  description = "Tổng biên tập — phân xử xung đột" },
         };
 

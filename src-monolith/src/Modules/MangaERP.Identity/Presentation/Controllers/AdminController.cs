@@ -31,7 +31,7 @@ public class AdminController : ControllerBase
     /// ```json
     /// { "fullName": "Nguyễn Văn Anh", "personalEmail": "anh@gmail.com", "role": 3 }
     /// ```
-    /// **Role values:** Admin=0, Mangaka=1, Assistant=2, TantouEditor=3, EditorialBoard=4, Reader=5
+    /// **Role values:** Admin=0, EditorialBoard=1, TantouEditor=2, Mangaka=3, Assistant=4, EditorInChief=5
     /// 
     /// **Generated username example:** `anhnv.tt@company.com`
     /// </remarks>
