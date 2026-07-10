@@ -1,7 +1,6 @@
 using MangaERP.Submission.Application.Queries.GetSubmissionStats;
 using MangaERP.Series.Application.Queries.GetSeriesStats;
 using MediatR;
-using SystemTask = System.Threading.Tasks.Task;
 
 namespace MangaERP.Api.Queries.GetBoardReports;
 
@@ -41,14 +40,9 @@ public class GetBoardReportsHandler : IRequestHandler<GetBoardReportsQuery, Boar
     public async Task<BoardReportsDto> Handle(
         GetBoardReportsQuery request, CancellationToken ct)
     {
-        // Gọi song song 2 module-internal queries
-        var submissionTask = _mediator.Send(new GetSubmissionStatsQuery(), ct);
-        var seriesTask     = _mediator.Send(new GetSeriesStatsQuery(), ct);
-
-        await SystemTask.WhenAll(submissionTask, seriesTask);
-
-        var submissionStats = submissionTask.Result;
-        var seriesStats     = seriesTask.Result;
+        // Run sequentially because these module queries share the same scoped DbContext.
+        var submissionStats = await _mediator.Send(new GetSubmissionStatsQuery(), ct);
+        var seriesStats     = await _mediator.Send(new GetSeriesStatsQuery(), ct);
 
         return new BoardReportsDto(
             Submissions: new SubmissionReportSection(
