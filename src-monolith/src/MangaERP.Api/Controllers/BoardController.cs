@@ -19,7 +19,7 @@ public class BoardController : ControllerBase
     public BoardController(IMediator mediator) => _mediator = mediator;
 
     /// <summary>
-    /// [EditorialBoard, EditorInChief, Admin] Báo cáo tổng hợp cho Board.
+    /// [EditorialBoard, EditorInChief] Báo cáo tổng hợp cho Board.
     /// Bao gồm: submissions đang review, conflict escalated, và cancellation requests.
     /// </summary>
     /// <remarks>
