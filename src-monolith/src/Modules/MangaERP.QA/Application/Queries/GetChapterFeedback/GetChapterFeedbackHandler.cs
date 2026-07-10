@@ -1,9 +1,11 @@
 using MediatR;
 using MangaERP.QA.Application.Ports;
+using MangaERP.Chapter.Application.Ports;
+using MangaERP.Series.Application.Ports;
 
 namespace MangaERP.QA.Application.Queries.GetChapterFeedback;
 
-public record GetChapterFeedbackQuery(Guid ChapterId) : IRequest<ChapterFeedbackDto>;
+public record GetChapterFeedbackQuery(Guid ChapterId, Guid RequesterId) : IRequest<ChapterFeedbackDto>;
 
 public record ChapterFeedbackDto(
     Guid ChapterId,
@@ -30,14 +32,37 @@ public record FeedbackPinDto(
 public class GetChapterFeedbackHandler : IRequestHandler<GetChapterFeedbackQuery, ChapterFeedbackDto>
 {
     private readonly IBugPinRepository _bugPinRepo;
+    private readonly IChapterRepository _chapterRepo;
+    private readonly ISeriesRepository _seriesRepo;
+    private readonly IQASessionRepository _qaSessionRepo;
 
-    public GetChapterFeedbackHandler(IBugPinRepository bugPinRepo)
+    public GetChapterFeedbackHandler(
+        IBugPinRepository bugPinRepo,
+        IChapterRepository chapterRepo,
+        ISeriesRepository seriesRepo,
+        IQASessionRepository qaSessionRepo)
     {
         _bugPinRepo = bugPinRepo;
+        _chapterRepo = chapterRepo;
+        _seriesRepo = seriesRepo;
+        _qaSessionRepo = qaSessionRepo;
     }
 
     public async Task<ChapterFeedbackDto> Handle(GetChapterFeedbackQuery request, CancellationToken cancellationToken)
     {
+        var chapter = await _chapterRepo.GetByIdAsync(request.ChapterId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Chapter {request.ChapterId} not found.");
+        var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, cancellationToken)
+            ?? throw new KeyNotFoundException($"Series {chapter.SeriesId} not found.");
+        var session = await _qaSessionRepo.GetByChapterIdAsync(request.ChapterId, cancellationToken);
+
+        var isAssignedEditor = chapter.AssignedEditorId == request.RequesterId;
+        var isAuthor = series.AuthorId == request.RequesterId;
+        var hasActiveSession = session != null && session.EditorId == request.RequesterId && session.Status == "InProgress";
+
+        if (!isAssignedEditor && !isAuthor && !hasActiveSession)
+            throw new UnauthorizedAccessException("Bạn không có quyền truy cập thông tin QA của chương này.");
+
         var allPins = await _bugPinRepo.GetByChapterIdAsync(request.ChapterId, cancellationToken);
 
         var batches = allPins

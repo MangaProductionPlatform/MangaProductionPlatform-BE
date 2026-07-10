@@ -123,7 +123,7 @@ public class QasController : ControllerBase
     [ProducesResponseType(403)]
     public async Task<IActionResult> GetPins(Guid chapterId, CancellationToken ct)
     {
-        var query = new GetBugPinsQuery(chapterId);
+        var query = new GetBugPinsQuery(chapterId, GetUserId());
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }
@@ -236,7 +236,7 @@ public class QasController : ControllerBase
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetSession(Guid chapterId, CancellationToken ct)
     {
-        var query = new MangaERP.QA.Application.Queries.GetQASession.GetQASessionQuery(chapterId);
+        var query = new MangaERP.QA.Application.Queries.GetQASession.GetQASessionQuery(chapterId, GetUserId());
         var result = await _mediator.Send(query, ct);
 
         if (result == null) return NotFound(new { message = "QA Session not found." });
@@ -272,7 +272,7 @@ public class QasController : ControllerBase
     [ProducesResponseType(typeof(MangaERP.QA.Application.Queries.GetChapterFeedback.ChapterFeedbackDto), 200)]
     public async Task<IActionResult> GetFeedback(Guid chapterId, CancellationToken ct)
     {
-        var query = new MangaERP.QA.Application.Queries.GetChapterFeedback.GetChapterFeedbackQuery(chapterId);
+        var query = new MangaERP.QA.Application.Queries.GetChapterFeedback.GetChapterFeedbackQuery(chapterId, GetUserId());
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }
@@ -286,7 +286,7 @@ public class QasController : ControllerBase
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetSummary(Guid chapterId, CancellationToken ct)
     {
-        var query = new MangaERP.QA.Application.Queries.GetChapterQaSummary.GetChapterQaSummaryQuery(chapterId);
+        var query = new MangaERP.QA.Application.Queries.GetChapterQaSummary.GetChapterQaSummaryQuery(chapterId, GetUserId());
         var result = await _mediator.Send(query, ct);
 
         if (result == null) return NotFound(new { message = "No QA data found for this chapter." });
@@ -322,7 +322,7 @@ public class QasController : ControllerBase
     [ProducesResponseType(typeof(MangaERP.QA.Application.Queries.GetQAHistory.QAHistoryDto), 200)]
     public async Task<IActionResult> GetHistory(Guid chapterId, CancellationToken ct)
     {
-        var query = new MangaERP.QA.Application.Queries.GetQAHistory.GetQAHistoryQuery(chapterId);
+        var query = new MangaERP.QA.Application.Queries.GetQAHistory.GetQAHistoryQuery(chapterId, GetUserId());
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }

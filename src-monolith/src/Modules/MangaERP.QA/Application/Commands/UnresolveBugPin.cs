@@ -20,6 +20,9 @@ public class UnresolveBugPinHandler : IRequestHandler<UnresolveBugPinCommand, bo
         var pin = await _bugPinRepo.GetByIdAsync(request.PinId, cancellationToken)
             ?? throw new KeyNotFoundException($"BugPin {request.PinId} not found.");
 
+        if (pin.EditorId != request.EditorId)
+            throw new UnauthorizedAccessException("Chỉ người tạo ghim lỗi mới có quyền mở lại lỗi.");
+
         pin.Status = "Open";
         pin.ResolvedAt = null;
 
