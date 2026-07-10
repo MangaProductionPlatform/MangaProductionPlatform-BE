@@ -10,9 +10,21 @@ using System.Security.Claims;
 
 namespace MangaERP.Api.Controllers;
 
+/// <summary>
+/// Dashboard nghiệp vụ cho Editor (TantouEditor làm việc 1-1 với Mangaka).
+/// Route: /api/v1/editor/dashboard
+/// </summary>
+/// <remarks>
+/// ⚠️ PHÂN TÁCH VAI TRÒ — KHÔNG THÊM "Admin" VÀO ĐÂY.
+/// Admin chỉ quản trị kỹ thuật hệ thống (tài khoản, cấu hình, audit log).
+/// Dashboard này chứa dữ liệu nghiệp vụ QA: QA queue, revision watchlist, bug pins,
+/// assigned series — là luồng công việc riêng của TantouEditor và EditorInChief.
+/// Admin không có context để xử lý các dữ liệu này.
+/// Ref: IdentityEnums.cs — UserRole design notes.
+/// </remarks>
 [ApiController]
 [Route("api/v1/editor/dashboard")]
-[Authorize(Roles = "TantouEditor,EditorInChief,Admin")]
+[Authorize(Roles = "TantouEditor,EditorInChief")]
 public class EditorDashboardController : ControllerBase
 {
     private readonly AppDbContext _db;

@@ -1,4 +1,5 @@
 using MangaERP.Api.Queries.GetAdminDashboard;
+using MangaERP.Identity.Domain.Enums;
 using MangaERP.Ranking.Domain.Entities;
 using MangaERP.Shared.Infrastructure.Persistence;
 using MediatR;
@@ -198,12 +199,12 @@ public class AdminDashboardController : ControllerBase
     {
         var roles = new[]
         {
-            new { value = 0, name = "Admin",          description = "Quản trị hệ thống kỹ thuật" },
-            new { value = 1, name = "EditorialBoard", description = "Ban biên tập — duyệt bản thảo & xuất bản" },
-            new { value = 2, name = "TantouEditor",   description = "Biên tập viên phụ trách 1-1 với Mangaka" },
-            new { value = 3, name = "Mangaka",        description = "Tác giả manga" },
-            new { value = 4, name = "Assistant",      description = "Trợ lý vẽ" },
-            new { value = 5, name = "EditorInChief",  description = "Tổng biên tập — phân xử xung đột" },
+            new { value = (int)UserRole.Admin,          name = nameof(UserRole.Admin),          description = "Quản trị hệ thống kỹ thuật", provisionable = false },
+            new { value = (int)UserRole.EditorialBoard, name = nameof(UserRole.EditorialBoard), description = "Ban biên tập - duyệt bản thảo & xuất bản", provisionable = true },
+            new { value = (int)UserRole.TantouEditor,   name = nameof(UserRole.TantouEditor),   description = "Biên tập viên phụ trách 1-1 với Mangaka", provisionable = true },
+            new { value = (int)UserRole.Mangaka,        name = nameof(UserRole.Mangaka),        description = "Tác giả manga", provisionable = true },
+            new { value = (int)UserRole.Assistant,      name = nameof(UserRole.Assistant),      description = "Trợ lý vẽ", provisionable = true },
+            new { value = (int)UserRole.EditorInChief,  name = nameof(UserRole.EditorInChief),  description = "Tổng biên tập - phân xử xung đột", provisionable = true },
         };
 
         return Ok(new { roles });

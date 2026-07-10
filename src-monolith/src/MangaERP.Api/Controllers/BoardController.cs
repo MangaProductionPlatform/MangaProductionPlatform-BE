@@ -9,9 +9,16 @@ namespace MangaERP.Api.Controllers;
 /// Cross-module Board endpoints — đặt ở Api layer vì cần data từ nhiều modules.
 /// Route: /api/v1/board
 /// </summary>
+/// <remarks>
+/// ⚠️ PHÂN TÁCH VAI TRÒ — KHÔNG THÊM "Admin" VÀO ĐÂY.
+/// Admin chỉ quản trị kỹ thuật hệ thống (tài khoản, cấu hình, audit log).
+/// Mọi nghiệp vụ biên tập (duyệt bản thảo, báo cáo board, xử lý conflict)
+/// là trách nhiệm của EditorInChief và EditorialBoard.
+/// Ref: IdentityEnums.cs — UserRole design notes.
+/// </remarks>
 [ApiController]
 [Route("api/v1/board")]
-[Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+[Authorize(Roles = "EditorialBoard,EditorInChief")]
 public class BoardController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -19,7 +26,7 @@ public class BoardController : ControllerBase
     public BoardController(IMediator mediator) => _mediator = mediator;
 
     /// <summary>
-    /// [EditorialBoard, EditorInChief, Admin] Báo cáo tổng hợp cho Board.
+    /// [EditorialBoard, EditorInChief] Báo cáo tổng hợp cho Board.
     /// Bao gồm: submissions đang review, conflict escalated, và cancellation requests.
     /// </summary>
     /// <remarks>

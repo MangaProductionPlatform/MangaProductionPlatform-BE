@@ -9,9 +9,21 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MangaERP.Api.Controllers;
 
+/// <summary>
+/// Dashboard tổng hợp nghiệp vụ cho Board (EditorialBoard + EditorInChief).
+/// Route: /api/v1/board/dashboard
+/// </summary>
+/// <remarks>
+/// ⚠️ PHÂN TÁCH VAI TRÒ — KHÔNG THÊM "Admin" VÀO ĐÂY.
+/// Admin chỉ quản trị kỹ thuật hệ thống (tài khoản, cấu hình, audit log).
+/// Dashboard này chứa dữ liệu nghiệp vụ biên tập: proposal queue, publishing queue,
+/// cancellation queue, conflict escalation — Admin không có trách nhiệm với các luồng này.
+/// Trách nhiệm nghiệp vụ thuộc về EditorInChief (tổng biên tập) và EditorialBoard (ban biên tập).
+/// Ref: IdentityEnums.cs — UserRole design notes.
+/// </remarks>
 [ApiController]
 [Route("api/v1/board/dashboard")]
-[Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+[Authorize(Roles = "EditorialBoard,EditorInChief")]
 public class BoardDashboardController : ControllerBase
 {
     private readonly AppDbContext _db;
