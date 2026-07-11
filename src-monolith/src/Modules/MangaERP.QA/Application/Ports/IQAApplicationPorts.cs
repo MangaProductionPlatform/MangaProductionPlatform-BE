@@ -9,6 +9,7 @@ public interface IBugPinRepository
 {
     System.Threading.Tasks.Task<BugPin?> GetByIdAsync(Guid id, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<BugPin>> GetByChapterIdAsync(Guid chapterId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<BugPin>> GetByPageTaskIdAsync(Guid pageTaskId, CancellationToken ct = default);
     System.Threading.Tasks.Task AddAsync(BugPin bugPin, CancellationToken ct = default);
     System.Threading.Tasks.Task UpdateAsync(BugPin bugPin, CancellationToken ct = default);
     System.Threading.Tasks.Task DeleteAsync(BugPin bugPin, CancellationToken ct = default);

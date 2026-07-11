@@ -129,6 +129,21 @@ public class QasController : ControllerBase
     }
 
     /// <summary>
+    /// [Assistant, Mangaka] Get active bug pin for a specific page task.
+    /// </summary>
+    [HttpGet("tasks/{pageTaskId:guid}/qa-pin")]
+    [Authorize(Roles = "Assistant,Mangaka")]
+    [ProducesResponseType(typeof(BugPinDto), 200)]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> GetPinByTask(Guid pageTaskId, CancellationToken ct)
+    {
+        var query = new MangaERP.QA.Application.Queries.GetBugPinByTaskQuery(pageTaskId, GetUserId());
+        var result = await _mediator.Send(query, ct);
+        if (result == null) return NoContent();
+        return Ok(result);
+    }
+
+    /// <summary>
     /// [TantouEditor] Mark a specific bug pin as resolved.
     /// </summary>
     [HttpPost("pins/{pinId:guid}/resolve")]

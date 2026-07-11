@@ -42,6 +42,16 @@ public class TasksController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("/api/v1/assistants/submissions")]
+    [Authorize(Roles = "Assistant")]
+    [ProducesResponseType(typeof(IEnumerable<MangaERP.Task.Application.Queries.GetAssistantSubmissions.AssistantSubmissionDto>), 200)]
+    public async Task<IActionResult> GetAssistantSubmissions(CancellationToken ct)
+    {
+        var query = new MangaERP.Task.Application.Queries.GetAssistantSubmissions.GetAssistantSubmissionsQuery(GetUserId());
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
     [HttpGet]
     [Authorize(Roles = "Mangaka,Assistant,TantouEditor")]
     [ProducesResponseType(typeof(IEnumerable<AssignedTaskDto>), 200)]

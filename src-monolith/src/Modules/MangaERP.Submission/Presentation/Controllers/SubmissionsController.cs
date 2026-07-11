@@ -255,6 +255,26 @@ public class SubmissionsController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 
+    /// <summary>
+    /// [Mangaka] Xem kết quả duyệt của submission của chính mình.
+    /// </summary>
+    [HttpGet("/api/v1/manuscripts/{id:guid}/review-results")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(MangaERP.Submission.Application.Queries.GetReviewResults.ReviewResultsDto), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetReviewResults(Guid id, [FromQuery] int? round, CancellationToken ct)
+    {
+        try
+        {
+            var query = new MangaERP.Submission.Application.Queries.GetReviewResults.GetReviewResultsQuery(id, GetUserId(), round);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
+
     // ── EDITORIAL BOARD VETTING FLOWS ────────────────────────────────────────
 
     /// <summary>
