@@ -44,8 +44,8 @@ public class GetChapterPagesTests
         var authorId = Guid.NewGuid();
         var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3);
-        var page1 = PageTask.CreatePending(chapter.Id, 1);
-        var page2 = PageTask.CreatePending(chapter.Id, 2);
+        var page1 = PageTask.CreatePending(chapter.Id, 1, "https://example.com/page-1.png");
+        var page2 = PageTask.CreatePending(chapter.Id, 2, "https://example.com/page-2.png");
 
         var query = new GetChapterPagesQuery(authorId, chapter.Id);
 
@@ -71,7 +71,7 @@ public class GetChapterPagesTests
         var editorId = Guid.NewGuid();
         var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3, editorId);
-        var page1 = PageTask.CreatePending(chapter.Id, 1);
+        var page1 = PageTask.CreatePending(chapter.Id, 1, "https://example.com/page-1.png");
         var query = new GetChapterPagesQuery(editorId, chapter.Id);
 
         _chapterRepoMock.Setup(r => r.GetByIdAsync(chapter.Id, It.IsAny<CancellationToken>()))

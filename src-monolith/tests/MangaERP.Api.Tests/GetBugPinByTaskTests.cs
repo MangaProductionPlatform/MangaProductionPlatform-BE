@@ -103,7 +103,7 @@ public class GetBugPinByTaskTests
         var assistantId = Guid.NewGuid();
         var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 1);
-        var pageTask = PageTask.CreatePending(chapter.Id, 1);
+        var pageTask = PageTask.CreatePending(chapter.Id, 1, "https://example.com/page-1.png");
         pageTask.Activate(assistantId);
 
         _pageTaskRepo.Setup(repository => repository.GetByIdAsync(

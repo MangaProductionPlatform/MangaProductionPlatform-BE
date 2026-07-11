@@ -23,6 +23,7 @@ public record PageTaskDetailDto(
     int PageNumber,
     string TaskStatus,
     Guid? AssignedAssistantId,
+    string BaseImageUrl,
     string? PreviewCompositeUrl,
     string? Description);
 
@@ -56,6 +57,7 @@ public class GetChapterDetailHandler : IRequestHandler<GetChapterDetailQuery, Ch
             page.PageNumber,
             page.TaskStatus.ToString(),
             page.AssignedAssistantId,
+            page.BaseImageUrl,
             page.PreviewPage?.CompositeFileUrl,
             page.Description)).ToList();
 

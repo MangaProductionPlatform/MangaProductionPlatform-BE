@@ -91,7 +91,7 @@ public class BulkReviewLayersTests
     {
         // Arrange
         var chapterId = Guid.NewGuid();
-        var pageTask = PageTaskEntity.CreatePending(chapterId, 1);
+        var pageTask = PageTaskEntity.CreatePending(chapterId, 1, "https://example.com/page-1.png");
         var pageTaskId = pageTask.Id;
         var command = new BulkReviewLayersCommand(Guid.NewGuid(), new List<BulkReviewItem>
         {
@@ -113,7 +113,7 @@ public class BulkReviewLayersTests
         // Arrange
         var chapterId = Guid.NewGuid();
         var seriesId = Guid.NewGuid();
-        var pageTask = PageTaskEntity.CreatePending(chapterId, 1);
+        var pageTask = PageTaskEntity.CreatePending(chapterId, 1, "https://example.com/page-1.png");
         var pageTaskId = pageTask.Id;
         var chapter = ChapterEntity.Create(seriesId, "Chapter 1", 1, 3);
         
@@ -145,7 +145,7 @@ public class BulkReviewLayersTests
         var chapter = ChapterEntity.Create(seriesId, "Chapter 1", 1, 3);
         var chapterId = chapter.Id;
         
-        var pageTask = PageTaskEntity.CreatePending(chapterId, 1);
+        var pageTask = PageTaskEntity.CreatePending(chapterId, 1, "https://example.com/page-1.png");
         var pageTaskId = pageTask.Id;
 
         var command = new BulkReviewLayersCommand(mangakaId, new List<BulkReviewItem>
@@ -175,7 +175,7 @@ public class BulkReviewLayersTests
         var chapter = ChapterEntity.Create(seriesId, "Chapter 1", 1, 3);
         var chapterId = chapter.Id;
         
-        var pageTask = PageTaskEntity.CreatePending(chapterId, 1);
+        var pageTask = PageTaskEntity.CreatePending(chapterId, 1, "https://example.com/page-1.png");
         var pageTaskId = pageTask.Id;
 
         var command = new BulkReviewLayersCommand(mangakaId, new List<BulkReviewItem>
@@ -209,8 +209,8 @@ public class BulkReviewLayersTests
         var chapterId = chapter.Id;
 
         // Page tasks
-        var pageTask1 = PageTaskEntity.CreatePending(chapterId, 1);
-        var pageTask2 = PageTaskEntity.CreatePending(chapterId, 2);
+        var pageTask1 = PageTaskEntity.CreatePending(chapterId, 1, "https://example.com/page-1.png");
+        var pageTask2 = PageTaskEntity.CreatePending(chapterId, 2, "https://example.com/page-2.png");
 
         pageTask1.Activate(assistantId, "Task 1");
         pageTask1.MarkReviewing();

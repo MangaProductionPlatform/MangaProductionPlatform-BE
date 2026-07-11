@@ -233,8 +233,8 @@ public class BulkActivatePageTasksTests
         var chapterId = chapter.Id;
         var assistantUser = new User { Id = assistantId, Role = UserRole.Assistant };
         
-        var page1 = PageTask.CreatePending(chapterId, 1);
-        var page2 = PageTask.CreatePending(chapterId, 2);
+        var page1 = PageTask.CreatePending(chapterId, 1, "https://example.com/page-1.png");
+        var page2 = PageTask.CreatePending(chapterId, 2, "https://example.com/page-2.png");
 
         var studioInvitation = new StudioInvitation
         {

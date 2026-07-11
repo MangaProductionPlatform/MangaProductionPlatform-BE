@@ -45,7 +45,7 @@ public class UpdateTaskDeadlineTests
         var wrongMangakaId = Guid.NewGuid();
         var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3);
-        var pageTask = PageTask.CreatePending(chapter.Id, 1);
+        var pageTask = PageTask.CreatePending(chapter.Id, 1, "https://example.com/page-1.png");
 
         var command = new UpdateTaskDeadlineCommand(wrongMangakaId, pageTask.Id, DateTime.UtcNow.AddDays(1));
 
@@ -65,7 +65,7 @@ public class UpdateTaskDeadlineTests
         var authorId = Guid.NewGuid();
         var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3);
-        var pageTask = PageTask.CreatePending(chapter.Id, 1);
+        var pageTask = PageTask.CreatePending(chapter.Id, 1, "https://example.com/page-1.png");
         var deadline = DateTime.UtcNow.AddDays(5);
 
         var command = new UpdateTaskDeadlineCommand(authorId, pageTask.Id, deadline);
