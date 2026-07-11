@@ -84,7 +84,7 @@ public class GetLayerHistoryTests
         var seriesId = series.Id;
         var chapter = ChapterEntity.Create(seriesId, "Chapter 1", 1, 3);
         var chapterId = chapter.Id;
-        var pageTask = PageTaskEntity.CreatePending(chapterId, 1);
+        var pageTask = PageTaskEntity.CreatePending(chapterId, 1, "https://example.com/page-1.png");
         var pageTaskId = pageTask.Id;
 
         var query = new GetLayerHistoryQuery(mangakaId, PageTaskId: pageTaskId);
@@ -153,7 +153,7 @@ public class GetLayerHistoryTests
         var seriesId = series.Id;
         var chapter = ChapterEntity.Create(seriesId, "Chapter 1", 1, 3);
         var chapterId = chapter.Id;
-        var pageTask = PageTaskEntity.CreatePending(chapterId, 1);
+        var pageTask = PageTaskEntity.CreatePending(chapterId, 1, "https://example.com/page-1.png");
         var pageTaskId = pageTask.Id;
 
         var layer1 = new ArtworkLayer 

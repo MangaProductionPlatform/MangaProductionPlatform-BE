@@ -14,6 +14,7 @@ public record ChapterPageDto(
     string TaskStatus,
     string? RegionMask,
     string TaskType,
+    string BaseImageUrl,
     string? PreviewCompositeUrl,
     DateTime CreatedAt,
     DateTime UpdatedAt
@@ -58,6 +59,7 @@ public class GetChapterPagesHandler : IRequestHandler<GetChapterPagesQuery, IEnu
             page.TaskStatus.ToString(),
             page.RegionMask,
             page.TaskType.ToString(),
+            page.BaseImageUrl,
             page.PreviewPage?.CompositeFileUrl,
             page.CreatedAt,
             page.UpdatedAt

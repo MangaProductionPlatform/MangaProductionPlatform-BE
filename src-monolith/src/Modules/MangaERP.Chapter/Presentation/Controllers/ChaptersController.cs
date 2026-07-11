@@ -121,7 +121,8 @@ public class ChaptersController : ControllerBase
     {
         try
         {
-            var command = new AddBasePageCommand(GetUserId(), chapterId, request.PageNumber);
+            var command = new AddBasePageCommand(
+                GetUserId(), chapterId, request.PageNumber, request.BaseImageUrl);
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
@@ -367,7 +368,7 @@ public record CreateChapterRequest(
     int TotalPages,
     string? CoverImageUrl);
 
-public record AddBasePageRequest(int PageNumber);
+public record AddBasePageRequest(int PageNumber, string BaseImageUrl);
 
 public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description, DateTime? Deadline);
 

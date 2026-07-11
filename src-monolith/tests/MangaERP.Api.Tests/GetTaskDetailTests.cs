@@ -45,7 +45,7 @@ public class GetTaskDetailTests
         var userNotOwner = Guid.NewGuid();
         var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3);
-        var pageTask = PageTask.CreatePending(chapter.Id, 1);
+        var pageTask = PageTask.CreatePending(chapter.Id, 1, "https://example.com/page-1.png");
 
         var query = new GetTaskDetailQuery(userNotOwner, pageTask.Id);
 
@@ -65,7 +65,7 @@ public class GetTaskDetailTests
         var authorId = Guid.NewGuid();
         var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3);
-        var pageTask = PageTask.CreatePending(chapter.Id, 1);
+        var pageTask = PageTask.CreatePending(chapter.Id, 1, "https://example.com/page-1.png");
         pageTask.SetDeadline(DateTime.UtcNow.AddDays(5));
 
         var query = new GetTaskDetailQuery(authorId, pageTask.Id);
@@ -81,6 +81,7 @@ public class GetTaskDetailTests
 
         Assert.NotNull(result);
         Assert.Equal(pageTask.Id, result.PageTaskId);
+        Assert.Equal("https://example.com/page-1.png", result.BaseImageUrl);
         Assert.NotNull(result.Deadline);
     }
 }

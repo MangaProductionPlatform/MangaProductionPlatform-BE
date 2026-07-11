@@ -80,7 +80,7 @@ public class ReassignPageTaskTests
         var series = MangaSeries.Create(authorId, null, "Series", null, null, null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1, 3);
         
-        var pageTask = PageTask.CreatePending(chapter.Id, 1);
+        var pageTask = PageTask.CreatePending(chapter.Id, 1, "https://example.com/page-1.png");
         pageTask.Activate(assistantId, "Initial desc"); // Set status to Incomplete to allow reassign
 
         var newAssistantUser = new User { Id = newAssistantId, Role = UserRole.Assistant };

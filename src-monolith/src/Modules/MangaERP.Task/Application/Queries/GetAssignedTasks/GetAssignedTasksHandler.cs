@@ -20,6 +20,7 @@ public record AssignedTaskDto(
     int? CurrentLayerVersion,
     DateTime UpdatedAt,
     string? ChapterCoverImageUrl,
+    string BaseImageUrl,
     string? Description);
 
 public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IEnumerable<AssignedTaskDto>>
@@ -62,6 +63,7 @@ public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IE
                 layer?.Version,
                 task.UpdatedAt,
                 chapter?.CoverImageUrl,
+                task.BaseImageUrl,
                 task.Description));
         }
 

@@ -9,10 +9,11 @@ namespace MangaERP.Chapter.Application.Commands.AddBasePage;
 public record AddBasePageCommand(
     Guid MangakaId,
     Guid ChapterId,
-    int PageNumber
+    int PageNumber,
+    string BaseImageUrl
 ) : IRequest<AddBasePageResult>;
 
-public record AddBasePageResult(Guid PageTaskId, int PageNumber, string TaskStatus);
+public record AddBasePageResult(Guid PageTaskId, int PageNumber, string BaseImageUrl, string TaskStatus);
 
 public class AddBasePageHandler : IRequestHandler<AddBasePageCommand, AddBasePageResult>
 {
@@ -50,11 +51,15 @@ public class AddBasePageHandler : IRequestHandler<AddBasePageCommand, AddBasePag
         if (existing is not null)
             throw new InvalidOperationException($"Page {cmd.PageNumber} already exists in this chapter.");
 
-        var pageTask = PageTask.CreatePending(cmd.ChapterId, cmd.PageNumber);
+        var pageTask = PageTask.CreatePending(cmd.ChapterId, cmd.PageNumber, cmd.BaseImageUrl);
         await _pageTaskRepo.AddAsync(pageTask, ct);
         await _pageTaskRepo.SaveChangesAsync(ct);
 
-        return new AddBasePageResult(pageTask.Id, pageTask.PageNumber, pageTask.TaskStatus.ToString());
+        return new AddBasePageResult(
+            pageTask.Id,
+            pageTask.PageNumber,
+            pageTask.BaseImageUrl,
+            pageTask.TaskStatus.ToString());
     }
 }
 
@@ -65,5 +70,11 @@ public class AddBasePageValidator : AbstractValidator<AddBasePageCommand>
         RuleFor(x => x.MangakaId).NotEmpty();
         RuleFor(x => x.ChapterId).NotEmpty();
         RuleFor(x => x.PageNumber).GreaterThan(0);
+        RuleFor(x => x.BaseImageUrl)
+            .NotEmpty()
+            .MaximumLength(2048)
+            .Must(url => Uri.TryCreate(url, UriKind.Absolute, out var parsed)
+                && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
+            .WithMessage("BaseImageUrl must be an absolute HTTP or HTTPS URL.");
     }
 }

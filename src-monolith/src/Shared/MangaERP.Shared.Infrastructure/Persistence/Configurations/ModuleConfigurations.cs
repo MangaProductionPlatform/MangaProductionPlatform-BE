@@ -108,6 +108,7 @@ public class PageTaskConfiguration : IEntityTypeConfiguration<PageTask>
         b.ToTable("PageTasks"); b.HasKey(e => e.Id);
         b.HasIndex(e => new { e.ChapterId, e.PageNumber }).IsUnique();
         b.Property(e => e.Description).HasMaxLength(2000);
+        b.Property(e => e.BaseImageUrl).IsRequired().HasMaxLength(2048);
         b.Property(e => e.TaskStatus).HasConversion(v => v.ToString(),
             v => Enum.Parse<PageTaskStatus>(v)).HasMaxLength(50);
         b.Property(e => e.TaskType).HasConversion(v => v.ToString(),

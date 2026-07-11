@@ -38,3 +38,9 @@ Thumbs.db
 
 ## Local documentation
 docs/DU_LIEU_VE_DIAGRAM.md
+
+## Diagram files
+*.puml
+*.mmd
+*.dbml
+*diagram*

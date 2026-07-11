@@ -124,6 +124,8 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public int PageNumber { get; set; }
     public Guid? AssignedAssistantId { get; set; }
     public string? Description { get; set; }
+    /// <summary>Original page image uploaded by the Mangaka for this task.</summary>
+    public string BaseImageUrl { get; private set; } = string.Empty;
     public PageTaskStatus TaskStatus { get; set; } = PageTaskStatus.Pending;
     /// <summary>SAM-generated mask polygon stored as JSON (array of [x,y] points).</summary>
     public string? RegionMask { get; set; }
@@ -143,15 +145,18 @@ public class PageTask : AggregateRoot, ISoftDeletable
     }
     public virtual PreviewPage? PreviewPage { get; set; }
 
-    public static PageTask CreatePending(Guid chapterId, int pageNumber)
+    public static PageTask CreatePending(Guid chapterId, int pageNumber, string baseImageUrl)
     {
         if (pageNumber <= 0)
             throw new ArgumentException("PageNumber must be > 0.");
+        if (string.IsNullOrWhiteSpace(baseImageUrl))
+            throw new ArgumentException("BaseImageUrl is required.");
 
         return new PageTask
         {
             ChapterId = chapterId,
             PageNumber = pageNumber,
+            BaseImageUrl = baseImageUrl.Trim(),
             TaskStatus = PageTaskStatus.Pending,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
