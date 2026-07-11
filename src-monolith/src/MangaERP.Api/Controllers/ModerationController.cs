@@ -38,12 +38,26 @@ public class ModerationController : ControllerBase
         });
     }
 
-    [HttpPost("{id:guid}/resolve")]
+    [HttpPost("{id:guid}/approve")]
     [ProducesResponseType(200)]
-    public IActionResult Resolve(Guid id, [FromBody] ResolveModerationRequest request)
+    public IActionResult Approve(Guid id, [FromBody] ModerationNoteRequest request)
     {
-        return Ok(new { message = $"Moderation item {id} resolved with action {request.Action}." });
+        return Ok(new { message = $"Moderation item {id} approved.", note = request.Note });
+    }
+
+    [HttpPost("{id:guid}/reject")]
+    [ProducesResponseType(200)]
+    public IActionResult Reject(Guid id, [FromBody] ModerationNoteRequest request)
+    {
+        return Ok(new { message = $"Moderation item {id} rejected.", note = request.Note });
+    }
+
+    [HttpPost("{id:guid}/hide")]
+    [ProducesResponseType(200)]
+    public IActionResult Hide(Guid id, [FromBody] ModerationNoteRequest request)
+    {
+        return Ok(new { message = $"Moderation item {id} hidden.", note = request.Note });
     }
 }
 
-public record ResolveModerationRequest(string Action, string? Note);
+public record ModerationNoteRequest(string? Note);
