@@ -35,3 +35,6 @@ Thumbs.db
 ## Database dumps & backups
 *.sql
 *.bak.docx
+
+## Local documentation
+docs/DU_LIEU_VE_DIAGRAM.md

@@ -16,7 +16,11 @@ public class SeriesSubmissionConfiguration : IEntityTypeConfiguration<SeriesSubm
 {
     public void Configure(EntityTypeBuilder<SeriesSubmission> b)
     {
-        b.ToTable("SeriesSubmissions"); b.HasKey(e => e.Id);
+        b.ToTable("SeriesSubmissions", table =>
+            table.HasCheckConstraint(
+                "CK_SeriesSubmissions_Status",
+                "\"Status\" IN ('Draft', 'Pending_EB_Review', 'Requires_Revision', 'EB_Rejected', 'EB_Approved', 'Conflict_Escalated')"));
+        b.HasKey(e => e.Id);
         b.Property(e => e.Title).IsRequired().HasMaxLength(256);
         b.Property(e => e.ManuscriptUrl).IsRequired(false).HasMaxLength(2048);
         b.Property(e => e.Status).HasConversion(v => v.ToString(), v => Enum.Parse<SubmissionStatus>(v)).HasMaxLength(50);
