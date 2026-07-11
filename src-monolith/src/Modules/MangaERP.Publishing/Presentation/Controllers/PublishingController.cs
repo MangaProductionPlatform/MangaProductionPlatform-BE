@@ -144,10 +144,10 @@ public class PublishingController : ControllerBase
     }
 
     /// <summary>
-    /// [EditorialBoard, Admin] Get all approved chapters ready for publishing.
+    /// [EditorialBoard, Admin, EditorInChief] Get all approved chapters ready for publishing.
     /// </summary>
     [HttpGet("chapters/ready")]
-    [Authorize(Roles = "EditorialBoard,Admin")]
+    [Authorize(Roles = "EditorialBoard,Admin,EditorInChief")]
     [ProducesResponseType(typeof(IEnumerable<MangaERP.Publishing.Application.Queries.GetReadyForPublish.ReadyForPublishChapterDto>), 200)]
     public async Task<IActionResult> GetReadyForPublish(CancellationToken ct)
     {
@@ -157,10 +157,10 @@ public class PublishingController : ControllerBase
     }
 
     /// <summary>
-    /// [EditorialBoard, Admin] Get publishing schedule (approved chapters with scheduled publish date).
+    /// [EditorialBoard, Admin, EditorInChief] Get publishing schedule (approved chapters with scheduled publish date).
     /// </summary>
     [HttpGet("schedule")]
-    [Authorize(Roles = "EditorialBoard,Admin")]
+    [Authorize(Roles = "EditorialBoard,Admin,EditorInChief")]
     [ProducesResponseType(typeof(IEnumerable<MangaERP.Publishing.Application.Queries.GetPublishingSchedule.ScheduledChapterDto>), 200)]
     public async Task<IActionResult> GetPublishingSchedule(CancellationToken ct)
     {
