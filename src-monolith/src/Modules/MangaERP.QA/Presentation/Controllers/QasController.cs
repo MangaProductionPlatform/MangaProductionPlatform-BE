@@ -135,12 +135,19 @@ public class QasController : ControllerBase
     [Authorize(Roles = "Assistant,Mangaka")]
     [ProducesResponseType(typeof(BugPinDto), 200)]
     [ProducesResponseType(204)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> GetPinByTask(Guid pageTaskId, CancellationToken ct)
     {
-        var query = new MangaERP.QA.Application.Queries.GetBugPinByTaskQuery(pageTaskId, GetUserId());
-        var result = await _mediator.Send(query, ct);
-        if (result == null) return NoContent();
-        return Ok(result);
+        try
+        {
+            var query = new MangaERP.QA.Application.Queries.GetBugPinByTaskQuery(pageTaskId, GetUserId());
+            var result = await _mediator.Send(query, ct);
+            if (result == null) return NoContent();
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
 
     /// <summary>
