@@ -189,6 +189,50 @@ public class AdminDashboardController : ControllerBase
     }
 
     /// <summary>
+    /// [Admin] Lấy cấu hình hệ thống chung (settings).
+    /// </summary>
+    [HttpGet("settings")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IDictionary<string, string>), 200)]
+    public async Task<IActionResult> GetSettings(CancellationToken ct)
+    {
+        var configs = await _db.SystemConfigs.ToListAsync(ct);
+        var result = configs.ToDictionary(c => c.Key, c => c.Value);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [Admin] Cập nhật cấu hình hệ thống chung (bulk patch).
+    /// </summary>
+    [HttpPatch("settings")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> PatchSettings([FromBody] Dictionary<string, string> settings, CancellationToken ct)
+    {
+        if (settings == null || settings.Count == 0) return BadRequest("Settings required.");
+
+        var existingConfigs = await _db.SystemConfigs.ToListAsync(ct);
+        
+        foreach (var kvp in settings)
+        {
+            var config = existingConfigs.FirstOrDefault(c => c.Key == kvp.Key);
+            if (config == null)
+            {
+                config = new MangaERP.Shared.Domain.Entities.SystemConfig { Key = kvp.Key, Value = kvp.Value };
+                _db.SystemConfigs.Add(config);
+            }
+            else
+            {
+                config.Value = kvp.Value;
+            }
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { message = "Settings updated successfully." });
+    }
+
+    /// <summary>
     /// [Admin] Danh sách static roles của hệ thống — dùng cho FE dropdown khi provision account.
     /// </summary>
     [HttpGet("roles")]

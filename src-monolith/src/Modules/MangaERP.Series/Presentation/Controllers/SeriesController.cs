@@ -250,6 +250,26 @@ public class SeriesController : ControllerBase
         catch (KeyNotFoundException ex)        { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
     }
+
+    /// <summary>
+    /// [Mangaka, TantouEditor, EditorialBoard] Get series analytics (views, votes, publish trends).
+    /// </summary>
+    [HttpGet("{seriesId:guid}/analytics")]
+    [Authorize(Roles = "Mangaka,TantouEditor,EditorialBoard,EditorInChief,Admin")]
+    [ProducesResponseType(typeof(MangaERP.Series.Application.Queries.GetSeriesAnalytics.SeriesAnalyticsDto), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetAnalytics(Guid seriesId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new MangaERP.Series.Application.Queries.GetSeriesAnalytics.GetSeriesAnalyticsQuery(seriesId, GetUserId(), GetUserRole());
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
 }
 
 // ── Request Models ────────────────────────────────────────────────────────────

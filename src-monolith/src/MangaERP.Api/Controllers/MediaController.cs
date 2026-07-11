@@ -117,4 +117,70 @@ public class MediaController : ControllerBase
 
         return isPng || isJpeg || isWebp;
     }
+
+    /// <summary>
+    /// [Admin] Get usage quota from Cloudinary.
+    /// </summary>
+    [HttpGet("quota")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> GetQuota(CancellationToken ct)
+    {
+        try
+        {
+            var quota = await _cloudinary.GetUsageQuotaAsync(ct);
+            return Ok(quota);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get Cloudinary quota");
+            return StatusCode(500, new { message = "Lỗi khi lấy thông tin dung lượng.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// [Admin] List uploaded images in a folder.
+    /// </summary>
+    [HttpGet]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(IEnumerable<object>), 200)]
+    public async Task<IActionResult> ListImages([FromQuery] string? folder, CancellationToken ct)
+    {
+        try
+        {
+            var images = await _cloudinary.ListImagesAsync(folder ?? "manga-platform", ct);
+            return Ok(images);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to list Cloudinary images");
+            return StatusCode(500, new { message = "Lỗi khi danh sách hình ảnh.", details = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// [Admin, Mangaka] Delete an image by publicId.
+    /// Mangakas can only delete their own images (simplified for now).
+    /// </summary>
+    [HttpDelete("{*publicId}")]
+    [Authorize(Roles = "Admin,Mangaka,Assistant,TantouEditor")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(500)]
+    public async Task<IActionResult> DeleteImage(string publicId, CancellationToken ct)
+    {
+        try
+        {
+            var success = await _cloudinary.DeleteImageAsync(publicId, ct);
+            if (!success)
+                return BadRequest(new { message = "Không thể xóa hình ảnh hoặc hình ảnh không tồn tại." });
+
+            return Ok(new { message = "Xóa hình ảnh thành công." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete Cloudinary image: {PublicId}", publicId);
+            return StatusCode(500, new { message = "Lỗi máy chủ khi xóa hình ảnh.", details = ex.Message });
+        }
+    }
 }

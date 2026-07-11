@@ -30,6 +30,12 @@ public class QARepositories : IBugPinRepository, IQASessionRepository
             .OrderByDescending(b => b.CreatedAt)
             .ToListAsync(ct);
 
+    public async System.Threading.Tasks.Task<IEnumerable<BugPin>> GetByPageTaskIdAsync(Guid pageTaskId, CancellationToken ct = default)
+        => await _db.BugPins
+            .Where(b => b.PageTaskId == pageTaskId)
+            .OrderByDescending(b => b.CreatedAt)
+            .ToListAsync(ct);
+
     public async System.Threading.Tasks.Task AddAsync(BugPin bugPin, CancellationToken ct = default)
     {
         await _db.BugPins.AddAsync(bugPin, ct);
