@@ -118,6 +118,33 @@ public class BoardReportsController : ControllerBase
             SubmissionsPerMonth = submissionsPerMonth
         });
     }
+    /// <summary>
+    /// [EB / EiC] Export performance report to CSV or Excel.
+    /// </summary>
+    [HttpGet("reports/export")]
+    [ProducesResponseType(typeof(FileContentResult), 200)]
+    public async Task<IActionResult> ExportReport([FromQuery] string format = "csv", CancellationToken ct = default)
+    {
+        if (format.ToLowerInvariant() != "csv")
+        {
+            return BadRequest(new { message = "Only CSV format is currently supported." });
+        }
+
+        var submissions = await _db.SeriesSubmissions
+            .Select(s => new { s.Id, s.Title, s.Status, s.CreatedAt, s.ReviewedAt })
+            .ToListAsync(ct);
+
+        var csvBuilder = new System.Text.StringBuilder();
+        csvBuilder.AppendLine("Id,Title,Status,CreatedAt,ReviewedAt");
+
+        foreach (var s in submissions)
+        {
+            csvBuilder.AppendLine($"{s.Id},\"{s.Title?.Replace("\"", "\"\"")}\",{s.Status},{s.CreatedAt:yyyy-MM-dd HH:mm:ss},{s.ReviewedAt?.ToString("yyyy-MM-dd HH:mm:ss")}");
+        }
+
+        var bytes = System.Text.Encoding.UTF8.GetBytes(csvBuilder.ToString());
+        return File(bytes, "text/csv", $"board-report-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+    }
 }
 
 // ── Response DTOs ──────────────────────────────────────────────────────────────
