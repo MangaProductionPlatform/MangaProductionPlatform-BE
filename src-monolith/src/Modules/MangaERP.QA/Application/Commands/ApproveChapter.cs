@@ -67,6 +67,7 @@ public class ApproveChapterHandler : IRequestHandler<ApproveChapterCommand, Appr
         // 4. Update Chapter Status
         chapter.Approve();
         await _chapterRepo.UpdateAsync(chapter, cancellationToken);
+        await _chapterRepo.SaveChangesAsync(cancellationToken);
 
         // 5. Publish event
         await _publisher.Publish(new ChapterApprovedNotification(chapter.Id, request.EditorId), cancellationToken);
