@@ -11,6 +11,9 @@ using MangaERP.Task.Application.Queries.GetLayerVersions;
 using MangaERP.Task.Application.Commands.RollbackLayer;
 using MangaERP.Task.Application.Queries.GetTaskComments;
 using MangaERP.Task.Application.Commands.AddComment;
+using MangaERP.Task.Application.Commands.CreateExtensionRequest;
+using MangaERP.Task.Application.Commands.HandleExtensionRequest;
+using MangaERP.Task.Application.Queries.GetExtensionRequests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -290,7 +293,70 @@ public class TasksController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
+
+    [HttpPost("{pageTaskId:guid}/extension-requests")]
+    [Authorize(Roles = "Assistant")]
+    [ProducesResponseType(typeof(CreateExtensionRequestResult), 200)]
+    public async Task<IActionResult> CreateExtensionRequest(
+        Guid pageTaskId,
+        [FromBody] CreateExtensionReq request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new CreateExtensionRequestCommand(
+                GetUserId(),
+                pageTaskId,
+                request.Reason,
+                request.RequestedDeadline);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpPost("extension-requests/{requestId:guid}/handle")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(HandleExtensionRequestResult), 200)]
+    public async Task<IActionResult> HandleExtensionRequest(
+        Guid requestId,
+        [FromBody] HandleExtensionReq request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new HandleExtensionRequestCommand(
+                GetUserId(),
+                requestId,
+                request.IsApproved,
+                request.RejectionReason);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpGet("extension-requests")]
+    [Authorize(Roles = "Mangaka,Assistant")]
+    [ProducesResponseType(typeof(IEnumerable<ExtensionRequestDto>), 200)]
+    public async Task<IActionResult> GetExtensionRequests(
+        [FromQuery] Guid? pageTaskId,
+        CancellationToken ct)
+    {
+        var role = User.FindFirst(ClaimTypes.Role)?.Value ?? string.Empty;
+        var query = new GetExtensionRequestsQuery(GetUserId(), role, pageTaskId);
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
 }
+
+public record CreateExtensionReq(string Reason, DateTime RequestedDeadline);
+public record HandleExtensionReq(bool IsApproved, string? RejectionReason);
 
 public record AddCommentReq(string Content);
 

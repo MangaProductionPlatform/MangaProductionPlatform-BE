@@ -441,4 +441,174 @@ public class NotificationService : INotificationService
                 createdAt           = notification.CreatedAt
             }, ct);
     }
+
+    public async System.Threading.Tasks.Task NotifyTaskDeadline3DaysAsync(
+        Guid assistantId, Guid pageTaskId, int pageNumber, DateTime deadline,
+        CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId        = assistantId,
+            Title             = "Sắp đến hạn deadline nhiệm vụ",
+            Message           = $"Nhiệm vụ vẽ trang {pageNumber} của bạn có hạn chót vào lúc {deadline:dd/MM/yyyy HH:mm}. Vui lòng hoàn thành nhiệm vụ.",
+            NotifyType        = "TaskDeadlineWarning3Days",
+            RelatedEntityId   = pageTaskId,
+            RelatedEntityType = "PageTask",
+            TargetUrl         = $"/app/tasks/{pageTaskId}"
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(assistantId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id                = notification.Id,
+                title             = notification.Title,
+                message           = notification.Message,
+                notifyType        = notification.NotifyType,
+                pageTaskId,
+                pageNumber,
+                deadline,
+                targetUrl         = notification.TargetUrl,
+                createdAt         = notification.CreatedAt
+            }, ct);
+    }
+
+    public async System.Threading.Tasks.Task NotifyTaskOverdueWarningAsync(
+        Guid assistantId, Guid pageTaskId, int pageNumber,
+        CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId        = assistantId,
+            Title             = "Cảnh báo trễ deadline",
+            Message           = $"Bạn đã trễ hạn deadline nhiệm vụ vẽ trang {pageNumber}.",
+            NotifyType        = "TaskDeadlineOverdueWarning",
+            RelatedEntityId   = pageTaskId,
+            RelatedEntityType = "PageTask",
+            TargetUrl         = $"/app/tasks/{pageTaskId}"
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(assistantId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id                = notification.Id,
+                title             = notification.Title,
+                message           = notification.Message,
+                notifyType        = notification.NotifyType,
+                pageTaskId,
+                pageNumber,
+                targetUrl         = notification.TargetUrl,
+                createdAt         = notification.CreatedAt
+            }, ct);
+    }
+
+    public async System.Threading.Tasks.Task NotifyAssistantPenalizedAsync(
+        Guid assistantId, int warningCount,
+        CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId        = assistantId,
+            Title             = "⚠️ Bạn đã bị xử phạt",
+            Message           = $"Bạn đã trễ deadline {warningCount} lần nên sẽ bị phạt trừ 20% thu nhập của tất cả nhiệm vụ và không được nhận thêm nhiệm vụ mới.",
+            NotifyType        = "AssistantPenalized",
+            RelatedEntityId   = assistantId,
+            RelatedEntityType = "User",
+            TargetUrl         = "/app/assistant/dashboard"
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(assistantId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id                = notification.Id,
+                title             = notification.Title,
+                message           = notification.Message,
+                notifyType        = notification.NotifyType,
+                warningCount,
+                targetUrl         = notification.TargetUrl,
+                createdAt         = notification.CreatedAt
+            }, ct);
+    }
+
+    public async System.Threading.Tasks.Task NotifyDeadlineExtensionRequestedAsync(
+        Guid mangakaId, Guid requestId, Guid pageTaskId, int pageNumber, DateTime requestedDeadline,
+        CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId        = mangakaId,
+            Title             = "Yêu cầu gia hạn deadline",
+            Message           = $"Trợ lý yêu cầu gia hạn nhiệm vụ vẽ trang {pageNumber} đến ngày {requestedDeadline:dd/MM/yyyy HH:mm}.",
+            NotifyType        = "DeadlineExtensionRequested",
+            RelatedEntityId   = requestId,
+            RelatedEntityType = "DeadlineExtensionRequest",
+            TargetUrl         = $"/app/tasks/{pageTaskId}"
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(mangakaId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id                = notification.Id,
+                title             = notification.Title,
+                message           = notification.Message,
+                notifyType        = notification.NotifyType,
+                requestId,
+                pageTaskId,
+                pageNumber,
+                requestedDeadline,
+                targetUrl         = notification.TargetUrl,
+                createdAt         = notification.CreatedAt
+            }, ct);
+    }
+
+    public async System.Threading.Tasks.Task NotifyExtensionRequestHandledAsync(
+        Guid assistantId, Guid pageTaskId, int pageNumber, bool isApproved, string? rejectionReason, DateTime? newDeadline,
+        CancellationToken ct = default)
+    {
+        var title = isApproved ? "Yêu cầu gia hạn được chấp nhận" : "Yêu cầu gia hạn bị từ chối";
+        var message = isApproved 
+            ? $"Yêu cầu gia hạn nhiệm vụ vẽ trang {pageNumber} của bạn đã được duyệt. Hạn mới: {newDeadline:dd/MM/yyyy HH:mm}."
+            : $"Yêu cầu gia hạn nhiệm vụ vẽ trang {pageNumber} của bạn bị từ chối. Lý do: {rejectionReason}.";
+
+        var notification = new Notification
+        {
+            ReceiverId        = assistantId,
+            Title             = title,
+            Message           = message,
+            NotifyType        = isApproved ? "ExtensionRequestApproved" : "ExtensionRequestRejected",
+            RelatedEntityId   = pageTaskId,
+            RelatedEntityType = "PageTask",
+            TargetUrl         = $"/app/tasks/{pageTaskId}"
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(assistantId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id                = notification.Id,
+                title             = notification.Title,
+                message           = notification.Message,
+                notifyType        = notification.NotifyType,
+                pageTaskId,
+                pageNumber,
+                isApproved,
+                rejectionReason,
+                newDeadline,
+                targetUrl         = notification.TargetUrl,
+                createdAt         = notification.CreatedAt
+            }, ct);
+    }
 }

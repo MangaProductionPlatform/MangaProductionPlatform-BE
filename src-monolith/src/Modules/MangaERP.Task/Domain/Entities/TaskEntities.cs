@@ -80,3 +80,16 @@ public class ChapterTeam
     public Guid? InvitedByUserId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class DeadlineExtensionRequest
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PageTaskId { get; set; }
+    public Guid AssistantId { get; set; }
+    public string Reason { get; set; } = string.Empty;
+    public DateTime RequestedDeadline { get; set; }
+    public string Status { get; set; } = "Pending"; // Pending, Approved, Rejected
+    public string? RejectionReason { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? HandledAt { get; set; }
+}

@@ -52,6 +52,7 @@ public class AppDbContext : DbContext
     public DbSet<AssistantInvitation> AssistantInvitations => Set<AssistantInvitation>();
     public DbSet<ChapterTeam>         ChapterTeams         => Set<ChapterTeam>();
     public DbSet<TaskComment>         TaskComments         => Set<TaskComment>();
+    public DbSet<DeadlineExtensionRequest> DeadlineExtensionRequests => Set<DeadlineExtensionRequest>();
 
     // ── Studio ────────────────────────────────────────────────
     public DbSet<StudioInvitation> StudioInvitations => Set<StudioInvitation>();
