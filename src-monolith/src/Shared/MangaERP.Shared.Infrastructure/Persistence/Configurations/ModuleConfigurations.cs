@@ -273,3 +273,14 @@ public class TaskCommentConfiguration : IEntityTypeConfiguration<TaskComment>
         b.HasIndex(e => e.PageTaskId);
     }
 }
+
+public class DeadlineExtensionRequestConfiguration : IEntityTypeConfiguration<DeadlineExtensionRequest>
+{
+    public void Configure(EntityTypeBuilder<DeadlineExtensionRequest> b)
+    {
+        b.ToTable("DeadlineExtensionRequests"); b.HasKey(e => e.Id);
+        b.Property(e => e.Reason).IsRequired().HasMaxLength(2000);
+        b.Property(e => e.Status).IsRequired().HasMaxLength(50);
+        b.Property(e => e.RejectionReason).HasMaxLength(1000);
+    }
+}

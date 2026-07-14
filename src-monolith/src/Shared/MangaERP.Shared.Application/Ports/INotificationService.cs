@@ -84,4 +84,24 @@ public interface INotificationService
     Task NotifySegmentationTaskAssignedAsync(
         Guid assistantId, Guid segmentationTaskId, string taskType,
         CancellationToken ct = default);
+
+    Task NotifyTaskDeadline3DaysAsync(
+        Guid assistantId, Guid pageTaskId, int pageNumber, DateTime deadline,
+        CancellationToken ct = default);
+
+    Task NotifyTaskOverdueWarningAsync(
+        Guid assistantId, Guid pageTaskId, int pageNumber,
+        CancellationToken ct = default);
+
+    Task NotifyAssistantPenalizedAsync(
+        Guid assistantId, int warningCount,
+        CancellationToken ct = default);
+
+    Task NotifyDeadlineExtensionRequestedAsync(
+        Guid mangakaId, Guid requestId, Guid pageTaskId, int pageNumber, DateTime requestedDeadline,
+        CancellationToken ct = default);
+
+    Task NotifyExtensionRequestHandledAsync(
+        Guid assistantId, Guid pageTaskId, int pageNumber, bool isApproved, string? rejectionReason, DateTime? newDeadline,
+        CancellationToken ct = default);
 }

@@ -29,6 +29,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         entity.Property(e => e.AccountStatus)
             .HasConversion(v => v.ToString(), v => Enum.Parse<AccountStatus>(v))
             .HasMaxLength(50);
+        entity.Property(e => e.DeadlineWarningCount)
+            .HasDefaultValue(0);
 
         entity.HasOne(e => e.ManagingTantou)
             .WithMany()

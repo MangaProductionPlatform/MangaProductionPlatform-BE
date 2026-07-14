@@ -68,12 +68,16 @@ public static class SharedInfrastructureExtensions
         services.AddScoped<IPreviewPageRepository, PreviewPageRepository>();
         services.AddScoped<IArtworkLayerRepository, ArtworkLayerRepository>();
         services.AddScoped<ITaskCommentRepository, TaskCommentRepository>();
+        services.AddScoped<IDeadlineExtensionRequestRepository, DeadlineExtensionRequestRepository>();
 
         // Ranking module infrastructure
         services.AddScoped<IRankingRepository, RankingRepository>();
 
         // Shared Services
         services.AddScoped<INotificationService, NotificationService>();
+
+        // Task deadline monitor background service
+        services.AddHostedService<TaskDeadlineMonitorService>();
 
         // Infrastructure Reliability & Security services
         services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
