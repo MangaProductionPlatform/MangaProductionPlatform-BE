@@ -21,7 +21,8 @@ public record AssignedTaskDto(
     DateTime UpdatedAt,
     string? ChapterCoverImageUrl,
     string BaseImageUrl,
-    string? Description);
+    string? Description,
+    DateTime? Deadline);
 
 public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IEnumerable<AssignedTaskDto>>
 {
@@ -64,7 +65,8 @@ public class GetAssignedTasksHandler : IRequestHandler<GetAssignedTasksQuery, IE
                 task.UpdatedAt,
                 chapter?.CoverImageUrl,
                 task.BaseImageUrl,
-                task.Description));
+                task.Description,
+                task.Deadline));
         }
 
         return result;
