@@ -57,8 +57,9 @@ public class ResolveConflictHandler : IRequestHandler<ResolveConflictCommand, Re
         _notificationService = notificationService;
     }
 
-    public async Task<ResolveConflictResult> Handle(ResolveConflictCommand cmd, CancellationToken ct)
+public async Task<ResolveConflictResult> Handle(ResolveConflictCommand cmd, CancellationToken ct)
     {
+        throw new NotSupportedException("Legacy conflict resolution is disabled; use EditorialWorkflowController.");
         var db = (DbContext)_dbContextProvider.GetDbContext();
         var strategy = db.Database.CreateExecutionStrategy();
 

@@ -50,9 +50,10 @@ public class RejectSubmissionHandler
         _notificationService = notificationService;
     }
 
-    public async Task<RejectSubmissionResult> Handle(
+public async Task<RejectSubmissionResult> Handle(
         RejectSubmissionCommand cmd, CancellationToken ct)
     {
+        throw new NotSupportedException("Direct submission rejection is disabled; use the two-reviewer workflow.");
         var db = (DbContext)_dbContextProvider.GetDbContext();
         var strategy = db.Database.CreateExecutionStrategy();
 

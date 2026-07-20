@@ -2,6 +2,7 @@ using MediatR;
 using MangaERP.Studio.Application.Ports;
 using MangaERP.Studio.Domain.Entities;
 using MangaERP.Series.Application.Ports;
+using System.Net.Mail;
 
 namespace MangaERP.Studio.Application.Commands.InviteAssistant;
 
@@ -41,6 +42,15 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
 
     public async Task<InviteAssistantResult> Handle(InviteAssistantCommand request, CancellationToken cancellationToken)
     {
+        var personalEmail = request.AssistantEmail.Trim().ToLowerInvariant();
+        // Invitation identity is an exact, complete personal email.  Do not
+        // allow partial values to reach account lookup/provisioning (the
+        // frontend debounce is only a convenience; the backend is authoritative).
+        if (!IsCompleteEmail(personalEmail))
+            throw new InvalidOperationException("A complete, valid personal email is required.");
+        if (await _identityService.IsInternalEmailAsync(personalEmail, cancellationToken))
+            throw new InvalidOperationException("Use the Assistant's personal email; internal email addresses are not accepted.");
+
         // Validate series thuộc Mangaka này
         var series = await _seriesRepo.GetByIdAsync(request.SeriesId, cancellationToken)
             ?? throw new KeyNotFoundException($"Series {request.SeriesId} không tồn tại.");
@@ -49,8 +59,16 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
             throw new UnauthorizedAccessException("Bạn không có quyền mời Assistant vào studio này.");
 
         // ── Phân nhánh TH1 / TH2 ──────────────────────────────────────
-        var existingAssistantId = await _identityService.FindActiveAssistantByEmailAsync(
-            request.AssistantEmail, cancellationToken);
+        var invitations = await _invitationRepo.GetBySeriesIdAsync(request.SeriesId, cancellationToken);
+        if (invitations.Any(x => x.Status == StudioInvitationStatus.Pending &&
+            string.Equals(string.IsNullOrWhiteSpace(x.NormalizedAssistantEmail)
+                ? x.AssistantEmail.Trim().ToLowerInvariant()
+                : x.NormalizedAssistantEmail,
+                personalEmail,
+                StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("A pending invitation already exists for this personal email and series.");
+
+        var existingAssistantId = await _identityService.FindActiveAssistantByEmailAsync(personalEmail, cancellationToken);
 
         string resultCase;
         string statusMsg;
@@ -61,7 +79,7 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
         {
             // TH1: Email chưa có tài khoản → provision + gửi email kích hoạt
             var (newUserId, token) = await _identityService.ProvisionAssistantAccountAsync(
-                request.AssistantEmail,
+                personalEmail,
                 fullName: null,
                 invitingMangakaName: series.Title,
                 cancellationToken);
@@ -69,14 +87,14 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
             assignedUserId = newUserId;
             activationToken = token;
             resultCase = "NewAccount";
-            statusMsg = "Email kích hoạt đã được gửi. Assistant sẽ tự động được thêm vào studio sau khi tạo mật khẩu xong.";
+            statusMsg = "Registration delivery was requested. The Assistant must activate, sign in, and accept the pending series invitation.";
         }
         else
         {
             // TH2: Email đã có tài khoản Active Assistant → gửi push notification
             assignedUserId = existingAssistantId;
             resultCase = "ExistingAccount";
-            statusMsg = "Lời mời đã được gửi. Chờ Assistant xác nhận.";
+            statusMsg = "The durable invitation was created and is waiting for the Assistant to accept or decline.";
         }
 
         // ── Tạo và lưu invitation record ──────────────────────────────
@@ -84,7 +102,8 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
         {
             InviterMangakaId = request.MangakaId,
             SeriesId = request.SeriesId,
-            AssistantEmail = request.AssistantEmail,
+            AssistantEmail = personalEmail,
+            NormalizedAssistantEmail = personalEmail,
             AssistantUserId = assignedUserId,
             Message = request.Message,
             IsNewAccountFlow = existingAssistantId is null,
@@ -93,21 +112,52 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
             ExpiresAt = DateTime.UtcNow.AddDays(7),
             CreatedAt = DateTime.UtcNow
         };
+        if (existingAssistantId is null)
+            invitation.MarkRegistrationDeliveryPending();
         await _invitationRepo.AddAsync(invitation, cancellationToken);
 
         // TH2: gửi notification SAU khi đã có invitationId
-        if (existingAssistantId is not null)
-        {
-            await _identityService.SendStudioInvitationNotificationAsync(
-                existingAssistantId.Value,
-                invitation.Id,
-                mangakaName: series.Title,    // dùng tạm title; thực tế nên dùng FullName của Mangaka
-                seriesTitle: series.Title,
-                cancellationToken);
-        }
+        await _identityService.SendStudioInvitationNotificationAsync(
+            assignedUserId!.Value,
+            invitation.Id,
+            mangakaName: series.Title,
+            seriesTitle: series.Title,
+            cancellationToken);
 
         await _invitationRepo.SaveChangesAsync(cancellationToken);
 
-        return new InviteAssistantResult(invitation.Id, request.AssistantEmail, resultCase, statusMsg);
+        if (existingAssistantId is null && assignedUserId.HasValue && activationToken is not null)
+        {
+            try
+            {
+                await _identityService.SendAssistantRegistrationEmailAsync(
+                    assignedUserId.Value, activationToken, cancellationToken);
+                invitation.MarkRegistrationDeliverySent();
+            }
+            catch (Exception ex)
+            {
+                invitation.MarkRegistrationDeliveryFailed(ex.Message);
+                statusMsg = "The invitation is durable, but registration delivery failed and must be retried.";
+            }
+            await _invitationRepo.UpdateAsync(invitation, cancellationToken);
+            await _invitationRepo.SaveChangesAsync(cancellationToken);
+        }
+
+        if (existingAssistantId is not null)
+            await _identityService.DeliverStudioInvitationRealtimeAsync(
+                existingAssistantId.Value, invitation.Id, series.Title, cancellationToken);
+
+        return new InviteAssistantResult(invitation.Id, personalEmail, resultCase, statusMsg);
+    }
+
+    private static bool IsCompleteEmail(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        try
+        {
+            var parsed = new MailAddress(value);
+            return parsed.Address.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (FormatException) { return false; }
     }
 }

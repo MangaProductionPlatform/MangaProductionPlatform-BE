@@ -1,6 +1,6 @@
 # 🚀 MangaERP — Deployment Guide
 
-> **Áp dụng cho:** `src-monolith` — ASP.NET Core 9 Modular Monolith + SQL Server
+> **Áp dụng cho:** `src-monolith` — ASP.NET Core 9 Modular Monolith + PostgreSQL (Npgsql)
 
 ---
 
@@ -9,7 +9,7 @@
 - [x] `docker-compose build` đã chạy thành công
 - [ ] Code đã push lên GitHub repo
 - [ ] Đã có tài khoản Render hoặc Railway
-- [ ] Đã có SQL Server managed (Azure SQL hoặc Railway MSSQL)
+- [ ] Đã có PostgreSQL database trên Render (hoặc PostgreSQL staging tương đương)
 - [ ] Đã có Gmail App Password (16 ký tự) để gửi email
 
 > [!IMPORTANT]
@@ -26,6 +26,10 @@ git add .
 git commit -m "feat: add Series API endpoints + fix Dockerfile"
 git push origin main
 ```
+
+## PostgreSQL migration mechanism
+
+The active provider is PostgreSQL through Npgsql. On Render, the application applies pending migrations during startup in `src/MangaERP.Api/Program.cs` with `await db.Database.MigrateAsync()` before `DbSeeder.SeedAsync`. Set `ConnectionStrings__DefaultConnection` to the Render PostgreSQL URL. Do not use `EnsureCreated`, SQL Server connection strings, or a separate migration command in the deployed service.
 
 > [!WARNING]
 > Kiểm tra `.gitignore` có dòng `.env` trước khi push. KHÔNG push file `.env` thật lên GitHub.
@@ -48,9 +52,9 @@ git push origin main
 
 4. Render tự detect `Dockerfile` — KHÔNG cần điền Build Command hay Start Command.
 
-## Bước 3 — Chuẩn bị Database (Azure SQL Free)
+## Bước 3 — Chuẩn bị PostgreSQL trên Render
 
-Render không cung cấp SQL Server. Dùng Azure SQL Database free tier.
+Tạo PostgreSQL database trên Render và dùng Internal Database URL cho Web Service.
 
 1. Vào portal.azure.com → **Create SQL Database**
 2. Chọn:
@@ -74,7 +78,7 @@ Trên trang Web Service → tab **Environment** → **Add Environment Variable**
 
 | Key | Value | Ghi chú |
 |---|---|---|
-| `ConnectionStrings__DefaultConnection` | `Server=tcp:...database.windows.net,1433;Database=MangaProductionDB;User ID=your_user;Password=YourPass!;Encrypt=True;TrustServerCertificate=False;` | Chuỗi kết nối Azure SQL |
+| `ConnectionStrings__DefaultConnection` | `postgresql://postgres:<password>@<host>:5432/MangaProductionDB` | Chuỗi kết nối PostgreSQL/Npgsql |
 | `Jwt__Key` | `MangaERP@SuperSecret#2026!Prod` | Tối thiểu 32 ký tự |
 | `Seed__AdminPassword` | `Admin@Render2026!` | Mật khẩu admin lần đầu |
 

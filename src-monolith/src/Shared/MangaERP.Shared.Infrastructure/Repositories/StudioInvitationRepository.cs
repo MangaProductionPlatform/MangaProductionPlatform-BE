@@ -34,8 +34,7 @@ public class StudioInvitationRepository : IStudioInvitationRepository
         var members = await _db.StudioInvitations
             .Where(i => i.SeriesId == seriesId
                 && i.AssistantUserId != null
-                && (i.Status == StudioInvitationStatus.Accepted
-                    || (i.IsNewAccountFlow && i.Status == StudioInvitationStatus.Pending)))
+                && i.Status == StudioInvitationStatus.Accepted)
             .Join(_db.Users,
                 inv => inv.AssistantUserId,
                 user => user.Id,

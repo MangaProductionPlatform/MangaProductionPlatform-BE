@@ -40,7 +40,7 @@ public record StudioMemberInfo(
     string? AvatarUrl,
     string? PenName,
     string InvitationStatus,
-    DateTime JoinedAt   // RespondedAt (thời điểm chấp nhận), hoặc CreatedAt nếu IsNewAccountFlow
+    DateTime JoinedAt   // RespondedAt (thời điểm chấp nhận)
 );
 
 /// <summary>
@@ -51,13 +51,18 @@ public interface IStudioIdentityService
 {
     /// Kiểm tra email đã có tài khoản Active chưa (trả về UserId nếu có)
     System.Threading.Tasks.Task<Guid?> FindActiveAssistantByEmailAsync(string email, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> IsInternalEmailAsync(string email, CancellationToken ct = default);
 
     /// Provision tài khoản Assistant mới (TH1) — tương đương AdminController.ProvisionAccount
     /// Trả về UserId mới tạo và activation token
     System.Threading.Tasks.Task<(Guid userId, string activationToken)> ProvisionAssistantAccountAsync(
         string email, string? fullName, string invitingMangakaName, CancellationToken ct = default);
+    System.Threading.Tasks.Task SendAssistantRegistrationEmailAsync(
+        Guid userId, string activationToken, CancellationToken ct = default);
 
     /// Gửi push notification cho Assistant đã có tài khoản (TH2)
     System.Threading.Tasks.Task SendStudioInvitationNotificationAsync(
         Guid receiverUserId, Guid invitationId, string mangakaName, string seriesTitle, CancellationToken ct = default);
+    System.Threading.Tasks.Task DeliverStudioInvitationRealtimeAsync(
+        Guid receiverUserId, Guid invitationId, string seriesTitle, CancellationToken ct = default);
 }

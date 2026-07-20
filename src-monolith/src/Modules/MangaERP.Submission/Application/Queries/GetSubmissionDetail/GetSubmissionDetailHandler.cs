@@ -1,5 +1,6 @@
 using MangaERP.Submission.Application.Ports;
 using MangaERP.Identity.Application.Ports;
+using MangaERP.Submission.Domain.Entities;
 using MediatR;
 
 namespace MangaERP.Submission.Application.Queries.GetSubmissionDetail;
@@ -69,6 +70,12 @@ public class GetSubmissionDetailHandler
             submitter.FullName,
             submitter.PenName,
             submitter.PersonalEmail);
+        var isMangaka = query.RequesterRole == "Mangaka";
+        var visibleFeedback = isMangaka
+            ? submission.Status is SubmissionStatus.Tantou_Revision_Required or SubmissionStatus.Mangaka_Revision_Required
+                ? submission.TantouGuidance
+                : null
+            : submission.FeedbackMessage;
 
         return new SubmissionDetailDto(
             submission.Id,
@@ -80,11 +87,11 @@ public class GetSubmissionDetailHandler
             submission.SubmitterId,
             submitterDto,
             submission.Status.ToString(),
-            submission.FeedbackMessage,
+            visibleFeedback,
             submission.EditorRecommendationMessage,
             submission.AssignedEditorId,
-            submission.ReviewedByUserId,
-            submission.ReviewedAt,
+            isMangaka ? null : submission.ReviewedByUserId,
+            isMangaka ? null : submission.ReviewedAt,
             submission.CreatedAt);
     }
 }

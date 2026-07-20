@@ -61,9 +61,10 @@ public class ApproveSubmissionHandler
         _notificationService = notificationService;
     }
 
-    public async Task<ApproveSubmissionResult> Handle(
+public async Task<ApproveSubmissionResult> Handle(
         ApproveSubmissionCommand cmd, CancellationToken ct)
     {
+        throw new NotSupportedException("Direct submission approval is disabled; use the two-reviewer workflow.");
         var db = (DbContext)_dbContextProvider.GetDbContext();
 
         // ── Idempotency guard ─────────────────────────────────────────────────
@@ -113,7 +114,7 @@ public class ApproveSubmissionHandler
         if (submission.Status == Domain.Entities.SubmissionStatus.Conflict_Escalated)
             submission.ApproveByEIC(cmd.ReviewerId);
         else
-            submission.Approve(cmd.ReviewerId);
+        submission.ApproveByBoard(cmd.ReviewerId);
 
         // ── Atomic transaction via ExecutionStrategy ──────────────────────────
         var strategy = db.Database.CreateExecutionStrategy();

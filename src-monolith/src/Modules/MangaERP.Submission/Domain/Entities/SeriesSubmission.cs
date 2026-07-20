@@ -6,8 +6,12 @@ namespace MangaERP.Submission.Domain.Entities;
 public enum SubmissionStatus
 {
     Draft,
+    Pending_Tantou_Review,
+    Tantou_Revision_Required,
     Pending_EB_Review,
     Requires_Revision,
+    Editorial_Rejected_To_Tantou,
+    Mangaka_Revision_Required,
     EB_Rejected,
     EB_Approved,
     Conflict_Escalated   // 1-1-1 vote deadlock — awaiting Editor-in-Chief arbitration
@@ -30,6 +34,9 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
+    public string? TantouGuidance { get; private set; }
+    public DateTime? TantouReviewedAt { get; private set; }
+    public DateTime? RecommendedAt { get; private set; }
 
     /// <summary>
     /// Voting round number — starts at 1, incremented by +1 each time REQ_REVISION
@@ -67,13 +74,16 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     /// Nộp draft lần đầu: Draft → Pending_EB_Review.
     /// ManuscriptUrl phải có trước khi gọi.
     /// </summary>
-    public void SubmitDraft()
+    public void SubmitDraft(Guid tantouEditorId)
     {
         if (Status != SubmissionStatus.Draft)
             throw new InvalidStateTransitionException("Chỉ có bản thảo ở trạng thái Draft mới được nộp lần đầu.");
         if (string.IsNullOrWhiteSpace(ManuscriptUrl))
             throw new InvalidStateTransitionException("Vui lòng tải lên file bản thảo trước khi nộp.");
-        Status = SubmissionStatus.Pending_EB_Review;
+        if (tantouEditorId == Guid.Empty)
+            throw new InvalidStateTransitionException("An assigned Tantou Editor is required.");
+        AssignedEditorId = tantouEditorId;
+        Status = SubmissionStatus.Pending_Tantou_Review;
     }
 
     /// <summary>
@@ -81,10 +91,13 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     /// </summary>
     public void ReSubmit()
     {
-        if (Status != SubmissionStatus.Requires_Revision)
+        if (Status != SubmissionStatus.Requires_Revision &&
+            Status != SubmissionStatus.Mangaka_Revision_Required &&
+            Status != SubmissionStatus.Tantou_Revision_Required)
             throw new InvalidStateTransitionException("Chỉ có thể nộp lại bản thảo khi trạng thái là Requires_Revision.");
-        Status = SubmissionStatus.Pending_EB_Review;
+        Status = SubmissionStatus.Pending_Tantou_Review;
         FeedbackMessage = null;
+        TantouGuidance = null;
     }
 
     /// <summary>
@@ -92,7 +105,8 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     /// </summary>
     public void UpdateManuscript(string newManuscriptUrl)
     {
-        if (Status != SubmissionStatus.Draft && Status != SubmissionStatus.Requires_Revision)
+        if (Status != SubmissionStatus.Draft && Status != SubmissionStatus.Requires_Revision &&
+            Status != SubmissionStatus.Mangaka_Revision_Required && Status != SubmissionStatus.Tantou_Revision_Required)
             throw new InvalidStateTransitionException("Không thể chỉnh sửa bản thảo khi đang trong quá trình xét duyệt hoặc đã đóng băng.");
         ManuscriptUrl = newManuscriptUrl;
     }
@@ -102,7 +116,8 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     /// </summary>
     public void UpdateDraftMetadata(string title, string? description, string? genre, string? coverImageUrl)
     {
-        if (Status != SubmissionStatus.Draft && Status != SubmissionStatus.Requires_Revision)
+        if (Status != SubmissionStatus.Draft && Status != SubmissionStatus.Requires_Revision &&
+            Status != SubmissionStatus.Mangaka_Revision_Required && Status != SubmissionStatus.Tantou_Revision_Required)
             throw new InvalidStateTransitionException("Không thể chỉnh sửa bản thảo khi đang trong quá trình xét duyệt hoặc đã đóng băng.");
         Title = title;
         Description = description;
@@ -115,7 +130,60 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     /// <summary>
     /// Board duyệt: Pending_EB_Review → EB_Approved.
     /// </summary>
-    public void Approve(Guid reviewerId)
+    public void ReturnByTantou(Guid tantouId, string guidance)
+    {
+        EnsureAssignedTantou(tantouId);
+        if (Status != SubmissionStatus.Pending_Tantou_Review)
+            throw new InvalidStateTransitionException("Only work awaiting Tantou review can be returned.");
+        if (string.IsNullOrWhiteSpace(guidance))
+            throw new InvalidStateTransitionException("Revision guidance is required.");
+        TantouGuidance = guidance.Trim();
+        TantouReviewedAt = DateTime.UtcNow;
+        Status = SubmissionStatus.Tantou_Revision_Required;
+    }
+
+    public void RecommendToEditorialBoard(Guid tantouId)
+    {
+        EnsureAssignedTantou(tantouId);
+        if (Status != SubmissionStatus.Pending_Tantou_Review)
+            throw new InvalidStateTransitionException("Only work awaiting Tantou review can be recommended.");
+        Status = SubmissionStatus.Pending_EB_Review;
+        TantouReviewedAt = DateTime.UtcNow;
+        RecommendedAt = DateTime.UtcNow;
+    }
+
+    public void RejectToTantou(Guid reviewerId, string feedback)
+    {
+        if (Status != SubmissionStatus.Pending_EB_Review && Status != SubmissionStatus.Conflict_Escalated)
+            throw new InvalidStateTransitionException("This work is not awaiting an editorial decision.");
+        if (string.IsNullOrWhiteSpace(feedback))
+            throw new InvalidStateTransitionException("Rejection feedback is required.");
+        Status = SubmissionStatus.Editorial_Rejected_To_Tantou;
+        FeedbackMessage = feedback.Trim();
+        ReviewedByUserId = reviewerId;
+        ReviewedAt = DateTime.UtcNow;
+    }
+
+    public void ReturnConsolidatedGuidanceToMangaka(Guid tantouId, string guidance)
+    {
+        EnsureAssignedTantou(tantouId);
+        if (Status != SubmissionStatus.Editorial_Rejected_To_Tantou)
+            throw new InvalidStateTransitionException("Only rejected work can be returned to the Mangaka.");
+        if (string.IsNullOrWhiteSpace(guidance))
+            throw new InvalidStateTransitionException("Consolidated revision guidance is required.");
+        TantouGuidance = guidance.Trim();
+        TantouReviewedAt = DateTime.UtcNow;
+        Status = SubmissionStatus.Mangaka_Revision_Required;
+        CurrentRound++;
+    }
+
+    private void EnsureAssignedTantou(Guid tantouId)
+    {
+        if (AssignedEditorId != tantouId)
+            throw new UnauthorizedAccessException("Only the assigned Tantou Editor can perform this action.");
+    }
+
+    public void ApproveByBoard(Guid reviewerId)
     {
         if (Status != SubmissionStatus.Pending_EB_Review)
             throw new InvalidStateTransitionException("Chỉ có thể duyệt bản thảo khi đang chờ Ban Biên Tập duyệt.");
@@ -129,6 +197,7 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     /// <summary>
     /// Từ chối (EB).
     /// </summary>
+    [Obsolete("Use the two-reviewer EditorialWorkflowController decision flow.")]
     public void Reject(string actorRole, Guid reviewerId, string feedbackMessage)
     {
         if (string.IsNullOrWhiteSpace(feedbackMessage))
@@ -149,6 +218,7 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
     /// <summary>
     /// Yêu cầu chỉnh sửa (EB).
     /// </summary>
+    [Obsolete("RequestRevision is not a valid Editorial Board decision.")]
     public void RequestRevision(string actorRole, Guid reviewerId, string feedbackMessage)
     {
         if (string.IsNullOrWhiteSpace(feedbackMessage))

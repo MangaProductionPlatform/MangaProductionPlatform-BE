@@ -48,20 +48,15 @@ public class ReSubmitProposalHandler
         if (submission.SubmitterId != cmd.SubmitterId)
             throw new UnauthorizedAccessException("You are not the owner of this submission.");
 
+        if (!submission.AssignedEditorId.HasValue)
+            throw new InvalidOperationException("An assigned Tantou Editor is required before resubmission.");
         submission.ReSubmit();   // Domain: RevisionRequired → Pending; clears FeedbackMessage
 
+        await _notificationService.NotifySubmissionReadyForTantouAsync(
+            submission.AssignedEditorId.Value, submission.Id, submission.Title, ct);
         await _repo.SaveChangesAsync(ct);
 
         // [Mốc 1] Bắn thông báo cho Editorial Board SAU khi DB commit thành công.
-        var author = await _userRepo.GetByIdAsync(cmd.SubmitterId, ct);
-        var authorName = author?.FullName ?? "Không rõ";
-
-        await _notificationService.NotifyNewSubmissionToEditorialBoardAsync(
-            submissionId:    submission.Id,
-            submissionTitle: submission.Title,
-            authorName:      authorName,
-            ct:              ct);
-
         return new ReSubmitProposalResult(submission.Id, submission.Status.ToString());
     }
 }

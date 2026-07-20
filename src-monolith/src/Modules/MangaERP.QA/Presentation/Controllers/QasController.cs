@@ -237,6 +237,7 @@ public class QasController : ControllerBase
     [ProducesResponseType(400)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> ApproveChapter(Guid chapterId, CancellationToken ct)
     {
         try

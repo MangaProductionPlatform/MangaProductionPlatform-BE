@@ -95,8 +95,7 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
         var invitations = await _studioRepo.GetBySeriesIdAsync(seriesId, ct);
         var isMember = invitations.Any(i =>
             i.AssistantUserId == assistantId &&
-            (i.Status == StudioInvitationStatus.Accepted ||
-             (i.IsNewAccountFlow && i.Status == StudioInvitationStatus.Pending)));
+            i.Status == StudioInvitationStatus.Accepted);
 
         if (!isMember)
             throw new InvalidOperationException("Assistant must be invited to the series studio before assignment.");

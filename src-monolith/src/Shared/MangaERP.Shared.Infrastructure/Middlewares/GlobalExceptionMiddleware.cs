@@ -4,6 +4,8 @@ using MangaERP.Shared.Domain.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using MangaERP.Submission.Domain.Exceptions;
 using Task = System.Threading.Tasks.Task;
 
 namespace MangaERP.Shared.Infrastructure.Middlewares;
@@ -82,6 +84,21 @@ public class GlobalExceptionMiddleware : IMiddleware
                 StatusCodes.Status409Conflict,
                 "Conflict",
                 conflictEx.Message),
+
+            InvalidStateTransitionException stateEx => (
+                StatusCodes.Status409Conflict,
+                "InvalidStateTransition",
+                stateEx.Message),
+
+            DbUpdateConcurrencyException => (
+                StatusCodes.Status409Conflict,
+                "ConcurrentUpdate",
+                "The workflow changed concurrently. Refresh and retry the action."),
+
+            DbUpdateException => (
+                StatusCodes.Status409Conflict,
+                "DatabaseConstraintConflict",
+                "The request conflicts with an existing assignment, account, or pending invitation."),
 
             KeyNotFoundException notFoundKeyEx => (
                 StatusCodes.Status404NotFound,

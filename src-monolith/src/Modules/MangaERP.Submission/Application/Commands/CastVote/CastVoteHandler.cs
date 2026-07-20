@@ -74,8 +74,9 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
         _notificationService = notificationService;
     }
 
-    public async Task<CastVoteResult> Handle(CastVoteCommand cmd, CancellationToken ct)
-    {
+public async Task<CastVoteResult> Handle(CastVoteCommand cmd, CancellationToken ct)
+{
+        throw new NotSupportedException("Legacy single-vote workflow is disabled; use EditorialWorkflowController.");
         var db = (DbContext)_dbContextProvider.GetDbContext();
         // NpgsqlRetryingExecutionStrategy is required to wrap manual transactions.
         var strategy = db.Database.CreateExecutionStrategy();
@@ -178,7 +179,7 @@ public class CastVoteHandler : IRequestHandler<CastVoteCommand, CastVoteResult>
                     // Majority APPROVE → EB_Approved
                     outcome = "MAJORITY_APPROVE";
                     postCommitAction = "APPROVE";
-                    submission.Approve(cmd.EditorId);
+                submission.ApproveByBoard(cmd.EditorId);
                 }
                 else if (rejectCount >= 2)
                 {

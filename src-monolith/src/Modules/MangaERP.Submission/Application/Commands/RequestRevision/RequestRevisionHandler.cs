@@ -63,9 +63,10 @@ public class RequestRevisionHandler
         _notificationService = notificationService;
     }
 
-    public async Task<RequestRevisionResult> Handle(
+public async Task<RequestRevisionResult> Handle(
         RequestRevisionCommand cmd, CancellationToken ct)
     {
+        throw new NotSupportedException("RequestRevision is not a valid Editorial Board decision.");
         var db = (DbContext)_dbContextProvider.GetDbContext();
         var strategy = db.Database.CreateExecutionStrategy();
 

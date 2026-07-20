@@ -2,7 +2,12 @@ using MangaERP.Shared.Domain.Abstractions;
 
 namespace MangaERP.Chapter.Domain.Entities;
 
-public enum ChapterStatus { Draft, ReadyForQA, QaRevisionRequired, Approved, Published, Archived }
+public enum ChapterStatus
+{
+    Draft, ReadyForQA, QaRevisionRequired, PendingEditorialReview,
+    EditorialRejectedToTantou, MangakaRevisionRequired, ConflictEscalated,
+    Approved, Published, Archived
+}
 public enum PageTaskStatus { Pending, Incomplete, Reviewing, RevisionAlert, Approved }
 
 /// <summary>Type of artwork work assigned to the assistant for this page region.</summary>
@@ -23,6 +28,9 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
+    public int EditorialRound { get; private set; } = 1;
+    public string? EditorialFeedback { get; private set; }
+    public string? TantouGuidance { get; private set; }
     public virtual ICollection<PageTask> PageTasks { get; private set; } = new List<PageTask>();
 
     private Chapter() { }
@@ -45,7 +53,8 @@ public class Chapter : AggregateRoot, ISoftDeletable
 
     public void UpdateMetadata(string title, decimal chapterNumber, int totalPages, Guid? assignedEditorId, string? coverImageUrl)
     {
-        if (Status != ChapterStatus.Draft && Status != ChapterStatus.QaRevisionRequired)
+        if (Status != ChapterStatus.Draft && Status != ChapterStatus.QaRevisionRequired &&
+            Status != ChapterStatus.MangakaRevisionRequired)
             throw new InvalidOperationException("Only Draft or QaRevisionRequired chapters can have their metadata updated.");
 
         if (totalPages <= 0)
@@ -69,7 +78,8 @@ public class Chapter : AggregateRoot, ISoftDeletable
 
     public void SubmitForQA()
     {
-        if (Status != ChapterStatus.Draft && Status != ChapterStatus.QaRevisionRequired)
+        if (Status != ChapterStatus.Draft && Status != ChapterStatus.QaRevisionRequired &&
+            Status != ChapterStatus.MangakaRevisionRequired)
             throw new InvalidOperationException("Only Draft or QaRevisionRequired chapters can be submitted for QA.");
 
         if (!CanSubmitForQA())
@@ -79,7 +89,66 @@ public class Chapter : AggregateRoot, ISoftDeletable
         Status = ChapterStatus.ReadyForQA;
     }
 
-    public void Approve() => Status = ChapterStatus.Approved;
+    public void ReturnByTantou(Guid tantouId, string guidance)
+    {
+        EnsureAssignedTantou(tantouId);
+        if (Status != ChapterStatus.ReadyForQA)
+            throw new InvalidOperationException("Only chapters awaiting Tantou review can be returned.");
+        if (string.IsNullOrWhiteSpace(guidance))
+            throw new InvalidOperationException("Revision guidance is required.");
+        TantouGuidance = guidance.Trim();
+        Status = ChapterStatus.QaRevisionRequired;
+    }
+
+    public void RecommendToEditorialBoard(Guid tantouId)
+    {
+        EnsureAssignedTantou(tantouId);
+        if (Status != ChapterStatus.ReadyForQA)
+            throw new InvalidOperationException("Only chapters awaiting Tantou review can be recommended.");
+        Status = ChapterStatus.PendingEditorialReview;
+    }
+
+    public void RejectToTantou(string feedback)
+    {
+        if (Status != ChapterStatus.PendingEditorialReview && Status != ChapterStatus.ConflictEscalated)
+            throw new InvalidOperationException("This chapter is not awaiting an editorial decision.");
+        if (string.IsNullOrWhiteSpace(feedback))
+            throw new InvalidOperationException("Rejection feedback is required.");
+        EditorialFeedback = feedback.Trim();
+        Status = ChapterStatus.EditorialRejectedToTantou;
+    }
+
+    public void EscalateEditorialConflict()
+    {
+        if (Status != ChapterStatus.PendingEditorialReview)
+            throw new InvalidOperationException("Only a pending editorial review can be escalated.");
+        Status = ChapterStatus.ConflictEscalated;
+    }
+
+    public void ReturnConsolidatedGuidanceToMangaka(Guid tantouId, string guidance)
+    {
+        EnsureAssignedTantou(tantouId);
+        if (Status != ChapterStatus.EditorialRejectedToTantou)
+            throw new InvalidOperationException("Only rejected chapters can be returned to the Mangaka.");
+        if (string.IsNullOrWhiteSpace(guidance))
+            throw new InvalidOperationException("Consolidated revision guidance is required.");
+        TantouGuidance = guidance.Trim();
+        Status = ChapterStatus.MangakaRevisionRequired;
+        EditorialRound++;
+    }
+
+    private void EnsureAssignedTantou(Guid tantouId)
+    {
+        if (AssignedEditorId != tantouId)
+            throw new UnauthorizedAccessException("Only the assigned Tantou Editor can perform this action.");
+    }
+
+    public void Approve()
+    {
+        if (Status != ChapterStatus.PendingEditorialReview && Status != ChapterStatus.ConflictEscalated)
+            throw new InvalidOperationException("Only the Editorial Board or Editor in Chief can approve this chapter.");
+        Status = ChapterStatus.Approved;
+    }
     public void RequestQaRevision() => Status = ChapterStatus.QaRevisionRequired;
     public void Archive() => Status = ChapterStatus.Archived;
 

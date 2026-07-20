@@ -70,24 +70,31 @@ public class NotificationService : INotificationService
     }
 
     public async System.Threading.Tasks.Task NotifyChapterReadyForQAAsync(
-        Guid chapterId, string chapterTitle, CancellationToken ct = default)
+        Guid tantouEditorId, Guid chapterId, string chapterTitle, CancellationToken ct = default)
     {
-        var editors = await _userRepo.GetByRoleAsync(UserRole.TantouEditor, ct);
-        foreach (var editor in editors)
+        await _notificationRepo.AddAsync(new Notification
         {
-            await _notificationRepo.AddAsync(new Notification
-            {
-                ReceiverId = editor.Id,
-                Title = "Chapter ready for QA",
-                Message = $"Chapter \"{chapterTitle}\" is ready for editorial review.",
-                NotifyType = "ChapterReadyForQA",
-                RelatedEntityId = chapterId,
-                RelatedEntityType = "Chapter"
-            }, ct);
-        }
+            ReceiverId = tantouEditorId,
+            Title = "Chapter ready for Tantou review",
+            Message = $"Chapter \"{chapterTitle}\" is ready for your review and guidance.",
+            NotifyType = "ChapterReadyForTantou",
+            RelatedEntityId = chapterId,
+            RelatedEntityType = "Chapter"
+        }, ct);
+    }
 
-        if (editors.Any())
-            await _notificationRepo.SaveChangesAsync(ct);
+    public async System.Threading.Tasks.Task NotifySubmissionReadyForTantouAsync(
+        Guid tantouEditorId, Guid submissionId, string submissionTitle, CancellationToken ct = default)
+    {
+        await _notificationRepo.AddAsync(new Notification
+        {
+            ReceiverId = tantouEditorId,
+            Title = "Submission ready for Tantou review",
+            Message = $"Submission \"{submissionTitle}\" is ready for your review and guidance.",
+            NotifyType = "SubmissionReadyForTantou",
+            RelatedEntityId = submissionId,
+            RelatedEntityType = "SeriesSubmission"
+        }, ct);
     }
 
     public async System.Threading.Tasks.Task NotifySubmissionRevisionAsync(

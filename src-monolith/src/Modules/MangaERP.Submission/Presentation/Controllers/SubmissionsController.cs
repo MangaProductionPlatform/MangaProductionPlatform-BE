@@ -243,6 +243,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(SubmissionVotesDto), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> GetVotes(Guid id, [FromQuery] int? round, CancellationToken ct)
     {
         try
@@ -263,6 +264,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(MangaERP.Submission.Application.Queries.GetReviewResults.ReviewResultsDto), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> GetReviewResults(Guid id, [FromQuery] int? round, CancellationToken ct)
     {
         try
@@ -286,6 +288,7 @@ public class SubmissionsController : ControllerBase
     [HttpGet("queue")]
     [Authorize(Roles = "EditorialBoard,EditorInChief")]
     [ProducesResponseType(typeof(IEnumerable<SubmissionSummaryDto>), 200)]
+    [NonAction]
     public async Task<IActionResult> GetQueue(CancellationToken ct)
     {
         try
@@ -311,6 +314,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(RequestRevisionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> RequestRevision(Guid id, [FromBody] RevisionWithPinsRequest request, CancellationToken ct)
     {
         try
@@ -337,6 +341,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(RejectSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> Reject(Guid id, [FromBody] FeedbackRequest request, CancellationToken ct)
     {
         try
@@ -360,6 +365,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(ApproveSubmissionResult), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> Approve(Guid id, CancellationToken ct)
     {
         try
@@ -389,6 +395,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(400)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> CastVote(Guid id, [FromBody] CastVoteRequest request, CancellationToken ct)
     {
         try
@@ -425,6 +432,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(400)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> ResolveConflict(Guid id, [FromBody] ResolveConflictRequest request, CancellationToken ct)
     {
         try
@@ -477,6 +485,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<FeedbackPinDto>), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> GetFeedbackPins(Guid id, CancellationToken ct)
     {
         try
@@ -497,6 +506,7 @@ public class SubmissionsController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<FeedbackPinDto>), 200)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
+    [NonAction]
     public async Task<IActionResult> GetFeedbackPinsHistory(Guid id, CancellationToken ct)
     {
         try

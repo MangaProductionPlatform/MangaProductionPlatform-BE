@@ -62,6 +62,7 @@ public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, 
             Username = username,
             Email = username,               // corporate email IS the login email
             PersonalEmail = request.PersonalEmail,
+            NormalizedPersonalEmail = request.PersonalEmail.Trim().ToLowerInvariant(),
             PasswordHash = string.Empty,    // not set until activation
             Role = request.Role,
             FullName = request.FullName,

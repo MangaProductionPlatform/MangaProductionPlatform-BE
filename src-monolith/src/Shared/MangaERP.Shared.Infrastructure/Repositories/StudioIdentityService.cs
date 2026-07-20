@@ -6,6 +6,8 @@ using MangaERP.Shared.Application.Ports;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using MangaERP.Shared.Infrastructure.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace MangaERP.Shared.Infrastructure.Repositories;
 
@@ -20,19 +22,22 @@ public class StudioIdentityService : IStudioIdentityService
     private readonly IEmailService _emailService;
     private readonly IUsernameGenerator _usernameGenerator;
     private readonly IConfiguration _config;
+    private readonly IHubContext<NotificationHub> _hub;
 
     public StudioIdentityService(
         IDbContextProvider provider,
         ITokenService tokenService,
         IEmailService emailService,
         IUsernameGenerator usernameGenerator,
-        IConfiguration config)
+        IConfiguration config,
+        IHubContext<NotificationHub> hub)
     {
         _db = (AppDbContext)provider.GetDbContext();
         _tokenService = tokenService;
         _emailService = emailService;
         _usernameGenerator = usernameGenerator;
         _config = config;
+        _hub = hub;
     }
 
     /// <summary>
@@ -41,14 +46,25 @@ public class StudioIdentityService : IStudioIdentityService
     /// </summary>
     public async System.Threading.Tasks.Task<Guid?> FindActiveAssistantByEmailAsync(string email, CancellationToken ct = default)
     {
-        var user = await _db.Users.FirstOrDefaultAsync(
-            u => (u.Email == email || u.PersonalEmail == email)
-                 && u.Role == UserRole.Assistant
-                 && u.AccountStatus == AccountStatus.Active
-                 && !u.IsDeleted,
-            ct);
+        var normalized = email.Trim().ToLower();
+        var matches = await _db.Users
+            .Where(u => u.NormalizedPersonalEmail == normalized && !u.IsDeleted)
+            .ToListAsync(ct);
+        if (matches.Count > 1)
+            throw new InvalidOperationException("Duplicate accounts exist for this personal email. Contact an administrator.");
+        var user = matches.SingleOrDefault();
+        if (user is null) return null;
+        if (user.Role != UserRole.Assistant)
+            throw new InvalidOperationException("This personal email belongs to a non-Assistant account.");
+        if (user.AccountStatus is AccountStatus.Suspended or AccountStatus.Deactivated)
+            throw new InvalidOperationException("This Assistant account is not available for invitations.");
+        return user.Id;
+    }
 
-        return user?.Id;
+    public System.Threading.Tasks.Task<bool> IsInternalEmailAsync(string email, CancellationToken ct = default)
+    {
+        var normalized = email.Trim().ToLower();
+        return _db.Users.AnyAsync(u => u.Email.ToLower() == normalized || u.Username.ToLower() == normalized, ct);
     }
 
     /// <summary>
@@ -68,6 +84,7 @@ public class StudioIdentityService : IStudioIdentityService
             Username = username,
             Email = username,
             PersonalEmail = email,
+            NormalizedPersonalEmail = email.Trim().ToLowerInvariant(),
             PasswordHash = string.Empty,
             Role = UserRole.Assistant,
             FullName = fullName,
@@ -93,15 +110,17 @@ public class StudioIdentityService : IStudioIdentityService
         await _db.InvitationTokens.AddAsync(invToken, ct);
 
         // Gửi email kích hoạt
-        var baseUrl = _config["Invitation:ActivationBaseUrl"] ?? "https://company.com/activate";
-        var activationLink = $"{baseUrl}?token={Uri.EscapeDataString(jwtToken)}";
-        await _emailService.SendInvitationEmailAsync(
-            email, activationLink, username,
-            fullName ?? "Assistant", ct);
-
-        await _db.SaveChangesAsync(ct);
-
         return (user.Id, jwtToken);
+    }
+
+    public async System.Threading.Tasks.Task SendAssistantRegistrationEmailAsync(
+        Guid userId, string activationToken, CancellationToken ct = default)
+    {
+        var user = await _db.Users.SingleAsync(x => x.Id == userId, ct);
+        var baseUrl = _config["Invitation:ActivationBaseUrl"] ?? "https://company.com/activate";
+        var activationLink = $"{baseUrl}?token={Uri.EscapeDataString(activationToken)}";
+        await _emailService.SendInvitationEmailAsync(
+            user.PersonalEmail!, activationLink, user.Username, user.FullName ?? "Assistant", ct);
     }
 
     /// <summary>
@@ -124,4 +143,14 @@ public class StudioIdentityService : IStudioIdentityService
         await _db.Notifications.AddAsync(notification, ct);
         // SaveChanges sẽ được gọi sau trong InviteAssistantHandler
     }
+
+    public System.Threading.Tasks.Task DeliverStudioInvitationRealtimeAsync(
+        Guid receiverUserId, Guid invitationId, string seriesTitle, CancellationToken ct = default) =>
+        _hub.Clients.User(receiverUserId.ToString()).SendAsync("ReceiveNotification", new
+        {
+            title = $"Studio invitation: {seriesTitle}",
+            message = "A new studio invitation is available.",
+            notifyType = "StudioInvitation",
+            relatedEntityId = invitationId
+        }, ct);
 }
