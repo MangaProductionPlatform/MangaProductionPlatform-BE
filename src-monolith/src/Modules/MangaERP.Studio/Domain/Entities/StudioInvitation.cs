@@ -19,11 +19,13 @@ public enum StudioInvitationStatus
     Cancelled
 }
 
+public enum RegistrationDeliveryStatus { NotRequired, Pending, Sent, Failed }
+
 /// <summary>
 /// Thực thể lời mời Assistant vào studio của Mangaka.
 /// Hỗ trợ 2 trường hợp:
 /// - TH1: Email chưa có tài khoản → tạo tài khoản PendingActivation + gửi email kích hoạt.
-///         Sau khi activate xong, IsNewAccountFlow = true → hệ thống auto chấp nhận lời mời.
+///         Sau khi kích hoạt và đăng nhập, Assistant vẫn phải chấp nhận lời mời đang chờ.
 /// - TH2: Email đã có tài khoản Assistant → gửi push notification, Assistant tự accept/decline.
 /// </summary>
 public class StudioInvitation
@@ -38,6 +40,7 @@ public class StudioInvitation
 
     /// Email của Assistant được mời
     public string AssistantEmail { get; set; } = string.Empty;
+    public string NormalizedAssistantEmail { get; set; } = string.Empty;
 
     /// UserId của Assistant (null nếu TH1 — chưa tồn tại tài khoản khi mời)
     public Guid? AssistantUserId { get; set; }
@@ -57,4 +60,23 @@ public class StudioInvitation
     public DateTime ExpiresAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? RespondedAt { get; set; }
+    public RegistrationDeliveryStatus RegistrationDeliveryStatus { get; private set; } = RegistrationDeliveryStatus.NotRequired;
+    public DateTime? RegistrationDeliveryAttemptedAt { get; private set; }
+    public string? RegistrationDeliveryError { get; private set; }
+
+    public void MarkRegistrationDeliveryPending() => RegistrationDeliveryStatus = RegistrationDeliveryStatus.Pending;
+
+    public void MarkRegistrationDeliverySent()
+    {
+        RegistrationDeliveryStatus = RegistrationDeliveryStatus.Sent;
+        RegistrationDeliveryAttemptedAt = DateTime.UtcNow;
+        RegistrationDeliveryError = null;
+    }
+
+    public void MarkRegistrationDeliveryFailed(string error)
+    {
+        RegistrationDeliveryStatus = RegistrationDeliveryStatus.Failed;
+        RegistrationDeliveryAttemptedAt = DateTime.UtcNow;
+        RegistrationDeliveryError = string.IsNullOrWhiteSpace(error) ? "Registration delivery failed." : error[..Math.Min(error.Length, 1000)];
+    }
 }

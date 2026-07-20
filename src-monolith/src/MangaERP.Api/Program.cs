@@ -30,6 +30,12 @@ Env.TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Keep design-time EF commands and local execution independent of the Windows
+// EventLog provider, which requires elevated source-registration permissions.
+// Render and container logs are collected from stdout/stderr instead.
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+
 // Đảm bảo ASP.NET Core đọc các biến đã được DotNetEnv inject vào System.Environment
 // Biến dạng Smtp__Host trong .env sẽ được map tự động sang Smtp:Host trong config
 builder.Configuration.AddEnvironmentVariables();

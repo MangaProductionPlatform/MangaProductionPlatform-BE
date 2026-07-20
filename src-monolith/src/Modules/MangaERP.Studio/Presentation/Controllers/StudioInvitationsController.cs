@@ -2,6 +2,7 @@ using MediatR;
 using MangaERP.Studio.Application.Commands.InviteAssistant;
 using MangaERP.Studio.Application.Commands.RespondInvitation;
 using MangaERP.Studio.Application.Commands.CancelInvitation;
+using MangaERP.Studio.Application.Commands.RetryRegistrationDelivery;
 using MangaERP.Studio.Application.Queries;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,7 +31,7 @@ public class StudioInvitationsController : ControllerBase
     /// [Mangaka] Mời Assistant vào studio của một Series.
     /// Backend tự phân nhánh:
     /// - TH1 (Email chưa có tài khoản): Tạo tài khoản PendingActivation + gửi email kích hoạt.
-    ///   Sau khi Assistant kích hoạt xong, hệ thống tự động chấp nhận lời mời.
+    ///   Sau khi kích hoạt và đăng nhập, Assistant nhận lời mời đang chờ để Accept/Decline.
     /// - TH2 (Email đã có tài khoản Assistant): Gửi push notification để Assistant Accept/Decline.
     /// </summary>
     [HttpPost("{seriesId:guid}/invitations")]
@@ -57,6 +58,7 @@ public class StudioInvitationsController : ControllerBase
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
     /// <summary>
@@ -74,7 +76,7 @@ public class StudioInvitationsController : ControllerBase
 
     /// <summary>
     /// [Mangaka] Xem danh sách Assistant đang hoạt động trong studio của một Series.
-    /// Trả về các Assistant có lời mời Accepted (hoặc IsNewAccountFlow + Pending).
+    /// Chỉ trả về các Assistant đã chấp nhận lời mời.
     /// </summary>
     [HttpGet("{seriesId:guid}/members")]
     [Authorize(Roles = "Mangaka")]
@@ -114,6 +116,15 @@ public class StudioInvitationsController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpPost("invitations/{invitationId:guid}/retry-registration")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(RetryRegistrationDeliveryResult), 200)]
+    public async Task<IActionResult> RetryRegistrationDelivery(Guid invitationId, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new RetryRegistrationDeliveryCommand(invitationId, GetUserId()), ct);
+        return Ok(result);
     }
 
     // ── ASSISTANT APIs ────────────────────────────────────────────────────────

@@ -47,13 +47,13 @@ public class SubmitChapterForQAHandler : IRequestHandler<SubmitChapterForQAComma
             ?? throw new KeyNotFoundException($"Series {chapter.SeriesId} not found.");
 
         chapter.EnsureOwnedBy(cmd.MangakaId, series.AuthorId);
+        if (!chapter.AssignedEditorId.HasValue)
+            throw new InvalidOperationException("An assigned Tantou Editor is required before chapter review.");
         chapter.SubmitForQA();
 
         await _chapterRepo.UpdateAsync(chapter, ct);
+        await _notificationService.NotifyChapterReadyForQAAsync(chapter.AssignedEditorId.Value, chapter.Id, chapter.Title, ct);
         await _chapterRepo.SaveChangesAsync(ct);
-
-        // Notify editors that a chapter is ready for QA review
-        await _notificationService.NotifyChapterReadyForQAAsync(chapter.Id, chapter.Title, ct);
 
         // Publish in-process MediatR event for QA Module to create QASession
         await _publisher.Publish(

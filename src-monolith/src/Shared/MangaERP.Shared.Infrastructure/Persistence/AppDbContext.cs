@@ -38,6 +38,7 @@ public class AppDbContext : DbContext
     public DbSet<SeriesSubmission> SeriesSubmissions     => Set<SeriesSubmission>();
     public DbSet<SubmissionFeedbackPin> SubmissionFeedbackPins => Set<SubmissionFeedbackPin>();
     public DbSet<SubmissionVote>   SubmissionVotes       => Set<SubmissionVote>();
+    public DbSet<EditorialReviewAssignment> EditorialReviewAssignments => Set<EditorialReviewAssignment>();
 
     // ── Series ────────────────────────────────────────────────
     public DbSet<MangaSeries>      MangaSeries       => Set<MangaSeries>();

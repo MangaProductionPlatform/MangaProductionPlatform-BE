@@ -24,7 +24,7 @@ public class UserRepository : IUserRepository
 
     public Task<bool> PersonalEmailExistsActiveOrPendingAsync(string personalEmail, CancellationToken ct = default)
         => _db.Set<User>().AnyAsync(u =>
-            u.PersonalEmail == personalEmail &&
+            u.NormalizedPersonalEmail == personalEmail.Trim().ToLower() &&
             (u.AccountStatus == AccountStatus.PendingActivation || u.AccountStatus == AccountStatus.Active), ct);
 
     public Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default)

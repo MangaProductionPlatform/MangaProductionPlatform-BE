@@ -16,6 +16,7 @@ public class User : ISoftDeletable
     public string Username { get; set; } = string.Empty;         // corporate email e.g. anhnv.mgk@company.com
     public string Email { get; set; } = string.Empty;            // same as Username for login
     public string? PersonalEmail { get; set; }                   // invitee personal contact email
+    public string? NormalizedPersonalEmail { get; set; }
     public string PasswordHash { get; set; } = string.Empty;     // empty until activation
     public UserRole Role { get; set; } = UserRole.Reader;        // kept for JWT compat; RBAC via UserRoles
     public AccountStatus AccountStatus { get; set; } = AccountStatus.Active;

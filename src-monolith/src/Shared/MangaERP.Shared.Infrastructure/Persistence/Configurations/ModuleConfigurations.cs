@@ -1,5 +1,6 @@
 using ChapterEntity = MangaERP.Chapter.Domain.Entities.Chapter;
 using MangaERP.Chapter.Domain.Entities;
+using MangaERP.Identity.Domain.Entities;
 using MangaERP.Publishing.Domain.Entities;
 using MangaERP.QA.Domain.Entities;
 using MangaERP.Ranking.Domain.Entities;
@@ -19,7 +20,7 @@ public class SeriesSubmissionConfiguration : IEntityTypeConfiguration<SeriesSubm
         b.ToTable("SeriesSubmissions", table =>
             table.HasCheckConstraint(
                 "CK_SeriesSubmissions_Status",
-                "\"Status\" IN ('Draft', 'Pending_EB_Review', 'Requires_Revision', 'EB_Rejected', 'EB_Approved', 'Conflict_Escalated')"));
+                "\"Status\" IN ('Draft', 'Pending_Tantou_Review', 'Tantou_Revision_Required', 'Pending_EB_Review', 'Editorial_Rejected_To_Tantou', 'Mangaka_Revision_Required', 'EB_Approved', 'Conflict_Escalated')"));
         b.HasKey(e => e.Id);
         b.Property(e => e.Title).IsRequired().HasMaxLength(256);
         b.Property(e => e.ManuscriptUrl).IsRequired(false).HasMaxLength(2048);
@@ -38,6 +39,32 @@ public class SeriesSubmissionConfiguration : IEntityTypeConfiguration<SeriesSubm
          .WithOne()
          .HasForeignKey(p => p.SubmissionId)
          .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class EditorialReviewAssignmentConfiguration : IEntityTypeConfiguration<EditorialReviewAssignment>
+{
+    public void Configure(EntityTypeBuilder<EditorialReviewAssignment> b)
+    {
+        b.ToTable("EditorialReviewAssignments", table =>
+        {
+            table.HasCheckConstraint("CK_EditorialReviewAssignments_Round", "\"RoundNumber\" > 0");
+            table.HasCheckConstraint(
+                "CK_EditorialReviewAssignments_Completion",
+                "(\"Status\" = 'Pending' AND \"Decision\" IS NULL AND \"ReviewedAt\" IS NULL) OR " +
+                "(\"Status\" = 'Completed' AND \"Decision\" IN ('Approved', 'Rejected') AND \"ReviewedAt\" IS NOT NULL AND " +
+                "(\"Decision\" = 'Approved' OR length(trim(\"Feedback\")) > 0))");
+        });
+        b.HasKey(e => e.Id);
+        b.Property(e => e.WorkType).HasConversion<string>().HasMaxLength(40).IsRequired();
+        b.Property(e => e.Status).HasConversion<string>().HasMaxLength(20).IsRequired();
+        b.Property(e => e.Decision).HasConversion<string>().HasMaxLength(20);
+        b.Property(e => e.Feedback).HasMaxLength(4000);
+        b.Property(e => e.ConcurrencyToken).IsConcurrencyToken();
+        b.HasIndex(e => new { e.WorkType, e.WorkId, e.RoundNumber, e.ReviewerId }).IsUnique();
+        b.HasIndex(e => new { e.WorkType, e.WorkId, e.RoundNumber });
+        b.HasIndex(e => new { e.ReviewerId, e.Status });
+        b.HasOne<User>().WithMany().HasForeignKey(e => e.ReviewerId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -94,6 +121,7 @@ public class ChapterConfiguration : IEntityTypeConfiguration<ChapterEntity>
         b.Property(e => e.CoverImageUrl).HasMaxLength(2048);
         b.Property(e => e.ChapterNumber).HasColumnType("decimal(5,2)");
         b.Property(e => e.Status).HasConversion(v => v.ToString(), v => Enum.Parse<ChapterStatus>(v)).HasMaxLength(50);
+        b.Property(e => e.EditorialRound).HasDefaultValue(1);
         b.Property(e => e.IssueType).HasMaxLength(50);
         b.HasMany(c => c.PageTasks).WithOne(pt => pt.Chapter)
             .HasForeignKey(pt => pt.ChapterId).OnDelete(DeleteBehavior.Cascade);
@@ -254,11 +282,16 @@ public class StudioInvitationConfiguration : IEntityTypeConfiguration<StudioInvi
     {
         b.ToTable("StudioInvitations"); b.HasKey(e => e.Id);
         b.Property(e => e.AssistantEmail).IsRequired().HasMaxLength(256);
+        b.Property(e => e.NormalizedAssistantEmail).IsRequired().HasMaxLength(256);
         b.Property(e => e.Status).HasConversion(v => v.ToString(),
             v => Enum.Parse<StudioInvitationStatus>(v)).HasMaxLength(50);
         b.Property(e => e.Message).HasMaxLength(1000);
         b.Property(e => e.ActivationToken).HasMaxLength(2048);
-        b.HasIndex(e => new { e.SeriesId, e.AssistantEmail });
+        b.Property(e => e.RegistrationDeliveryStatus).HasConversion<string>().HasMaxLength(20);
+        b.Property(e => e.RegistrationDeliveryError).HasMaxLength(1000);
+        b.HasIndex(e => new { e.SeriesId, e.NormalizedAssistantEmail, e.Status })
+            .IsUnique()
+            .HasFilter("\"Status\" = 'Pending'");
         b.HasIndex(e => new { e.AssistantUserId, e.Status });
     }
 }

@@ -49,21 +49,19 @@ public class SubmitProposalHandler
         if (submission.SubmitterId != cmd.SubmitterId)
             throw new UnauthorizedAccessException("You are not the owner of this submission.");
 
-        submission.SubmitDraft();   // Domain: Draft → Pending; guards ManuscriptUrl
+        var author = await _userRepo.GetByIdAsync(cmd.SubmitterId, ct)
+            ?? throw new KeyNotFoundException("Submission owner not found.");
+        if (!author.ManagingTantouId.HasValue)
+            throw new InvalidOperationException("A Tantou Editor must be assigned before submitting work.");
 
+        submission.SubmitDraft(author.ManagingTantouId.Value);
+
+        await _notificationService.NotifySubmissionReadyForTantouAsync(
+            author.ManagingTantouId.Value, submission.Id, submission.Title, ct);
         await _repo.SaveChangesAsync(ct);
 
         // [Mốc 1] Bắn thông báo cho Editorial Board SAU khi DB commit thành công.
         // Lấy tên tác giả từ User entity để hiển thị trong thông báo.
-        var author = await _userRepo.GetByIdAsync(cmd.SubmitterId, ct);
-        var authorName = author?.FullName ?? "Không rõ";
-
-        await _notificationService.NotifyNewSubmissionToEditorialBoardAsync(
-            submissionId:    submission.Id,
-            submissionTitle: submission.Title,
-            authorName:      authorName,
-            ct:              ct);
-
         return new SubmitProposalResult(submission.Id, submission.Status.ToString());
     }
 }

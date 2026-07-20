@@ -84,6 +84,7 @@ public static class DbSeeder
             Username      = "sysadmin.adm@company.com",
             Email         = "sysadmin.adm@company.com",
             PersonalEmail = "admin@company.com",
+            NormalizedPersonalEmail = "admin@company.com",
             PasswordHash  = BCrypt.Net.BCrypt.HashPassword(adminPassword),
             Role          = UserRole.Admin,
             FullName      = "System Administrator",

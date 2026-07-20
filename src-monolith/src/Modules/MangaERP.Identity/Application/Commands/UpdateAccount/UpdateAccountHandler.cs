@@ -53,6 +53,7 @@ public class UpdateAccountHandler : IRequestHandler<UpdateAccountCommand, Update
                 throw new UserAlreadyExistsException(request.PersonalEmail);
             }
             user.PersonalEmail = request.PersonalEmail;
+            user.NormalizedPersonalEmail = request.PersonalEmail.Trim().ToLowerInvariant();
         }
 
         // Validate ManagingTantouId if role is Mangaka
