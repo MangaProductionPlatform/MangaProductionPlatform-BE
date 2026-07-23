@@ -25,7 +25,8 @@ public record PageTaskDetailDto(
     Guid? AssignedAssistantId,
     string BaseImageUrl,
     string? PreviewCompositeUrl,
-    string? Description);
+    string? Description,
+    string TaskType);
 
 public class GetChapterDetailHandler : IRequestHandler<GetChapterDetailQuery, ChapterDetailDto>
 {
@@ -59,7 +60,8 @@ public class GetChapterDetailHandler : IRequestHandler<GetChapterDetailQuery, Ch
             page.AssignedAssistantId,
             page.BaseImageUrl,
             page.PreviewPage?.CompositeFileUrl,
-            page.Description)).ToList();
+            page.Description,
+            page.TaskType.ToString())).ToList();
 
         var approved = await _pageTaskRepo.CountApprovedPagesAsync(chapter.Id, ct);
         var progress = chapter.TotalPages > 0

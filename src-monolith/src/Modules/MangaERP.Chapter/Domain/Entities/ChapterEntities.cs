@@ -232,12 +232,13 @@ public class PageTask : AggregateRoot, ISoftDeletable
         };
     }
 
-    public void Activate(Guid assistantId, string? description = null, DateTime? deadline = null)
+    public void Activate(Guid assistantId, PageTaskType taskType, string? description = null, DateTime? deadline = null)
     {
         if (TaskStatus != PageTaskStatus.Pending)
             throw new InvalidOperationException("Only Pending page tasks can be activated.");
 
         AssignedAssistantId = assistantId;
+        TaskType = taskType;
         Description = description;
         Deadline = deadline;
         TaskStatus = PageTaskStatus.Incomplete;

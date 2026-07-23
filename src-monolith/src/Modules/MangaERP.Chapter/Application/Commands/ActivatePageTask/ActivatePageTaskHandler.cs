@@ -16,6 +16,7 @@ public record ActivatePageTaskCommand(
     Guid ChapterId,
     int PageNumber,
     Guid AssignedAssistantId,
+    string TaskType,
     string? Description = null,
     DateTime? Deadline = null
 ) : IRequest<ActivatePageTaskResult>;
@@ -72,9 +73,15 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
         if (assistant.Role != UserRole.Assistant)
             throw new InvalidOperationException("Assigned user must have Assistant role.");
 
+        if (assistant.DeadlineWarningCount >= 3)
+            throw new InvalidOperationException("Assistant has been penalized due to too many deadline violations and cannot be assigned to new tasks.");
+
         await EnsureAssistantInStudioAsync(series.Id, cmd.AssignedAssistantId, ct);
 
-        pageTask.Activate(cmd.AssignedAssistantId, cmd.Description, cmd.Deadline);
+        if (!Enum.TryParse<PageTaskType>(cmd.TaskType, ignoreCase: true, out var taskType))
+            throw new InvalidOperationException($"Invalid TaskType '{cmd.TaskType}'. Valid values: {string.Join(", ", Enum.GetNames<PageTaskType>())}");
+
+        pageTask.Activate(cmd.AssignedAssistantId, taskType, cmd.Description, cmd.Deadline);
         await _pageTaskRepo.UpdateAsync(pageTask, ct);
         await _pageTaskRepo.SaveChangesAsync(ct);
 
@@ -110,6 +117,9 @@ public class ActivatePageTaskValidator : AbstractValidator<ActivatePageTaskComma
         RuleFor(x => x.ChapterId).NotEmpty();
         RuleFor(x => x.PageNumber).GreaterThan(0);
         RuleFor(x => x.AssignedAssistantId).NotEmpty();
+        RuleFor(x => x.TaskType).NotEmpty()
+            .Must(t => Enum.TryParse<PageTaskType>(t, ignoreCase: true, out _))
+            .WithMessage($"TaskType must be one of: {string.Join(", ", Enum.GetNames<PageTaskType>())}");
         RuleFor(x => x.Description).MaximumLength(2000).When(x => x.Description != null);
         RuleFor(x => x.Deadline)
             .Must(d => !d.HasValue || d.Value > DateTime.UtcNow.AddMinutes(-5))

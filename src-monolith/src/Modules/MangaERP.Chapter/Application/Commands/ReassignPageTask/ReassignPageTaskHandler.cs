@@ -70,6 +70,9 @@ public class ReassignPageTaskHandler : IRequestHandler<ReassignPageTaskCommand, 
         if (assistant.Role != UserRole.Assistant)
             throw new InvalidOperationException("Assigned user must have Assistant role.");
 
+        if (assistant.DeadlineWarningCount >= 3)
+            throw new InvalidOperationException("Assistant has been penalized due to too many deadline violations and cannot be assigned to new tasks.");
+
         await EnsureAssistantInStudioAsync(series.Id, cmd.NewAssistantId, ct);
 
         pageTask.Reassign(cmd.NewAssistantId, cmd.Description);

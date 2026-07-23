@@ -27,6 +27,7 @@ public class User : ISoftDeletable
     public string? DrawingSoftwares { get; set; }
     public string? BankAccountNumber { get; set; }
     public Guid? ManagingTantouId { get; set; }
+    public int DeadlineWarningCount { get; set; } = 0;
 
     // Navigation
     public virtual User? ManagingTantou { get; set; }

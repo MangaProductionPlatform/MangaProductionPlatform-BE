@@ -3,6 +3,7 @@ using System;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714103753_AddUserDeadlineWarningCount")]
+    partial class AddUserDeadlineWarningCount
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -44,13 +47,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("EditorialFeedback")
-                        .HasColumnType("text");
-
-                    b.Property<int>("EditorialRound")
-                        .HasDefaultValue(1)
-                        .HasColumnType("integer");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -71,9 +67,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
-
-                    b.Property<string>("TantouGuidance")
-                        .HasColumnType("text");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -327,10 +320,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ManagingTantouId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("NormalizedPersonalEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -363,9 +352,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.HasIndex("ManagingTantouId");
-
-                    b.HasIndex("NormalizedPersonalEmail")
-                        .IsUnique();
 
                     b.HasIndex("PersonalEmail");
 
@@ -827,25 +813,8 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<string>("NormalizedAssistantEmail")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
                     b.Property<DateTime?>("RespondedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("RegistrationDeliveryAttemptedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("RegistrationDeliveryError")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("RegistrationDeliveryStatus")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
 
                     b.Property<Guid>("SeriesId")
                         .HasColumnType("uuid");
@@ -859,71 +828,9 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("AssistantUserId", "Status");
 
-                    b.HasIndex("SeriesId", "NormalizedAssistantEmail", "Status")
-                        .IsUnique()
-                        .HasFilter("\"Status\" = 'Pending'");
+                    b.HasIndex("SeriesId", "AssistantEmail");
 
                     b.ToTable("StudioInvitations", (string)null);
-                });
-
-            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.EditorialReviewAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ConcurrencyToken")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Decision")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Feedback")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ReviewerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("RoundNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<Guid>("WorkId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("WorkType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReviewerId", "Status");
-
-                    b.HasIndex("WorkType", "WorkId", "RoundNumber");
-
-                    b.HasIndex("WorkType", "WorkId", "RoundNumber", "ReviewerId")
-                        .IsUnique();
-
-                    b.ToTable("EditorialReviewAssignments", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_EditorialReviewAssignments_Completion", "(\"Status\" = 'Pending' AND \"Decision\" IS NULL AND \"ReviewedAt\" IS NULL) OR (\"Status\" = 'Completed' AND \"Decision\" IN ('Approved', 'Rejected') AND \"ReviewedAt\" IS NOT NULL AND (\"Decision\" = 'Approved' OR length(trim(\"Feedback\")) > 0))");
-
-                            t.HasCheckConstraint("CK_EditorialReviewAssignments_Round", "\"RoundNumber\" > 0");
-                        });
                 });
 
             modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SeriesSubmission", b =>
@@ -968,9 +875,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
 
-                    b.Property<DateTime?>("RecommendedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<DateTime?>("ReviewedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -985,12 +889,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SubmitterId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("TantouGuidance")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("TantouReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -1000,7 +898,7 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 
                     b.ToTable("SeriesSubmissions", null, t =>
                         {
-                            t.HasCheckConstraint("CK_SeriesSubmissions_Status", "\"Status\" IN ('Draft', 'Pending_Tantou_Review', 'Tantou_Revision_Required', 'Pending_EB_Review', 'Editorial_Rejected_To_Tantou', 'Mangaka_Revision_Required', 'EB_Approved', 'Conflict_Escalated')");
+                            t.HasCheckConstraint("CK_SeriesSubmissions_Status", "\"Status\" IN ('Draft', 'Pending_EB_Review', 'Requires_Revision', 'EB_Rejected', 'EB_Approved', 'Conflict_Escalated')");
                         });
                 });
 
@@ -1212,46 +1110,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.ToTable("ChapterTeams", (string)null);
                 });
 
-            modelBuilder.Entity("MangaERP.Task.Domain.Entities.DeadlineExtensionRequest", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AssistantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("HandledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("PageTaskId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Reason")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime>("RequestedDeadline")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("DeadlineExtensionRequests", (string)null);
-                });
-
             modelBuilder.Entity("MangaERP.Task.Domain.Entities.TaskComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1355,15 +1213,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Navigation("Role");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("MangaERP.Submission.Domain.Entities.EditorialReviewAssignment", b =>
-                {
-                    b.HasOne("MangaERP.Identity.Domain.Entities.User", null)
-                        .WithMany()
-                        .HasForeignKey("ReviewerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("MangaERP.Submission.Domain.Entities.SubmissionFeedbackPin", b =>
