@@ -22,7 +22,7 @@ public class BulkActivatePageTasksTests
     private readonly Mock<IPageTaskRepository> _pageTaskRepoMock = new();
     private readonly Mock<ISeriesRepository> _seriesRepoMock = new();
     private readonly Mock<IUserRepository> _userRepoMock = new();
-    private readonly Mock<IStudioInvitationRepository> _studioRepoMock = new();
+    private readonly Mock<ICollaborationAuthorizationService> _collaborationAuthMock = new();
     private readonly Mock<INotificationService> _notificationServiceMock = new();
 
     private readonly BulkActivatePageTasksHandler _handler;
@@ -34,7 +34,7 @@ public class BulkActivatePageTasksTests
             _pageTaskRepoMock.Object,
             _seriesRepoMock.Object,
             _userRepoMock.Object,
-            _studioRepoMock.Object,
+            _collaborationAuthMock.Object,
             _notificationServiceMock.Object);
     }
 
@@ -176,8 +176,8 @@ public class BulkActivatePageTasksTests
             .ReturnsAsync(series);
         _userRepoMock.Setup(r => r.GetByIdAsync(assistantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(assistantUser);
-        _studioRepoMock.Setup(r => r.GetBySeriesIdAsync(seriesId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<StudioInvitation>());
+        _collaborationAuthMock.Setup(r => r.CanReceiveNewAssignmentsAsync(authorId, seriesId, assistantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() => _handler.Handle(command, CancellationToken.None));
@@ -211,8 +211,8 @@ public class BulkActivatePageTasksTests
             .ReturnsAsync(series);
         _userRepoMock.Setup(r => r.GetByIdAsync(assistantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(assistantUser);
-        _studioRepoMock.Setup(r => r.GetBySeriesIdAsync(seriesId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<StudioInvitation> { studioInvitation });
+        _collaborationAuthMock.Setup(r => r.CanReceiveNewAssignmentsAsync(authorId, seriesId, assistantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
         _pageTaskRepoMock.Setup(r => r.GetByChapterAndPageNumbersAsync(chapterId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<PageTask>());
 
@@ -252,8 +252,8 @@ public class BulkActivatePageTasksTests
             .ReturnsAsync(series);
         _userRepoMock.Setup(r => r.GetByIdAsync(assistantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(assistantUser);
-        _studioRepoMock.Setup(r => r.GetBySeriesIdAsync(seriesId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<StudioInvitation> { studioInvitation });
+        _collaborationAuthMock.Setup(r => r.CanReceiveNewAssignmentsAsync(authorId, seriesId, assistantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         _pageTaskRepoMock.Setup(r => r.GetByChapterAndPageNumbersAsync(chapterId, It.IsAny<IEnumerable<int>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<PageTask> { page1, page2 });

@@ -1,5 +1,4 @@
 using ChapterEntity = MangaERP.Chapter.Domain.Entities.Chapter;
-using TaskEntity = MangaERP.Task.Domain.Entities;
 using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Identity.Domain.Entities;
 using MangaERP.Publishing.Domain.Entities;
@@ -54,9 +53,18 @@ public class AppDbContext : DbContext
     public DbSet<ChapterTeam>         ChapterTeams         => Set<ChapterTeam>();
     public DbSet<TaskComment>         TaskComments         => Set<TaskComment>();
     public DbSet<DeadlineExtensionRequest> DeadlineExtensionRequests => Set<DeadlineExtensionRequest>();
+    public DbSet<TaskAssignmentAttempt> TaskAssignmentAttempts => Set<TaskAssignmentAttempt>();
+    public DbSet<TaskProgressUpdate> TaskProgressUpdates => Set<TaskProgressUpdate>();
+    public DbSet<TaskCheckpoint>     TaskCheckpoints     => Set<TaskCheckpoint>();
+
+    // ── Audit ─────────────────────────────────────────────────
+    public DbSet<AuditEvent>          AuditEvents          => Set<AuditEvent>();
 
     // ── Studio ────────────────────────────────────────────────
     public DbSet<StudioInvitation> StudioInvitations => Set<StudioInvitation>();
+    public DbSet<MangakaAssistantCollaboration> MangakaAssistantCollaborations => Set<MangakaAssistantCollaboration>();
+    public DbSet<CollaborationEvent> CollaborationEvents => Set<CollaborationEvent>();
+    public DbSet<SeriesAccessGrant> SeriesAccessGrants => Set<SeriesAccessGrant>();
 
     // ── QA ────────────────────────────────────────────────────
     public DbSet<BugPin>     BugPins     => Set<BugPin>();

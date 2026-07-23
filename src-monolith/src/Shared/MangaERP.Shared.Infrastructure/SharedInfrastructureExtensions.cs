@@ -26,19 +26,10 @@ public static class SharedInfrastructureExtensions
         var parsedConnectionString = BuildPostgresConnectionString(connectionString);
 
         // ── DATABASE CONFIGURATION ──────────────────────────────────────────────────
-        // [POSTGRESQL CONFIG] - Mặc định khi deploy (Hãy uncomment dòng này khi deploy)
         services.AddDbContext<AppDbContext>(options =>
             options.UseNpgsql(
                 parsedConnectionString,
                 npgsql => npgsql.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
-
-        // [SQL SERVER CONFIG] - Dùng để test local với SSMS
-        /*
-        services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(
-                config.GetConnectionString("DefaultConnection"),
-                sqlServer => sqlServer.EnableRetryOnFailure(10, TimeSpan.FromSeconds(5), null)));
-        */
 
         // Allow all modules to access AppDbContext without a direct circular reference
         services.AddScoped<IDbContextProvider, AppDbContextProvider>();
@@ -57,18 +48,24 @@ public static class SharedInfrastructureExtensions
         services.AddScoped<IPublicationRecordRepository>(sp => sp.GetRequiredService<PublishingRepositories>());
         services.AddScoped<INotificationRepository>(sp => sp.GetRequiredService<PublishingRepositories>());
 
-        // Studio module infrastructure (here to avoid circular dependency)
+        // Studio module infrastructure
         services.AddScoped<IStudioInvitationRepository, StudioInvitationRepository>();
+        services.AddScoped<ISeriesAccessGrantRepository, SeriesAccessGrantRepository>();
+        services.AddScoped<ICollaborationAuthorizationService, CollaborationAuthorizationService>();
         services.AddScoped<IStudioIdentityService, StudioIdentityService>();
         services.AddScoped<IStudioTaskRevocationService, StudioTaskRevocationService>();
 
-        // Chapter / Task / Notification infrastructure (MF2)
+        // Chapter / Task / Notification infrastructure
         services.AddScoped<IChapterRepository, ChapterRepository>();
         services.AddScoped<IPageTaskRepository, PageTaskRepository>();
         services.AddScoped<IPreviewPageRepository, PreviewPageRepository>();
         services.AddScoped<IArtworkLayerRepository, ArtworkLayerRepository>();
         services.AddScoped<ITaskCommentRepository, TaskCommentRepository>();
         services.AddScoped<IDeadlineExtensionRequestRepository, DeadlineExtensionRequestRepository>();
+        services.AddScoped<ITaskAssignmentAttemptRepository, TaskAssignmentRepository>();
+        services.AddScoped<ITaskProgressRepository, TaskProgressRepository>();
+        services.AddScoped<ITaskCheckpointRepository, TaskCheckpointRepository>();
+        services.AddScoped<IAuditEventRepository, AuditEventRepository>();
 
         // Ranking module infrastructure
         services.AddScoped<IRankingRepository, RankingRepository>();
@@ -91,7 +88,6 @@ public static class SharedInfrastructureExtensions
     {
         if (string.IsNullOrWhiteSpace(connectionString)) return connectionString;
         
-        // If it's already a standard ADO.NET string (contains "="), just return it
         if (!connectionString.StartsWith("postgres://") && !connectionString.StartsWith("postgresql://"))
         {
             return connectionString;
@@ -99,7 +95,6 @@ public static class SharedInfrastructureExtensions
 
         try
         {
-            // Parse Uri format: postgres://username:password@host:port/database
             var uri = new Uri(connectionString);
             var userInfo = uri.UserInfo.Split(':');
             var username = userInfo.Length > 0 ? userInfo[0] : "";
@@ -112,7 +107,7 @@ public static class SharedInfrastructureExtensions
         }
         catch
         {
-            return connectionString; // fallback to original if parsing fails
+            return connectionString;
         }
     }
 }

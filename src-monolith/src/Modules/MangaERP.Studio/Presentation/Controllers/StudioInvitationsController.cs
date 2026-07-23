@@ -4,6 +4,9 @@ using MangaERP.Studio.Application.Commands.RespondInvitation;
 using MangaERP.Studio.Application.Commands.CancelInvitation;
 using MangaERP.Studio.Application.Commands.RetryRegistrationDelivery;
 using MangaERP.Studio.Application.Queries;
+using MangaERP.Studio.Application.Commands.ManageCollaboration;
+using MangaERP.Studio.Domain.Entities;
+using MangaERP.Shared.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -58,6 +61,7 @@ public class StudioInvitationsController : ControllerBase
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
@@ -162,6 +166,7 @@ public class StudioInvitationsController : ControllerBase
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
@@ -185,7 +190,47 @@ public class StudioInvitationsController : ControllerBase
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpPost("collaborations/{collaborationId:guid}/suspend")]
+    [Authorize(Roles = "Mangaka,Admin")]
+    public async Task<IActionResult> SuspendCollaboration(Guid collaborationId, [FromBody] CollaborationStateRequest request, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new SuspendCollaborationCommand(collaborationId, GetUserId(), User.IsInRole("Admin"), request.Mode, request.Reason, request.ExpectedConcurrencyToken), ct);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
+    }
+
+    [HttpPost("collaborations/{collaborationId:guid}/suspension-mode")]
+    [Authorize(Roles = "Mangaka,Admin")]
+    public async Task<IActionResult> ChangeSuspensionMode(Guid collaborationId, [FromBody] CollaborationStateRequest request, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new ChangeSuspensionModeCommand(collaborationId, GetUserId(), User.IsInRole("Admin"), request.Mode, request.Reason, request.ExpectedConcurrencyToken), ct);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
+    }
+
+    [HttpPost("collaborations/{collaborationId:guid}/reactivate")]
+    [Authorize(Roles = "Mangaka,Admin")]
+    public async Task<IActionResult> ReactivateCollaboration(Guid collaborationId, [FromBody] ReactivateCollaborationRequest request, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new ReactivateCollaborationCommand(collaborationId, GetUserId(), User.IsInRole("Admin"), request.ExpectedConcurrencyToken), ct);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
     }
 }
 
@@ -195,3 +240,10 @@ public record InviteAssistantRequest(
     string AssistantEmail,
     string? Message
 );
+
+public record CollaborationStateRequest(
+    CollaborationSuspensionMode Mode,
+    string Reason,
+    Guid ExpectedConcurrencyToken);
+
+public record ReactivateCollaborationRequest(Guid ExpectedConcurrencyToken);

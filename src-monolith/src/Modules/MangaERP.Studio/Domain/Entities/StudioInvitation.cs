@@ -16,7 +16,9 @@ public enum StudioInvitationStatus
     /// Link kích hoạt đã hết hạn (TH1: chưa có tài khoản)
     Expired,
     /// Đã hủy bởi Mangaka
-    Cancelled
+    Cancelled,
+    /// New long-term workflow name; Cancelled is retained for historical rows.
+    Revoked
 }
 
 public enum RegistrationDeliveryStatus { NotRequired, Pending, Sent, Failed }

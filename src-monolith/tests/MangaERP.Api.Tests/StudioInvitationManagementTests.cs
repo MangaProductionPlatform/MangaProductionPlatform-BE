@@ -89,7 +89,7 @@ public class StudioInvitationManagementTests
 
         await _handler.Handle(command, CancellationToken.None);
 
-        Assert.Equal(StudioInvitationStatus.Cancelled, invitation.Status);
+        Assert.Equal(StudioInvitationStatus.Revoked, invitation.Status);
         _repoMock.Verify(r => r.UpdateAsync(invitation, It.IsAny<CancellationToken>()), Times.Once);
         _repoMock.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }

@@ -3,6 +3,9 @@ using MangaERP.Studio.Domain.Entities;
 using MangaERP.Shared.Application.Ports;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using MangaERP.Shared.Domain.Exceptions;
+using MangaERP.Identity.Domain.Enums;
+using Npgsql;
 
 namespace MangaERP.Shared.Infrastructure.Repositories;
 
@@ -27,6 +30,10 @@ public class StudioInvitationRepository : IStudioInvitationRepository
             .Where(i => i.SeriesId == seriesId)
             .OrderByDescending(i => i.CreatedAt)
             .ToListAsync(ct);
+
+    public System.Threading.Tasks.Task<bool> HasPendingForMangakaEmailAsync(Guid mangakaId, string normalizedEmail, CancellationToken ct = default)
+        => _db.StudioInvitations.AnyAsync(i => i.InviterMangakaId == mangakaId &&
+            i.Status == StudioInvitationStatus.Pending && i.NormalizedAssistantEmail == normalizedEmail, ct);
 
     public async System.Threading.Tasks.Task<IEnumerable<StudioMemberInfo>> GetActiveMembersWithUsersBySeriesIdAsync(Guid seriesId, CancellationToken ct = default)
     {
@@ -69,4 +76,92 @@ public class StudioInvitationRepository : IStudioInvitationRepository
 
     public System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default)
         => _db.SaveChangesAsync(ct);
+
+    public System.Threading.Tasks.Task<bool> HasNonEndedCollaborationAsync(Guid assistantId, CancellationToken ct = default)
+        => _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId &&
+            c.Status != CollaborationStatus.Ended, ct);
+
+    public System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetCollaborationAsync(Guid id, CancellationToken ct = default)
+        => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.Id == id, ct);
+
+    public System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetNonEndedCollaborationByAssistantAsync(Guid assistantId, CancellationToken ct = default)
+        => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct);
+
+    public async System.Threading.Tasks.Task<MangakaAssistantCollaboration> AcceptInvitationAsync(
+        Guid invitationId, Guid assistantId, Guid actorId, DateTime now, string? correlationId, CancellationToken ct = default)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        var invitation = await _db.StudioInvitations.FirstOrDefaultAsync(i => i.Id == invitationId, ct)
+            ?? throw new KeyNotFoundException("Invitation was not found.");
+
+        var actor = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == actorId, ct);
+        if (actor is null || actor.IsDeleted || actor.AccountStatus != AccountStatus.Active ||
+            actor.Role != UserRole.Assistant || actor.Id != assistantId)
+            throw new UnauthorizedAccessException("Only the active Assistant account owning this invitation can accept it.");
+
+        if (invitation.AssistantUserId != assistantId)
+            throw new UnauthorizedAccessException("You cannot process this invitation.");
+
+        if (invitation.Status != StudioInvitationStatus.Pending)
+            throw new ConflictException("This invitation has already been processed.");
+
+        if (invitation.ExpiresAt < now)
+        {
+            invitation.Status = StudioInvitationStatus.Expired;
+            invitation.RespondedAt = now;
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            throw new ConflictException("This invitation has expired.");
+        }
+
+        if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+            throw new ConflictException("The Assistant already has a non-ended Mangaka collaboration.");
+
+        var collaboration = new MangakaAssistantCollaboration(invitation.InviterMangakaId, assistantId, invitation.Id, now);
+        _db.MangakaAssistantCollaborations.Add(collaboration);
+        _db.CollaborationEvents.Add(new CollaborationEvent(
+            collaboration.Id, CollaborationEventType.CollaborationActivated, actorId, now,
+            correlationId: correlationId));
+        invitation.Status = StudioInvitationStatus.Accepted;
+        invitation.RespondedAt = now;
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return collaboration;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(ct);
+            throw new ConflictException("The invitation could not be accepted because it changed concurrently.");
+        }
+        catch (DbUpdateException ex) when (IsConcurrencyOrKnownUniqueViolation(ex))
+        {
+            await transaction.RollbackAsync(ct);
+            throw new ConflictException("The invitation could not be accepted because the Assistant collaboration changed concurrently.");
+        }
+    }
+
+    private static bool IsConcurrencyOrKnownUniqueViolation(DbUpdateException ex)
+    {
+        var postgres = FindPostgresException(ex);
+        if (postgres is null) return false;
+        if (postgres.SqlState is "40001" or "40P01") return true;
+        if (postgres.SqlState != "23505") return false;
+        var constraint = postgres.ConstraintName ?? string.Empty;
+        return constraint.Contains("StudioInvitations", StringComparison.OrdinalIgnoreCase) ||
+               constraint.Contains("MangakaAssistantCollaborations", StringComparison.OrdinalIgnoreCase) ||
+               constraint.Contains("IX_StudioInvitations", StringComparison.OrdinalIgnoreCase) ||
+               constraint.Contains("IX_MangakaAssistantCollaborations", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static PostgresException? FindPostgresException(Exception ex)
+    {
+        for (var current = ex; current is not null; current = current.InnerException)
+            if (current is PostgresException postgres) return postgres;
+        return null;
+    }
+
+    public System.Threading.Tasks.Task AddCollaborationEventAsync(CollaborationEvent collaborationEvent, CancellationToken ct = default)
+        => _db.CollaborationEvents.AddAsync(collaborationEvent, ct).AsTask();
 }
