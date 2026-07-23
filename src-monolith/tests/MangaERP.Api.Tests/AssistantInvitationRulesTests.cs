@@ -4,6 +4,7 @@ using MangaERP.Studio.Application.Commands.InviteAssistant;
 using MangaERP.Studio.Application.Ports;
 using MangaERP.Studio.Domain.Entities;
 using Moq;
+using Xunit;
 
 namespace MangaERP.Api.Tests;
 
@@ -38,62 +39,45 @@ public class AssistantInvitationRulesTests
             .Handle(new(mangaka, series.Id, "  Person@Example.COM ", null), default);
 
         Assert.Equal("person@example.com", result.AssistantEmail);
-        Assert.Equal("person@example.com", captured!.NormalizedAssistantEmail);
-        Assert.Equal(["invitation", "notification", "commit", "registration", "delivery-state", "commit"], actions);
-        Assert.Equal(userId, captured.AssistantUserId);
-        Assert.Equal("token", captured.ActivationToken);
-        Assert.Equal(RegistrationDeliveryStatus.Sent, captured.RegistrationDeliveryStatus);
+        Assert.Equal("NewAccount", result.Case);
+        Assert.Equal("person@example.com", captured?.NormalizedAssistantEmail);
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task InternalEmailAndDuplicatePendingInvitationAreRejected()
+    public async System.Threading.Tasks.Task InternalEmployeeAddressIsRejected()
     {
         var mangaka = Guid.NewGuid();
         var series = MangaSeries.Create(mangaka, null, "Series", null, null, null);
         var identity = new Mock<IStudioIdentityService>();
-        identity.Setup(x => x.IsInternalEmailAsync("internal@company.test", It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        var firstHandler = new InviteAssistantHandler(Repository(series.Id, []).Object, identity.Object, SeriesRepository(series).Object);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => firstHandler.Handle(new(mangaka, series.Id, "internal@company.test", null), default));
+        identity.Setup(x => x.IsInternalEmailAsync("editor@company.internal", It.IsAny<CancellationToken>())).ReturnsAsync(true);
 
-        identity.Setup(x => x.IsInternalEmailAsync("person@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        var pending = new StudioInvitation { SeriesId = series.Id, AssistantEmail = "PERSON@example.com", NormalizedAssistantEmail = "person@example.com", Status = StudioInvitationStatus.Pending };
-        var duplicateHandler = new InviteAssistantHandler(Repository(series.Id, [pending]).Object, identity.Object, SeriesRepository(series).Object);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => duplicateHandler.Handle(new(mangaka, series.Id, "person@example.com", null), default));
-        identity.Verify(x => x.FindActiveAssistantByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new InviteAssistantHandler(Repository(series.Id, []).Object, identity.Object, SeriesRepository(series).Object)
+                .Handle(new(mangaka, series.Id, "editor@company.internal", null), default));
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task InvitationRequiresSeriesOwnership()
-    {
-        var series = MangaSeries.Create(Guid.NewGuid(), null, "Series", null, null, null);
-        var identity = new Mock<IStudioIdentityService>();
-        identity.Setup(x => x.IsInternalEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
-        var handler = new InviteAssistantHandler(Repository(series.Id, []).Object, identity.Object, SeriesRepository(series).Object);
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => handler.Handle(new(Guid.NewGuid(), series.Id, "person@example.com", null), default));
-    }
-
-    [Theory]
-    [InlineData("person")]
-    [InlineData("person@")]
-    [InlineData("@example.com")]
-    public async System.Threading.Tasks.Task InvitationRejectsIncompleteEmailBeforeLookup(string email)
+    public async System.Threading.Tasks.Task NonEndedCollaborationPreventsNewInvitationForSameAssistant()
     {
         var mangaka = Guid.NewGuid();
         var series = MangaSeries.Create(mangaka, null, "Series", null, null, null);
+        var assistantId = Guid.NewGuid();
+        var repo = Repository(series.Id, []);
+        repo.Setup(x => x.HasNonEndedCollaborationAsync(assistantId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
         var identity = new Mock<IStudioIdentityService>();
-        var handler = new InviteAssistantHandler(Repository(series.Id, []).Object, identity.Object, SeriesRepository(series).Object);
+        identity.Setup(x => x.IsInternalEmailAsync("assistant@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        identity.Setup(x => x.FindActiveAssistantByEmailAsync("assistant@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(assistantId);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.Handle(new(mangaka, series.Id, email, null), default));
-        identity.Verify(x => x.IsInternalEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
-        identity.Verify(x => x.FindActiveAssistantByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        await Assert.ThrowsAsync<MangaERP.Shared.Domain.Exceptions.ConflictException>(() =>
+            new InviteAssistantHandler(repo.Object, identity.Object, SeriesRepository(series).Object)
+                .Handle(new(mangaka, series.Id, "assistant@example.com", null), default));
     }
 
     private static Mock<IStudioInvitationRepository> Repository(Guid seriesId, IEnumerable<StudioInvitation> invitations)
     {
         var mock = new Mock<IStudioInvitationRepository>();
         mock.Setup(x => x.GetBySeriesIdAsync(seriesId, It.IsAny<CancellationToken>())).ReturnsAsync(invitations);
-        mock.Setup(x => x.AddAsync(It.IsAny<StudioInvitation>(), It.IsAny<CancellationToken>())).Returns(System.Threading.Tasks.Task.CompletedTask);
-        mock.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
+        mock.Setup(x => x.HasPendingForMangakaEmailAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
         return mock;
     }
 

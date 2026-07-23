@@ -25,7 +25,7 @@ public class AddCommentHandler : IRequestHandler<AddCommentCommand, TaskCommentD
     private readonly IPageTaskRepository _pageTaskRepo;
     private readonly IChapterRepository _chapterRepo;
     private readonly ISeriesRepository _seriesRepo;
-    private readonly IStudioInvitationRepository _studioInvitationRepo;
+    private readonly ICollaborationAuthorizationService _collaborationAuth;
 
     public AddCommentHandler(
         ITaskCommentRepository commentRepo,
@@ -33,14 +33,14 @@ public class AddCommentHandler : IRequestHandler<AddCommentCommand, TaskCommentD
         IPageTaskRepository pageTaskRepo,
         IChapterRepository chapterRepo,
         ISeriesRepository seriesRepo,
-        IStudioInvitationRepository studioInvitationRepo)
+        ICollaborationAuthorizationService collaborationAuth)
     {
         _commentRepo = commentRepo;
         _userRepo = userRepo;
         _pageTaskRepo = pageTaskRepo;
         _chapterRepo = chapterRepo;
         _seriesRepo = seriesRepo;
-        _studioInvitationRepo = studioInvitationRepo;
+        _collaborationAuth = collaborationAuth;
     }
 
     public async Task<TaskCommentDto> Handle(AddCommentCommand cmd, CancellationToken ct)
@@ -67,9 +67,8 @@ public class AddCommentHandler : IRequestHandler<AddCommentCommand, TaskCommentD
         else if (cmd.UserRole.Equals("Assistant", StringComparison.OrdinalIgnoreCase))
         {
             var isAssigned = (task.AssignedAssistantId == cmd.UserId);
-            var invitations = await _studioInvitationRepo.GetBySeriesIdAsync(series.Id, ct);
-            var isMember = invitations.Any(i => i.AssistantUserId == cmd.UserId &&
-                                                i.Status == StudioInvitationStatus.Accepted);
+            var isMember = await _collaborationAuth.HasActiveCollaborationAsync(series.AuthorId, cmd.UserId, ct) &&
+                           await _collaborationAuth.HasLegacySeriesScopeAsync(series.AuthorId, series.Id, cmd.UserId, ct);
             isAuthorized = isAssigned || isMember;
         }
         else if (cmd.UserRole.Equals("EditorInChief", StringComparison.OrdinalIgnoreCase) ||

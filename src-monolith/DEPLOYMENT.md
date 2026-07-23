@@ -4,6 +4,10 @@
 
 ---
 
+## Authoritative database and migration policy
+
+Production uses PostgreSQL through Npgsql only. Render provides the PostgreSQL database; configure `ConnectionStrings__DefaultConnection` with the Render PostgreSQL URL. At startup `Program.cs` runs `await db.Database.MigrateAsync()` before `DbSeeder.SeedAsync`. Do not use `EnsureCreated`, SQL Server/Azure SQL/Railway MSSQL settings, or a separate migration command in the deployed service. Offline verification uses `dotnet ef migrations list --no-connect --context AppDbContext` and `dotnet ef migrations script --idempotent --context AppDbContext`.
+
 ## 📋 Checklist trước khi deploy
 
 - [x] `docker-compose build` đã chạy thành công

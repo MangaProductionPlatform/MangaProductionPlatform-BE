@@ -10,28 +10,59 @@ public interface IStudioInvitationRepository
     System.Threading.Tasks.Task<StudioInvitation?> GetByIdAsync(Guid id, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<StudioInvitation>> GetPendingByAssistantUserIdAsync(Guid assistantUserId, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<StudioInvitation>> GetBySeriesIdAsync(Guid seriesId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> HasPendingForMangakaEmailAsync(Guid mangakaId, string normalizedEmail, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<StudioMemberInfo>> GetActiveMembersWithUsersBySeriesIdAsync(Guid seriesId, CancellationToken ct = default);
     System.Threading.Tasks.Task<StudioInvitation?> GetByActivationTokenAsync(string token, CancellationToken ct = default);
     System.Threading.Tasks.Task AddAsync(StudioInvitation invitation, CancellationToken ct = default);
     System.Threading.Tasks.Task UpdateAsync(StudioInvitation invitation, CancellationToken ct = default);
     System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> HasNonEndedCollaborationAsync(Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetCollaborationAsync(Guid id, CancellationToken ct = default);
+    System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetNonEndedCollaborationByAssistantAsync(Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<MangakaAssistantCollaboration> AcceptInvitationAsync(Guid invitationId, Guid assistantId, Guid actorId, DateTime now, string? correlationId, CancellationToken ct = default);
+    System.Threading.Tasks.Task AddCollaborationEventAsync(CollaborationEvent collaborationEvent, CancellationToken ct = default);
 }
 
-/// <summary>
-/// Port for production-task cleanup triggered by Studio membership changes.
-/// Implemented by the task/chapter side so Studio does not depend on task internals.
-/// </summary>
+public interface ICollaborationAuthorizationService
+{
+    System.Threading.Tasks.Task<bool> HasActiveCollaborationAsync(Guid mangakaId, Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> HasLegacySeriesScopeAsync(Guid mangakaId, Guid seriesId, Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanReceiveNewAssignmentsAsync(Guid mangakaId, Guid seriesId, Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanAccessSeriesAsync(Guid seriesId, Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanBrowseSeriesAsync(Guid assistantId, Guid seriesId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanAccessTaskAsync(Guid assistantId, Guid taskId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanAccessTaskResourcesAsync(Guid assistantId, Guid taskId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanReceiveAssignmentAsync(Guid assistantId, Guid seriesId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanRespondToAssignmentAsync(Guid assistantId, Guid attemptId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanSubmitProgressAsync(Guid assistantId, Guid taskId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> CanCompleteTaskAsync(Guid assistantId, Guid taskId, CancellationToken ct = default);
+}
+
+public interface ISeriesAccessGrantRepository
+{
+    System.Threading.Tasks.Task<SeriesAccessGrant?> GetActiveGrantAsync(Guid collaborationId, Guid seriesId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<SeriesAccessGrant?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<SeriesAccessGrant>> GetByCollaborationIdAsync(Guid collaborationId, CancellationToken ct = default);
+    System.Threading.Tasks.Task AddAsync(SeriesAccessGrant grant, CancellationToken ct = default);
+    System.Threading.Tasks.Task UpdateAsync(SeriesAccessGrant grant, CancellationToken ct = default);
+    System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default);
+}
+
 public interface IStudioTaskRevocationService
 {
     System.Threading.Tasks.Task RevokeActiveTasksForRemovedMemberAsync(
         Guid seriesId,
         Guid assistantId,
         CancellationToken ct = default);
+
+    System.Threading.Tasks.Task HandleCollaborationStateChangeAsync(
+        Guid collaborationId,
+        CollaborationStatus newStatus,
+        CollaborationSuspensionMode? suspensionMode,
+        Guid actorUserId,
+        CancellationToken ct = default);
 }
 
-/// <summary>
-/// Projection kết hợp thông tin invitation + user profile của Assistant đang hoạt động trong studio.
-/// </summary>
 public record StudioMemberInfo(
     Guid InvitationId,
     Guid AssistantUserId,
@@ -40,27 +71,19 @@ public record StudioMemberInfo(
     string? AvatarUrl,
     string? PenName,
     string InvitationStatus,
-    DateTime JoinedAt   // RespondedAt (thời điểm chấp nhận)
+    DateTime JoinedAt
 );
 
-/// <summary>
-/// Cổng giao tiếp với Identity module để kiểm tra / tạo user mới.
-/// Tránh circular reference giữa Studio và Identity.
-/// </summary>
 public interface IStudioIdentityService
 {
-    /// Kiểm tra email đã có tài khoản Active chưa (trả về UserId nếu có)
     System.Threading.Tasks.Task<Guid?> FindActiveAssistantByEmailAsync(string email, CancellationToken ct = default);
     System.Threading.Tasks.Task<bool> IsInternalEmailAsync(string email, CancellationToken ct = default);
 
-    /// Provision tài khoản Assistant mới (TH1) — tương đương AdminController.ProvisionAccount
-    /// Trả về UserId mới tạo và activation token
     System.Threading.Tasks.Task<(Guid userId, string activationToken)> ProvisionAssistantAccountAsync(
         string email, string? fullName, string invitingMangakaName, CancellationToken ct = default);
     System.Threading.Tasks.Task SendAssistantRegistrationEmailAsync(
         Guid userId, string activationToken, CancellationToken ct = default);
 
-    /// Gửi push notification cho Assistant đã có tài khoản (TH2)
     System.Threading.Tasks.Task SendStudioInvitationNotificationAsync(
         Guid receiverUserId, Guid invitationId, string mangakaName, string seriesTitle, CancellationToken ct = default);
     System.Threading.Tasks.Task DeliverStudioInvitationRealtimeAsync(

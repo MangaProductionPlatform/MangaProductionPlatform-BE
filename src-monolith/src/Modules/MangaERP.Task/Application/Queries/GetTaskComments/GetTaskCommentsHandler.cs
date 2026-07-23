@@ -24,7 +24,7 @@ public class GetTaskCommentsHandler : IRequestHandler<GetTaskCommentsQuery, IEnu
     private readonly IPageTaskRepository _pageTaskRepo;
     private readonly IChapterRepository _chapterRepo;
     private readonly ISeriesRepository _seriesRepo;
-    private readonly IStudioInvitationRepository _studioInvitationRepo;
+    private readonly ICollaborationAuthorizationService _collaborationAuth;
     private readonly IUserRepository _userRepo;
 
     public GetTaskCommentsHandler(
@@ -32,14 +32,14 @@ public class GetTaskCommentsHandler : IRequestHandler<GetTaskCommentsQuery, IEnu
         IPageTaskRepository pageTaskRepo,
         IChapterRepository chapterRepo,
         ISeriesRepository seriesRepo,
-        IStudioInvitationRepository studioInvitationRepo,
+        ICollaborationAuthorizationService collaborationAuth,
         IUserRepository userRepo)
     {
         _commentRepo = commentRepo;
         _pageTaskRepo = pageTaskRepo;
         _chapterRepo = chapterRepo;
         _seriesRepo = seriesRepo;
-        _studioInvitationRepo = studioInvitationRepo;
+        _collaborationAuth = collaborationAuth;
         _userRepo = userRepo;
     }
 
@@ -67,9 +67,8 @@ public class GetTaskCommentsHandler : IRequestHandler<GetTaskCommentsQuery, IEnu
         else if (query.RequesterRole.Equals("Assistant", StringComparison.OrdinalIgnoreCase))
         {
             var isAssigned = (task.AssignedAssistantId == query.RequesterId);
-            var invitations = await _studioInvitationRepo.GetBySeriesIdAsync(series.Id, ct);
-            var isMember = invitations.Any(i => i.AssistantUserId == query.RequesterId &&
-                                                i.Status == StudioInvitationStatus.Accepted);
+            var isMember = await _collaborationAuth.HasActiveCollaborationAsync(series.AuthorId, query.RequesterId, ct) &&
+                           await _collaborationAuth.HasLegacySeriesScopeAsync(series.AuthorId, series.Id, query.RequesterId, ct);
             isAuthorized = isAssigned || isMember;
         }
         else if (query.RequesterRole.Equals("EditorInChief", StringComparison.OrdinalIgnoreCase) ||

@@ -37,20 +37,20 @@ public class GetStudioTasksBoardHandler : IRequestHandler<GetStudioTasksBoardQue
     private readonly IPageTaskRepository _pageTaskRepo;
     private readonly IUserRepository _userRepo;
     private readonly ISeriesRepository _seriesRepo;
-    private readonly IStudioInvitationRepository _studioInvitationRepo;
+    private readonly ICollaborationAuthorizationService _collaborationAuth;
 
     public GetStudioTasksBoardHandler(
         IChapterRepository chapterRepo,
         IPageTaskRepository pageTaskRepo,
         IUserRepository userRepo,
         ISeriesRepository seriesRepo,
-        IStudioInvitationRepository studioInvitationRepo)
+        ICollaborationAuthorizationService collaborationAuth)
     {
         _chapterRepo = chapterRepo;
         _pageTaskRepo = pageTaskRepo;
         _userRepo = userRepo;
         _seriesRepo = seriesRepo;
-        _studioInvitationRepo = studioInvitationRepo;
+        _collaborationAuth = collaborationAuth;
     }
 
     public async Task<StudioTasksBoardDto> Handle(GetStudioTasksBoardQuery query, CancellationToken ct)
@@ -71,9 +71,10 @@ public class GetStudioTasksBoardHandler : IRequestHandler<GetStudioTasksBoardQue
         }
         else if (query.RequesterRole.Equals("Assistant", StringComparison.OrdinalIgnoreCase))
         {
-            var invitations = await _studioInvitationRepo.GetBySeriesIdAsync(series.Id, ct);
-            isAuthorized = invitations.Any(i => i.AssistantUserId == query.RequesterId &&
-                                                i.Status == StudioInvitationStatus.Accepted);
+            isAuthorized = await _collaborationAuth.HasActiveCollaborationAsync(
+                series.AuthorId, query.RequesterId, ct) &&
+                await _collaborationAuth.HasLegacySeriesScopeAsync(
+                    series.AuthorId, series.Id, query.RequesterId, ct);
         }
         else if (query.RequesterRole.Equals("EditorInChief", StringComparison.OrdinalIgnoreCase) ||
                  query.RequesterRole.Equals("EditorialBoard", StringComparison.OrdinalIgnoreCase) ||

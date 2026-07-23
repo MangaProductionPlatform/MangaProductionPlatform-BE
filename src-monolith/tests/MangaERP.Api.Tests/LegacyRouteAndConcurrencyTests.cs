@@ -32,4 +32,23 @@ public class LegacyRouteAndConcurrencyTests
         });
     }
 
+    [Fact]
+    public void LegacyDecisionsAndDisclosureEndpointsAreExplicitlyRejected()
+    {
+        var methods = new[]
+        {
+            typeof(SubmissionsController).GetMethod(nameof(SubmissionsController.RequestRevision)),
+            typeof(SubmissionsController).GetMethod(nameof(SubmissionsController.CastVote)),
+            typeof(SubmissionsController).GetMethod(nameof(SubmissionsController.ResolveConflict)),
+            typeof(SubmissionsController).GetMethod(nameof(SubmissionsController.GetVotes)),
+            typeof(SubmissionsController).GetMethod(nameof(SubmissionsController.GetReviewResults)),
+            typeof(SubmissionsController).GetMethod(nameof(SubmissionsController.Approve)),
+            typeof(SubmissionsController).GetMethod(nameof(SubmissionsController.Reject))
+        };
+
+        Assert.All(methods, method => Assert.True(
+            method!.GetCustomAttributes<NonActionAttribute>().Any(),
+            $"Legacy endpoint {method!.Name} must not be routable."));
+    }
+
 }

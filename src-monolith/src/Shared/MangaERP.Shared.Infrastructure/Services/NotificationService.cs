@@ -24,6 +24,21 @@ public class NotificationService : INotificationService
         _hubContext = hubContext;
     }
 
+    public async System.Threading.Tasks.Task NotifyCollaborationEventAsync(
+        Guid receiverId, string notifyType, string title, string message, Guid collaborationId, CancellationToken ct = default)
+    {
+        await _notificationRepo.AddAsync(new Notification
+        {
+            ReceiverId = receiverId,
+            Title = title,
+            Message = message,
+            NotifyType = notifyType,
+            RelatedEntityId = collaborationId,
+            RelatedEntityType = "MangakaAssistantCollaboration"
+        }, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+    }
+
     public async System.Threading.Tasks.Task NotifyTaskAssignedAsync(
         Guid assistantId, Guid pageTaskId, int pageNumber, CancellationToken ct = default)
     {
