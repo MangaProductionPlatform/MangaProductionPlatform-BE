@@ -16,7 +16,8 @@ public record ChapterTaskDto(
     int? CurrentLayerVersion,
     string? RejectionNote,
     DateTime UpdatedAt,
-    string? Description);
+    string? Description,
+    string TaskType);
 
 public class GetChapterTasksHandler : IRequestHandler<GetChapterTasksQuery, IEnumerable<ChapterTaskDto>>
 {
@@ -62,7 +63,8 @@ public class GetChapterTasksHandler : IRequestHandler<GetChapterTasksQuery, IEnu
                 layer?.Version,
                 layer?.RejectionNote,
                 task.UpdatedAt,
-                task.Description));
+                task.Description,
+                task.TaskType.ToString()));
         }
 
         return result;

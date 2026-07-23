@@ -1,6 +1,7 @@
 using MangaERP.Chapter.Application.Ports;
 using ChapterEntity = MangaERP.Chapter.Domain.Entities.Chapter;
 using PageTaskEntity = MangaERP.Chapter.Domain.Entities.PageTask;
+using PageTaskType = MangaERP.Chapter.Domain.Entities.PageTaskType;
 using PreviewPageEntity = MangaERP.Chapter.Domain.Entities.PreviewPage;
 using MangaERP.Shared.Application.Ports;
 using MangaERP.Series.Application.Ports;
@@ -212,10 +213,10 @@ public class BulkReviewLayersTests
         var pageTask1 = PageTaskEntity.CreatePending(chapterId, 1, "https://example.com/page-1.png");
         var pageTask2 = PageTaskEntity.CreatePending(chapterId, 2, "https://example.com/page-2.png");
 
-        pageTask1.Activate(assistantId, "Task 1");
+        pageTask1.Activate(assistantId, PageTaskType.General, "Task 1");
         pageTask1.MarkReviewing();
 
-        pageTask2.Activate(assistantId, "Task 2");
+        pageTask2.Activate(assistantId, PageTaskType.General, "Task 2");
         pageTask2.MarkReviewing();
 
         var pageTaskId1 = pageTask1.Id;

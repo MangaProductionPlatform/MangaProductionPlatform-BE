@@ -63,12 +63,15 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
         var pageTasks = await _pageTaskRepo.GetByChapterAndPageNumbersAsync(cmd.ChapterId, pageNumbers, ct);
         var pageTasksDict = pageTasks.ToDictionary(p => p.PageNumber);
 
+        if (!Enum.TryParse<PageTaskType>(cmd.TaskType, ignoreCase: true, out var taskType))
+            throw new InvalidOperationException($"Invalid TaskType '{cmd.TaskType}'. Valid values: {string.Join(", ", Enum.GetNames<PageTaskType>())}");
+
         foreach (var pageNum in pageNumbers)
         {
             if (!pageTasksDict.TryGetValue(pageNum, out var pageTask))
                 throw new KeyNotFoundException($"Page {pageNum} not found in chapter {cmd.ChapterId}.");
 
-            pageTask.Activate(cmd.AssignedAssistantId, cmd.Description, cmd.Deadline);
+            pageTask.Activate(cmd.AssignedAssistantId, taskType, cmd.Description, cmd.Deadline);
             await _pageTaskRepo.UpdateAsync(pageTask, ct);
             activatedTasks.Add(pageTask);
 
