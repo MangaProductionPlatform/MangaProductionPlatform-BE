@@ -43,7 +43,7 @@ public class BulkActivatePageTasksTests
     {
         // Arrange
         var command = new BulkActivatePageTasksCommand(
-            Guid.NewGuid(), Guid.NewGuid(), new List<int>(), Guid.NewGuid());
+            Guid.NewGuid(), Guid.NewGuid(), new List<int>(), Guid.NewGuid(), "General");
         var validator = new BulkActivatePageTasksValidator();
 
         // Act
@@ -59,7 +59,7 @@ public class BulkActivatePageTasksTests
     {
         // Arrange
         var command = new BulkActivatePageTasksCommand(
-            Guid.NewGuid(), Guid.NewGuid(), new List<int> { 1, -2, 3 }, Guid.NewGuid());
+            Guid.NewGuid(), Guid.NewGuid(), new List<int> { 1, -2, 3 }, Guid.NewGuid(), "General");
         var validator = new BulkActivatePageTasksValidator();
 
         // Act
@@ -76,7 +76,7 @@ public class BulkActivatePageTasksTests
         // Arrange
         var chapterId = Guid.NewGuid();
         var command = new BulkActivatePageTasksCommand(
-            Guid.NewGuid(), chapterId, new List<int> { 1 }, Guid.NewGuid());
+            Guid.NewGuid(), chapterId, new List<int> { 1 }, Guid.NewGuid(), "General");
 
         _chapterRepoMock.Setup(r => r.GetByIdAsync(chapterId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((ChapterEntity)null!);
@@ -93,7 +93,7 @@ public class BulkActivatePageTasksTests
         var chapter = ChapterEntity.Create(seriesId, "Chapter 1", 1, 3);
         var chapterId = chapter.Id;
         var command = new BulkActivatePageTasksCommand(
-            Guid.NewGuid(), chapterId, new List<int> { 1 }, Guid.NewGuid());
+            Guid.NewGuid(), chapterId, new List<int> { 1 }, Guid.NewGuid(), "General");
 
         _chapterRepoMock.Setup(r => r.GetByIdAsync(chapterId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chapter);
@@ -116,7 +116,7 @@ public class BulkActivatePageTasksTests
         var chapter = ChapterEntity.Create(seriesId, "Chapter 1", 1, 3);
         var chapterId = chapter.Id;
         var command = new BulkActivatePageTasksCommand(
-            authorId, chapterId, new List<int> { 1 }, assistantId);
+            authorId, chapterId, new List<int> { 1 }, assistantId, "General");
 
         _chapterRepoMock.Setup(r => r.GetByIdAsync(chapterId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chapter);
@@ -142,7 +142,7 @@ public class BulkActivatePageTasksTests
         var chapterId = chapter.Id;
         var readerUser = new User { Id = assistantId, Role = UserRole.Reader };
         var command = new BulkActivatePageTasksCommand(
-            authorId, chapterId, new List<int> { 1 }, assistantId);
+            authorId, chapterId, new List<int> { 1 }, assistantId, "General");
 
         _chapterRepoMock.Setup(r => r.GetByIdAsync(chapterId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chapter);
@@ -168,7 +168,7 @@ public class BulkActivatePageTasksTests
         var chapterId = chapter.Id;
         var assistantUser = new User { Id = assistantId, Role = UserRole.Assistant };
         var command = new BulkActivatePageTasksCommand(
-            authorId, chapterId, new List<int> { 1 }, assistantId);
+            authorId, chapterId, new List<int> { 1 }, assistantId, "General");
 
         _chapterRepoMock.Setup(r => r.GetByIdAsync(chapterId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chapter);
@@ -203,7 +203,7 @@ public class BulkActivatePageTasksTests
         };
 
         var command = new BulkActivatePageTasksCommand(
-            authorId, chapterId, new List<int> { 5 }, assistantId); // Page 5 doesn't exist
+            authorId, chapterId, new List<int> { 5 }, assistantId, "General"); // Page 5 doesn't exist
 
         _chapterRepoMock.Setup(r => r.GetByIdAsync(chapterId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chapter);
@@ -244,7 +244,7 @@ public class BulkActivatePageTasksTests
         };
 
         var command = new BulkActivatePageTasksCommand(
-            authorId, chapterId, new List<int> { 1, 2 }, assistantId, "Please draw backgrounds.");
+            authorId, chapterId, new List<int> { 1, 2 }, assistantId, "General", "Please draw backgrounds.");
 
         _chapterRepoMock.Setup(r => r.GetByIdAsync(chapterId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(chapter);

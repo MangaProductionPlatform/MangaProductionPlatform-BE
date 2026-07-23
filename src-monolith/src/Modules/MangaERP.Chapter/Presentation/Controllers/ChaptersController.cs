@@ -146,6 +146,7 @@ public class ChaptersController : ControllerBase
                 chapterId,
                 request.PageNumber,
                 request.AssignedAssistantId,
+                request.TaskType,
                 request.Description,
                 request.Deadline);
 
@@ -172,6 +173,7 @@ public class ChaptersController : ControllerBase
                 chapterId,
                 request.PageNumbers,
                 request.AssignedAssistantId,
+                request.TaskType,
                 request.Description,
                 request.Deadline);
 
@@ -370,9 +372,9 @@ public record CreateChapterRequest(
 
 public record AddBasePageRequest(int PageNumber, string BaseImageUrl);
 
-public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string? Description, DateTime? Deadline);
+public record ActivatePageTaskRequest(int PageNumber, Guid AssignedAssistantId, string TaskType, string? Description, DateTime? Deadline);
 
-public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedAssistantId, string? Description, DateTime? Deadline);
+public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedAssistantId, string TaskType, string? Description, DateTime? Deadline);
 
 /// <summary>
 /// Request to save a SAM region on a page task.
