@@ -147,7 +147,19 @@ public class PageTaskConfiguration : IEntityTypeConfiguration<PageTask>
         b.Property(e => e.ReassignmentReason).HasMaxLength(2000);
         b.HasOne(pt => pt.PreviewPage).WithOne(pp => pp.PageTask)
             .HasForeignKey<PreviewPage>(pp => pp.PageTaskId).OnDelete(DeleteBehavior.Cascade);
+        b.HasMany(pt => pt.BasePageVersions).WithOne()
+            .HasForeignKey(bp => bp.PageTaskId).OnDelete(DeleteBehavior.Cascade);
         b.HasQueryFilter(e => !e.IsDeleted);
+    }
+}
+
+public class BasePageVersionConfiguration : IEntityTypeConfiguration<BasePageVersion>
+{
+    public void Configure(EntityTypeBuilder<BasePageVersion> b)
+    {
+        b.ToTable("BasePageVersions"); b.HasKey(e => e.Id);
+        b.HasIndex(e => new { e.PageTaskId, e.VersionNumber }).IsUnique();
+        b.Property(e => e.BaseImageUrl).IsRequired().HasMaxLength(2048);
     }
 }
 

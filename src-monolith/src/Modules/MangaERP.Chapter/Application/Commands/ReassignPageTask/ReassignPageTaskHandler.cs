@@ -15,7 +15,8 @@ public record ReassignPageTaskCommand(
     Guid ChapterId,
     int PageNumber,
     Guid NewAssistantId,
-    string? Description = null
+    string? Description = null,
+    bool ConfirmIfSubmitted = false
 ) : IRequest<ReassignPageTaskResult>;
 
 public record ReassignPageTaskResult(
@@ -62,6 +63,15 @@ public class ReassignPageTaskHandler : IRequestHandler<ReassignPageTaskCommand, 
 
         var pageTask = await _pageTaskRepo.GetByChapterAndPageNumberAsync(cmd.ChapterId, cmd.PageNumber, ct)
             ?? throw new KeyNotFoundException($"Page {cmd.PageNumber} not found in chapter {cmd.ChapterId}.");
+
+        if (!cmd.ConfirmIfSubmitted)
+        {
+            var hasSubmissions = await _pageTaskRepo.HasSubmissionsAsync(pageTask.Id, ct);
+            if (hasSubmissions)
+            {
+                throw new InvalidOperationException("SUBMISSION_EXISTS_CONFIRMATION_REQUIRED");
+            }
+        }
 
         var assistant = await _userRepo.GetByIdAsync(cmd.NewAssistantId, ct)
             ?? throw new KeyNotFoundException($"Assistant {cmd.NewAssistantId} not found.");
