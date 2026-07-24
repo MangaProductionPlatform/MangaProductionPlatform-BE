@@ -59,7 +59,10 @@ public class AdminDashboardController : ControllerBase
     [ProducesResponseType(typeof(AdminDashboardDto), 200)]
     [ProducesResponseType(401)]
     [ProducesResponseType(403)]
-    public async Task<IActionResult> GetDashboard(CancellationToken ct)
+    public async Task<IActionResult> GetDashboard(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate,
+        CancellationToken ct)
     {
         // Guardrail 1.2: Audit log bắt buộc cho endpoint xem toàn hệ thống
         var actorId = Guid.TryParse(
@@ -81,7 +84,7 @@ public class AdminDashboardController : ControllerBase
             "[AUDIT] Admin dashboard accessed by {ActorId} from {Ip} at {Time}",
             actorId, auditLog.IpAddress, auditLog.Timestamp);
 
-        var result = await _mediator.Send(new GetAdminDashboardQuery(), ct);
+        var result = await _mediator.Send(new GetAdminDashboardQuery(startDate, endDate), ct);
         return Ok(result);
     }
 
@@ -253,4 +256,102 @@ public class AdminDashboardController : ControllerBase
 
         return Ok(new { roles });
     }
+
+    /// <summary>
+    /// [Admin] Biểu đồ xu hướng (Bản thảo Submissions & Series truyện) theo thời gian.
+    /// Default range: 30 ngày gần nhất nếu không truyền.
+    /// groupBy: "day" (default) hoặc "month".
+    /// </summary>
+    [HttpGet("charts")]
+    [ProducesResponseType(typeof(AdminChartsDto), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(403)]
+    public async Task<IActionResult> GetCharts(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate,
+        [FromQuery] string groupBy = "day",
+        CancellationToken ct = default)
+    {
+        var start = startDate ?? DateTime.UtcNow.AddDays(-30);
+        var end = endDate ?? DateTime.UtcNow;
+
+        var isMonthly = string.Equals(groupBy, "month", StringComparison.OrdinalIgnoreCase);
+
+        // 1. Submissions trend
+        var submissionsQuery = _db.SeriesSubmissions.AsNoTracking()
+            .Where(s => s.CreatedAt >= start && s.CreatedAt <= end);
+
+        List<TrendDataPointDto> submissionTrends;
+        if (isMonthly)
+        {
+            var raw = await submissionsQuery
+                .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month })
+                .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+                .ToListAsync(ct);
+
+            submissionTrends = raw
+                .Select(x => new TrendDataPointDto($"{x.Year:D4}-{x.Month:D2}", x.Count))
+                .OrderBy(x => x.Date)
+                .ToList();
+        }
+        else
+        {
+            var raw = await submissionsQuery
+                .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month, s.CreatedAt.Day })
+                .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, Count = g.Count() })
+                .ToListAsync(ct);
+
+            submissionTrends = raw
+                .Select(x => new TrendDataPointDto($"{x.Year:D4}-{x.Month:D2}-{x.Day:D2}", x.Count))
+                .OrderBy(x => x.Date)
+                .ToList();
+        }
+
+        // 2. Series trend
+        var seriesQuery = _db.MangaSeries.AsNoTracking()
+            .Where(s => s.CreatedAt >= start && s.CreatedAt <= end);
+
+        List<TrendDataPointDto> seriesTrends;
+        if (isMonthly)
+        {
+            var raw = await seriesQuery
+                .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month })
+                .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+                .ToListAsync(ct);
+
+            seriesTrends = raw
+                .Select(x => new TrendDataPointDto($"{x.Year:D4}-{x.Month:D2}", x.Count))
+                .OrderBy(x => x.Date)
+                .ToList();
+        }
+        else
+        {
+            var raw = await seriesQuery
+                .GroupBy(s => new { s.CreatedAt.Year, s.CreatedAt.Month, s.CreatedAt.Day })
+                .Select(g => new { g.Key.Year, g.Key.Month, g.Key.Day, Count = g.Count() })
+                .ToListAsync(ct);
+
+            seriesTrends = raw
+                .Select(x => new TrendDataPointDto($"{x.Year:D4}-{x.Month:D2}-{x.Day:D2}", x.Count))
+                .OrderBy(x => x.Date)
+                .ToList();
+        }
+
+        return Ok(new AdminChartsDto(
+            submissionTrends,
+            seriesTrends,
+            DateTime.UtcNow
+        ));
+    }
 }
+
+public record AdminChartsDto(
+    IEnumerable<TrendDataPointDto> SubmissionTrends,
+    IEnumerable<TrendDataPointDto> SeriesTrends,
+    DateTime GeneratedAt
+);
+
+public record TrendDataPointDto(
+    string Date,
+    int Count
+);

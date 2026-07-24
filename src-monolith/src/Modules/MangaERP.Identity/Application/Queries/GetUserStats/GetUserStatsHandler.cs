@@ -11,7 +11,7 @@ namespace MangaERP.Identity.Application.Queries.GetUserStats;
 /// Được gọi bởi GetAdminDashboardHandler ở Api layer qua IMediator.Send().
 /// KHÔNG expose IUserRepository ra ngoài module.
 /// </summary>
-public record GetUserStatsQuery : IRequest<UserStatsResult>;
+public record GetUserStatsQuery(DateTime? StartDate = null, DateTime? EndDate = null) : IRequest<UserStatsResult>;
 
 public record UserStatsResult(
     int TotalUsers,
@@ -36,7 +36,14 @@ public class GetUserStatsHandler : IRequestHandler<GetUserStatsQuery, UserStatsR
 
     public async Task<UserStatsResult> Handle(GetUserStatsQuery request, CancellationToken ct)
     {
-        var users = (await _repo.GetAllAsync(ct)).ToList();
+        var usersQuery = (await _repo.GetAllAsync(ct)).AsQueryable();
+
+        if (request.StartDate.HasValue)
+            usersQuery = usersQuery.Where(u => u.CreatedAt >= request.StartDate.Value);
+        if (request.EndDate.HasValue)
+            usersQuery = usersQuery.Where(u => u.CreatedAt <= request.EndDate.Value);
+
+        var users = usersQuery.ToList();
 
         return new UserStatsResult(
             TotalUsers:          users.Count,
