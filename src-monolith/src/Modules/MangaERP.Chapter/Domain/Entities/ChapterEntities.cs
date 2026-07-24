@@ -8,7 +8,7 @@ public enum ChapterStatus
     EditorialRejectedToTantou, MangakaRevisionRequired, ConflictEscalated,
     Approved, Published, Archived
 }
-public enum PageTaskStatus { Pending, Incomplete, Reviewing, RevisionAlert, Approved }
+public enum PageTaskStatus { Pending, PendingAcceptance, Incomplete, Reviewing, RevisionAlert, Approved, ReassignmentRequired, Cancelled }
 
 /// <summary>Type of artwork work assigned to the assistant for this page region.</summary>
 public enum PageTaskType { General, Background, Shading, Inking, Effect, Coloring }
@@ -201,6 +201,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
     /// <summary>Type of artwork work for this region (Background, Shading, etc.).</summary>
     public PageTaskType TaskType { get; set; } = PageTaskType.General;
     public DateTime? Deadline { get; set; }
+    public DateTime? WorkStartedAt { get; set; }
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -225,6 +226,72 @@ public class PageTask : AggregateRoot, ISoftDeletable
 
         var nextVersion = BasePageVersions.Any() ? BasePageVersions.Max(v => v.VersionNumber) + 1 : 1;
         BasePageVersions.Add(BasePageVersion.Create(Id, nextVersion, BaseImageUrl, updatedByUserId));
+    }
+
+    public void AssignPending(Guid assistantId, string? description = null, DateTime? deadline = null)
+    {
+        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.ReassignmentRequired && TaskStatus != PageTaskStatus.Incomplete)
+            throw new InvalidOperationException($"Cannot assign task in status '{TaskStatus}'.");
+
+        AssignedAssistantId = assistantId;
+        Description = description ?? Description;
+        Deadline = deadline ?? Deadline;
+        TaskStatus = PageTaskStatus.PendingAcceptance;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AcceptAssignment(DateTime acceptedAt, TimeSpan? duration = null)
+    {
+        if (TaskStatus != PageTaskStatus.PendingAcceptance)
+            throw new InvalidOperationException("Only PendingAcceptance tasks can be accepted.");
+
+        TaskStatus = PageTaskStatus.Incomplete;
+        WorkStartedAt = acceptedAt;
+        if (duration.HasValue && duration.Value > TimeSpan.Zero)
+        {
+            Deadline = acceptedAt.Add(duration.Value);
+        }
+        UpdatedAt = acceptedAt;
+    }
+
+    public void RejectAssignment()
+    {
+        AssignedAssistantId = null;
+        WorkStartedAt = null;
+        TaskStatus = PageTaskStatus.ReassignmentRequired;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public int ProgressPercent { get; set; } = 0;
+
+    public void MarkReassignmentRequired()
+    {
+        AssignedAssistantId = null;
+        WorkStartedAt = null;
+        Deadline = null;
+        TaskStatus = PageTaskStatus.ReassignmentRequired;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void SubmitProgress(int percent)
+    {
+        if (percent < 0 || percent > 100)
+            throw new ArgumentException("Progress percent must be between 0 and 100.");
+        if (percent < ProgressPercent)
+            throw new InvalidOperationException("Progress percent cannot decrease.");
+
+        ProgressPercent = percent;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void CompleteTask(DateTime completedAt)
+    {
+        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+            throw new InvalidOperationException($"Cannot complete task in status '{TaskStatus}'.");
+
+        ProgressPercent = 100;
+        TaskStatus = PageTaskStatus.Reviewing;
+        UpdatedAt = completedAt;
     }
 
     public static PageTask CreatePending(Guid chapterId, int pageNumber, string baseImageUrl)

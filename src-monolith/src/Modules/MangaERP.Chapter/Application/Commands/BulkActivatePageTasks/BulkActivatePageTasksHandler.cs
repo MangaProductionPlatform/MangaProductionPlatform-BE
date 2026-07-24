@@ -5,7 +5,6 @@ using MangaERP.Identity.Domain.Enums;
 using MangaERP.Shared.Application.Ports;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Studio.Application.Ports;
-using MangaERP.Studio.Domain.Entities;
 using MediatR;
 
 namespace MangaERP.Chapter.Application.Commands.BulkActivatePageTasks;
@@ -16,7 +15,7 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
     private readonly IPageTaskRepository _pageTaskRepo;
     private readonly ISeriesRepository _seriesRepo;
     private readonly IUserRepository _userRepo;
-    private readonly IStudioInvitationRepository _studioRepo;
+    private readonly ICollaborationAuthorizationService _collaborationAuth;
     private readonly INotificationService _notificationService;
 
     public BulkActivatePageTasksHandler(
@@ -24,14 +23,14 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
         IPageTaskRepository pageTaskRepo,
         ISeriesRepository seriesRepo,
         IUserRepository userRepo,
-        IStudioInvitationRepository studioRepo,
+        ICollaborationAuthorizationService collaborationAuth,
         INotificationService notificationService)
     {
         _chapterRepo = chapterRepo;
         _pageTaskRepo = pageTaskRepo;
         _seriesRepo = seriesRepo;
         _userRepo = userRepo;
-        _studioRepo = studioRepo;
+        _collaborationAuth = collaborationAuth;
         _notificationService = notificationService;
     }
 
@@ -54,7 +53,8 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
         if (assistant.DeadlineWarningCount >= 3)
             throw new InvalidOperationException("Assistant has been penalized due to too many deadline violations and cannot be assigned to new tasks.");
 
-        await EnsureAssistantInStudioAsync(series.Id, cmd.AssignedAssistantId, ct);
+        if (!await _collaborationAuth.CanReceiveNewAssignmentsAsync(series.AuthorId, series.Id, cmd.AssignedAssistantId, ct))
+            throw new InvalidOperationException("Assistant must have an active collaboration and accepted series scope before assignment.");
 
         var results = new List<BulkPageTaskActivationResult>();
         var activatedTasks = new List<PageTask>();
@@ -92,16 +92,5 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
         }
 
         return new BulkActivatePageTasksResult(chapter.Id, cmd.AssignedAssistantId, results);
-    }
-
-    private async Task EnsureAssistantInStudioAsync(Guid seriesId, Guid assistantId, CancellationToken ct)
-    {
-        var invitations = await _studioRepo.GetBySeriesIdAsync(seriesId, ct);
-        var isMember = invitations.Any(i =>
-            i.AssistantUserId == assistantId &&
-            i.Status == StudioInvitationStatus.Accepted);
-
-        if (!isMember)
-            throw new InvalidOperationException("Assistant must be invited to the series studio before assignment.");
     }
 }

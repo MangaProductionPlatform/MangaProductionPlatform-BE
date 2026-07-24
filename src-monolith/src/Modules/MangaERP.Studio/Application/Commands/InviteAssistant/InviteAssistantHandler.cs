@@ -60,7 +60,8 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
 
         // ── Phân nhánh TH1 / TH2 ──────────────────────────────────────
         var invitations = await _invitationRepo.GetBySeriesIdAsync(request.SeriesId, cancellationToken);
-        if (invitations.Any(x => x.Status == StudioInvitationStatus.Pending &&
+        var pendingForMangaka = await _invitationRepo.HasPendingForMangakaEmailAsync(request.MangakaId, personalEmail, cancellationToken);
+        if (pendingForMangaka || invitations.Any(x => x.Status == StudioInvitationStatus.Pending &&
             string.Equals(string.IsNullOrWhiteSpace(x.NormalizedAssistantEmail)
                 ? x.AssistantEmail.Trim().ToLowerInvariant()
                 : x.NormalizedAssistantEmail,
@@ -69,6 +70,9 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
             throw new InvalidOperationException("A pending invitation already exists for this personal email and series.");
 
         var existingAssistantId = await _identityService.FindActiveAssistantByEmailAsync(personalEmail, cancellationToken);
+
+        if (existingAssistantId.HasValue && await _invitationRepo.HasNonEndedCollaborationAsync(existingAssistantId.Value, cancellationToken))
+            throw new MangaERP.Shared.Domain.Exceptions.ConflictException("The Assistant already has a non-ended Mangaka collaboration.");
 
         string resultCase;
         string statusMsg;
@@ -115,6 +119,8 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
         if (existingAssistantId is null)
             invitation.MarkRegistrationDeliveryPending();
         await _invitationRepo.AddAsync(invitation, cancellationToken);
+        // Commit invitation before notification delivery.
+        await _invitationRepo.SaveChangesAsync(cancellationToken);
 
         // TH2: gửi notification SAU khi đã có invitationId
         await _identityService.SendStudioInvitationNotificationAsync(

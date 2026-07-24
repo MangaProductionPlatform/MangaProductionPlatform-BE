@@ -822,7 +822,7 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SystemConfigs");
+                    b.ToTable("SystemConfigs", (string)null);
                 });
 
             modelBuilder.Entity("MangaERP.Studio.Domain.Entities.StudioInvitation", b =>

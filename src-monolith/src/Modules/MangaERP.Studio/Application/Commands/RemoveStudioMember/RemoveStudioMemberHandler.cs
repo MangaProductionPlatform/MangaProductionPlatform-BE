@@ -43,8 +43,9 @@ public class RemoveStudioMemberHandler : IRequestHandler<RemoveStudioMemberComma
         if (activeInvitation == null)
             throw new KeyNotFoundException($"Active studio membership for assistant {request.AssistantId} in series {request.SeriesId} not found.");
 
-        // 3. Mark the invitation as Cancelled (removed)
-        activeInvitation.Status = StudioInvitationStatus.Cancelled;
+        // 3. Mark the invitation as Revoked (Cancelled is retained only as a
+        // historical compatibility value and is never written by new flows).
+        activeInvitation.Status = StudioInvitationStatus.Revoked;
         activeInvitation.RespondedAt = DateTime.UtcNow;
 
         await _repo.UpdateAsync(activeInvitation, ct);

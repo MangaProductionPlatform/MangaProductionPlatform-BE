@@ -1,5 +1,6 @@
 using ChapterEntity = MangaERP.Chapter.Domain.Entities.Chapter;
 using MangaERP.Chapter.Domain.Entities;
+using MangaERP.Shared.Domain.Entities;
 using MangaERP.Identity.Domain.Entities;
 using MangaERP.Publishing.Domain.Entities;
 using MangaERP.QA.Domain.Entities;
@@ -301,10 +302,59 @@ public class StudioInvitationConfiguration : IEntityTypeConfiguration<StudioInvi
         b.Property(e => e.ActivationToken).HasMaxLength(2048);
         b.Property(e => e.RegistrationDeliveryStatus).HasConversion<string>().HasMaxLength(20);
         b.Property(e => e.RegistrationDeliveryError).HasMaxLength(1000);
-        b.HasIndex(e => new { e.SeriesId, e.NormalizedAssistantEmail, e.Status })
+        b.HasIndex(e => new { e.InviterMangakaId, e.NormalizedAssistantEmail, e.Status })
             .IsUnique()
             .HasFilter("\"Status\" = 'Pending'");
         b.HasIndex(e => new { e.AssistantUserId, e.Status });
+    }
+}
+
+public class MangakaAssistantCollaborationConfiguration : IEntityTypeConfiguration<MangakaAssistantCollaboration>
+{
+    public void Configure(EntityTypeBuilder<MangakaAssistantCollaboration> b)
+    {
+        b.ToTable("MangakaAssistantCollaborations", table =>
+        {
+            table.HasCheckConstraint(
+                "CK_MangakaAssistantCollaborations_Suspension",
+                "(\"Status\" = 'Suspended' AND \"SuspensionMode\" IS NOT NULL) OR (\"Status\" <> 'Suspended' AND \"SuspensionMode\" IS NULL)");
+            table.HasCheckConstraint(
+                "CK_MangakaAssistantCollaborations_Ended",
+                "(\"Status\" <> 'Ended') OR (\"EndedAt\" IS NOT NULL AND length(trim(\"EndReason\")) > 0 AND \"TerminatedByUserId\" IS NOT NULL)");
+        });
+        b.HasKey(e => e.Id);
+        b.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+        b.Property(e => e.SuspensionMode).HasConversion<string>().HasMaxLength(40);
+        b.Property(e => e.SuspensionReason).HasMaxLength(2000);
+        b.Property(e => e.EndReason).HasMaxLength(2000);
+        b.Property(e => e.ConcurrencyToken).IsConcurrencyToken().ValueGeneratedNever();
+        b.HasIndex(e => e.AssistantId)
+            .IsUnique()
+            .HasFilter("\"Status\" IN ('Active', 'Suspended', 'EndingRequested')");
+        b.HasIndex(e => new { e.MangakaId, e.AssistantId })
+            .IsUnique()
+            .HasFilter("\"Status\" IN ('Active', 'Suspended', 'EndingRequested')");
+        b.HasIndex(e => e.InvitationId).IsUnique();
+        b.HasOne<User>().WithMany().HasForeignKey(e => e.MangakaId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(e => e.AssistantId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<StudioInvitation>().WithMany().HasForeignKey(e => e.InvitationId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<User>().WithMany().HasForeignKey(e => e.TerminatedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class CollaborationEventConfiguration : IEntityTypeConfiguration<CollaborationEvent>
+{
+    public void Configure(EntityTypeBuilder<CollaborationEvent> b)
+    {
+        b.ToTable("CollaborationEvents");
+        b.HasKey(e => e.Id);
+        b.Property(e => e.EventType).HasConversion<string>().HasMaxLength(50).IsRequired();
+        b.Property(e => e.Reason).HasMaxLength(2000);
+        b.Property(e => e.DetailsJson).HasColumnType("text");
+        b.Property(e => e.CorrelationId).HasMaxLength(128);
+        b.HasIndex(e => new { e.CollaborationId, e.OccurredAt });
+        b.HasOne<MangakaAssistantCollaboration>().WithMany().HasForeignKey(e => e.CollaborationId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<User>().WithMany().HasForeignKey(e => e.ActorUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -327,5 +377,136 @@ public class DeadlineExtensionRequestConfiguration : IEntityTypeConfiguration<De
         b.Property(e => e.Reason).IsRequired().HasMaxLength(2000);
         b.Property(e => e.Status).IsRequired().HasMaxLength(50);
         b.Property(e => e.RejectionReason).HasMaxLength(1000);
+    }
+}
+
+public class SeriesAccessGrantConfiguration : IEntityTypeConfiguration<SeriesAccessGrant>
+{
+    public void Configure(EntityTypeBuilder<SeriesAccessGrant> b)
+    {
+        b.ToTable("SeriesAccessGrants");
+        b.HasKey(e => e.Id);
+        b.Property(e => e.RevokeReason).HasMaxLength(2000);
+        b.Property(e => e.ConcurrencyToken).IsConcurrencyToken().ValueGeneratedNever();
+
+        b.HasIndex(e => new { e.CollaborationId, e.SeriesId })
+            .IsUnique()
+            .HasFilter("\"RevokedAt\" IS NULL");
+
+        b.HasIndex(e => new { e.SeriesId, e.CollaborationId });
+
+        b.HasOne<MangakaAssistantCollaboration>()
+            .WithMany()
+            .HasForeignKey(e => e.CollaborationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasOne<MangaSeries>()
+            .WithMany()
+            .HasForeignKey(e => e.SeriesId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(e => e.GrantedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        b.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(e => e.RevokedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class TaskAssignmentAttemptConfiguration : IEntityTypeConfiguration<TaskAssignmentAttempt>
+{
+    public void Configure(EntityTypeBuilder<TaskAssignmentAttempt> b)
+    {
+        b.ToTable("TaskAssignmentAttempts");
+        b.HasKey(e => e.Id);
+        b.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
+        b.Property(e => e.RejectionReason).HasMaxLength(2000);
+        b.Property(e => e.ConcurrencyToken).IsConcurrencyToken().ValueGeneratedNever();
+
+        b.HasIndex(e => new { e.TaskId, e.AttemptNumber }).IsUnique();
+
+        b.HasIndex(e => e.TaskId, "IX_TaskAssignmentAttempts_TaskId_PendingAcceptance")
+            .IsUnique()
+            .HasFilter("\"Status\" = 'PendingAcceptance'");
+
+        b.HasIndex(e => e.TaskId, "IX_TaskAssignmentAttempts_TaskId_Accepted")
+            .IsUnique()
+            .HasFilter("\"Status\" = 'Accepted'");
+
+        b.HasIndex(e => new { e.AssistantId, e.Status });
+        b.HasIndex(e => new { e.TaskId, e.Status });
+        b.HasIndex(e => e.CollaborationId);
+
+        b.HasOne<PageTask>()
+            .WithMany()
+            .HasForeignKey(e => e.TaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(e => e.AssistantId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        b.HasOne<MangakaAssistantCollaboration>()
+            .WithMany()
+            .HasForeignKey(e => e.CollaborationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        b.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(e => e.AssignedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public class TaskProgressUpdateConfiguration : IEntityTypeConfiguration<TaskProgressUpdate>
+{
+    public void Configure(EntityTypeBuilder<TaskProgressUpdate> b)
+    {
+        b.ToTable("TaskProgressUpdates");
+        b.HasKey(e => e.Id);
+        b.Property(e => e.Note).HasMaxLength(2000);
+        b.HasIndex(e => e.TaskId);
+        b.HasIndex(e => e.AssistantId);
+
+        b.HasOne<PageTask>()
+            .WithMany()
+            .HasForeignKey(e => e.TaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class TaskCheckpointConfiguration : IEntityTypeConfiguration<TaskCheckpoint>
+{
+    public void Configure(EntityTypeBuilder<TaskCheckpoint> b)
+    {
+        b.ToTable("TaskCheckpoints");
+        b.HasKey(e => e.Id);
+        b.Property(e => e.Name).HasMaxLength(200).IsRequired();
+        b.HasIndex(e => e.TaskId);
+
+        b.HasOne<PageTask>()
+            .WithMany()
+            .HasForeignKey(e => e.TaskId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class AuditEventConfiguration : IEntityTypeConfiguration<AuditEvent>
+{
+    public void Configure(EntityTypeBuilder<AuditEvent> b)
+    {
+        b.ToTable("AuditEvents");
+        b.HasKey(e => e.Id);
+        b.Property(e => e.Action).HasMaxLength(100).IsRequired();
+        b.Property(e => e.TargetType).HasMaxLength(100).IsRequired();
+        b.HasIndex(e => e.ActorUserId);
+        b.HasIndex(e => e.TaskId);
+        b.HasIndex(e => e.CollaborationId);
+        b.HasIndex(e => e.SeriesId);
     }
 }

@@ -15,20 +15,20 @@ public class AssignFixTaskHandler : IRequestHandler<AssignFixTaskCommand, bool>
     private readonly IPageTaskRepository _pageTaskRepo;
     private readonly IChapterRepository _chapterRepo;
     private readonly ISeriesRepository _seriesRepo;
-    private readonly IStudioInvitationRepository _studioInvitationRepo;
+    private readonly ICollaborationAuthorizationService _collaborationAuth;
 
     public AssignFixTaskHandler(
         IBugPinRepository bugPinRepo,
         IPageTaskRepository pageTaskRepo,
         IChapterRepository chapterRepo,
         ISeriesRepository seriesRepo,
-        IStudioInvitationRepository studioInvitationRepo)
+        ICollaborationAuthorizationService collaborationAuth)
     {
         _bugPinRepo = bugPinRepo;
         _pageTaskRepo = pageTaskRepo;
         _chapterRepo = chapterRepo;
         _seriesRepo = seriesRepo;
-        _studioInvitationRepo = studioInvitationRepo;
+        _collaborationAuth = collaborationAuth;
     }
 
     public async Task<bool> Handle(AssignFixTaskCommand request, CancellationToken cancellationToken)
@@ -51,10 +51,8 @@ public class AssignFixTaskHandler : IRequestHandler<AssignFixTaskCommand, bool>
         var pageTask = await _pageTaskRepo.GetByIdAsync(pin.PageTaskId, cancellationToken)
             ?? throw new KeyNotFoundException($"PageTask {pin.PageTaskId} not found.");
 
-        var studioInvitations = await _studioInvitationRepo.GetBySeriesIdAsync(series.Id, cancellationToken);
-        var isAcceptedStudioAssistant = studioInvitations.Any(i =>
-            i.Status == StudioInvitationStatus.Accepted &&
-            i.AssistantUserId == request.AssistantId);
+        var isAcceptedStudioAssistant = await _collaborationAuth.CanReceiveNewAssignmentsAsync(
+            series.AuthorId, series.Id, request.AssistantId, cancellationToken);
 
         if (!isAcceptedStudioAssistant)
             throw new UnauthorizedAccessException("Assistant được giao sửa lỗi phải là thành viên đang hoạt động của studio thuộc series này.");

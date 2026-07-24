@@ -22,7 +22,7 @@ public class ReassignPageTaskTests
     private readonly Mock<IPageTaskRepository> _pageTaskRepoMock = new();
     private readonly Mock<ISeriesRepository> _seriesRepoMock = new();
     private readonly Mock<IUserRepository> _userRepoMock = new();
-    private readonly Mock<IStudioInvitationRepository> _studioRepoMock = new();
+    private readonly Mock<ICollaborationAuthorizationService> _collaborationAuthMock = new();
     private readonly Mock<INotificationService> _notificationServiceMock = new();
 
     private readonly ReassignPageTaskHandler _handler;
@@ -34,7 +34,7 @@ public class ReassignPageTaskTests
             _pageTaskRepoMock.Object,
             _seriesRepoMock.Object,
             _userRepoMock.Object,
-            _studioRepoMock.Object,
+            _collaborationAuthMock.Object,
             _notificationServiceMock.Object);
     }
 
@@ -101,8 +101,8 @@ public class ReassignPageTaskTests
             .ReturnsAsync(pageTask);
         _userRepoMock.Setup(r => r.GetByIdAsync(newAssistantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(newAssistantUser);
-        _studioRepoMock.Setup(r => r.GetBySeriesIdAsync(series.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<StudioInvitation> { studioInvitation });
+        _collaborationAuthMock.Setup(r => r.CanReceiveNewAssignmentsAsync(authorId, series.Id, newAssistantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
         var result = await _handler.Handle(command, CancellationToken.None);
 

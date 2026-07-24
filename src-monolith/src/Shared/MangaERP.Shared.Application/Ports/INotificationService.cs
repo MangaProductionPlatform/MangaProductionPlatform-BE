@@ -2,6 +2,7 @@ namespace MangaERP.Shared.Application.Ports;
 
 public interface INotificationService
 {
+    Task NotifyCollaborationEventAsync(Guid receiverId, string notifyType, string title, string message, Guid collaborationId, CancellationToken ct = default);
     Task NotifyTaskAssignedAsync(Guid assistantId, Guid pageTaskId, int pageNumber, CancellationToken ct = default);
     Task NotifyRevisionRequiredAsync(Guid assistantId, Guid pageTaskId, string rejectionNote, CancellationToken ct = default);
     Task NotifyTaskApprovedAsync(Guid assistantId, Guid pageTaskId, CancellationToken ct = default);

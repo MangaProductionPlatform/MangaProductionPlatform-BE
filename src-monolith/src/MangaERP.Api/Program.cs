@@ -24,9 +24,13 @@ using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
 // ── Load .env for local development (ignored in Docker / Render / Railway) ────
-// DotNetEnv tự động inject vào System.Environment → ASP.NET Core config sẽ đọc được
-// Tìm file .env từ thư mục src-monolith (thư mục gốc của project)
-Env.TraversePath().Load();
+// Priority (highest → lowest):
+//   CLI args > Process env vars > .env file (fallback only) > appsettings.*
+//
+// NoClobber() ensures the .env file NEVER overwrites a variable that is already
+// set in the process environment. This lets callers (dotnet ef, tests, CI) pass
+// ConnectionStrings__DefaultConnection=... and have it respected.
+Env.NoClobber().TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,8 +40,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
-// Đảm bảo ASP.NET Core đọc các biến đã được DotNetEnv inject vào System.Environment
-// Biến dạng Smtp__Host trong .env sẽ được map tự động sang Smtp:Host trong config
+// Re-read System.Environment after the conditional .env injection above.
+// Variables injected by DotNetEnv are visible here because DotNetEnv writes
+// directly to System.Environment; AddEnvironmentVariables() lifts them into
+// the IConfiguration layer so the rest of the app can read them.
 builder.Configuration.AddEnvironmentVariables();
 
 // ── Dynamic PORT (Railway / Docker) ───────────────────────────────────────────
