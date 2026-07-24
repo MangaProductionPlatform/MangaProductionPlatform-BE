@@ -9,9 +9,8 @@ namespace MangaERP.Submission.Application.Commands.ReSubmitProposal;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Mangaka nộp lại sau khi đã chỉnh sửa theo yêu cầu: RevisionRequired → Pending.
-/// Khác với SubmitProposalCommand (Draft → Pending).
-/// Sau khi chuyển trạng thái thành công, bắn thông báo tới toàn bộ Editorial Board (Mốc 1).
+/// Mangaka nộp lại sau khi đã chỉnh sửa theo yêu cầu: RevisionRequired → Pending_EB_Review.
+/// Tự động gán 2 Reviewers thuộc Editorial Board cho vòng mới và lưu persistent notification.
 /// </summary>
 public record ReSubmitProposalCommand(
     Guid SubmissionId,
@@ -48,7 +47,11 @@ public class ReSubmitProposalHandler
         if (submission.SubmitterId != cmd.SubmitterId)
             throw new UnauthorizedAccessException("You are not the owner of this submission.");
 
+        var author = await _userRepo.GetByIdAsync(cmd.SubmitterId, ct)
+            ?? throw new KeyNotFoundException("Submission owner not found.");
+
         submission.ReSubmit();   // Domain: Requires_Revision / Rejected → Pending_EB_Review; clears FeedbackMessage
+        await _repo.AssignEditorialReviewersAsync(submission.Id, submission.CurrentRound, author.FullName, ct);
         await _repo.SaveChangesAsync(ct);
 
         return new ReSubmitProposalResult(submission.Id, submission.Status.ToString());

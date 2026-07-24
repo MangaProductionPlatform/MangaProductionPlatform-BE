@@ -157,7 +157,7 @@ public class PrimaryBackupTakeoverAndSecurityTests
         db.MangaSeries.Add(series);
 
         var submission = SeriesSubmission.CreateDraft(authorId, "Submission Title", "Synopsis", "G", "http://cv.png", "http://manuscript.pdf");
-        submission.SubmitDraft(assignedTantouId);
+        submission.SubmitDraft();
         db.SeriesSubmissions.Add(submission);
 
         await db.SaveChangesAsync();

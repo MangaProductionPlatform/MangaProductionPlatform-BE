@@ -1,5 +1,6 @@
 using MangaERP.Series.Application.Ports;
 using MangaERP.Series.Domain.Entities;
+using MangaERP.Shared.Application.Helpers;
 using MediatR;
 
 namespace MangaERP.Series.Application.Queries.GetMySeries;
@@ -39,7 +40,7 @@ public class GetMySeriesHandler
             s.Id,
             s.Title,
             s.Genre,
-            s.CoverImageUrl,
+            MediaUrlSanitizer.Sanitize(s.CoverImageUrl),
             s.Status.ToString(),
             s.SubmissionId,
             s.CreatedAt));
