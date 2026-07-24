@@ -11,7 +11,7 @@ namespace MangaERP.Series.Application.Queries.GetSeriesStats;
 /// Được gọi bởi GetAdminDashboardHandler và GetBoardReportsHandler ở Api layer.
 /// KHÔNG leak ISeriesRepository ra ngoài module.
 /// </summary>
-public record GetSeriesStatsQuery : IRequest<SeriesStatsResult>;
+public record GetSeriesStatsQuery(DateTime? StartDate = null, DateTime? EndDate = null) : IRequest<SeriesStatsResult>;
 
 public record SeriesStatsResult(
     int TotalSeries,
@@ -35,7 +35,14 @@ public class GetSeriesStatsHandler : IRequestHandler<GetSeriesStatsQuery, Series
     public async Task<SeriesStatsResult> Handle(GetSeriesStatsQuery request, CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddDays(-30);
-        var all = (await _repo.GetAllAsync(ct)).ToList();
+        var query = (await _repo.GetAllAsync(ct)).AsQueryable();
+
+        if (request.StartDate.HasValue)
+            query = query.Where(s => s.CreatedAt >= request.StartDate.Value);
+        if (request.EndDate.HasValue)
+            query = query.Where(s => s.CreatedAt <= request.EndDate.Value);
+
+        var all = query.ToList();
 
         return new SeriesStatsResult(
             TotalSeries:                     all.Count,
