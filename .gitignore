@@ -34,6 +34,7 @@ Thumbs.db
 
 ## Database dumps & backups
 *.sql
+!src-monolith/src/Shared/MangaERP.Shared.Infrastructure/Persistence/Scripts/**/*.sql
 *.bak.docx
 
 ## Local documentation

@@ -26,6 +26,10 @@ public class TaskAssignmentAttempt : AggregateRoot
     public string? RejectionReason { get; private set; }
     public DateTime? ExpiresAt { get; private set; }
     public Guid AssignedByUserId { get; private set; }
+    public string AssignmentRole { get; private set; } = "Primary"; // "Primary" | "BackupTakeover"
+    public DateTime? ResponseDeadline { get; private set; }
+    public DateTime? WorkDeadline { get; private set; }
+    public Guid? PreviousAttemptId { get; private set; }
     public DateTime CreatedAt { get; private set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; private set; } = DateTime.UtcNow;
     public Guid ConcurrencyToken { get; private set; } = Guid.NewGuid();
@@ -38,7 +42,11 @@ public class TaskAssignmentAttempt : AggregateRoot
         Guid collaborationId,
         int attemptNumber,
         Guid assignedByUserId,
-        DateTime? expiresAt = null)
+        DateTime? expiresAt = null,
+        string assignmentRole = "Primary",
+        DateTime? responseDeadline = null,
+        DateTime? workDeadline = null,
+        Guid? previousAttemptId = null)
     {
         if (taskId == Guid.Empty) throw new ArgumentException("TaskId is required.", nameof(taskId));
         if (assistantId == Guid.Empty) throw new ArgumentException("AssistantId is required.", nameof(assistantId));
@@ -55,8 +63,12 @@ public class TaskAssignmentAttempt : AggregateRoot
             AttemptNumber = attemptNumber,
             Status = TaskAssignmentAttemptStatus.PendingAcceptance,
             AssignedAt = DateTime.UtcNow,
-            ExpiresAt = expiresAt,
+            ExpiresAt = expiresAt ?? responseDeadline,
             AssignedByUserId = assignedByUserId,
+            AssignmentRole = string.IsNullOrWhiteSpace(assignmentRole) ? "Primary" : assignmentRole,
+            ResponseDeadline = responseDeadline ?? expiresAt,
+            WorkDeadline = workDeadline,
+            PreviousAttemptId = previousAttemptId,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
             ConcurrencyToken = Guid.NewGuid()

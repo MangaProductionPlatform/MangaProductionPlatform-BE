@@ -63,6 +63,22 @@ public class TaskAssignmentsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("api/tasks/{taskId:guid}/request-takeover")]
+    public async Task<IActionResult> RequestTakeover(
+        [FromRoute] Guid taskId,
+        [FromBody] RequestTakeoverRequest request,
+        CancellationToken ct)
+    {
+        var command = new MangaERP.Task.Application.Commands.RequestTakeover.RequestTakeoverCommand(
+            taskId,
+            GetCurrentUserId(),
+            request.Reason ?? "Assistant incident or timeout.",
+            request.WorkDurationHours.HasValue ? TimeSpan.FromHours(request.WorkDurationHours.Value) : null);
+
+        var result = await _mediator.Send(command, ct);
+        return Ok(result);
+    }
+
     [HttpGet("api/tasks/{taskId:guid}/assignment-history")]
     public async Task<IActionResult> GetAssignmentHistory(
         [FromRoute] Guid taskId,
@@ -128,3 +144,4 @@ public class TaskAssignmentsController : ControllerBase
 public record AssignTaskRequest(Guid AssistantId, string? Description, DateTime? Deadline, double? DurationHours);
 public record RespondTaskAssignmentRequest(bool Accept, string? RejectionReason, Guid? ExpectedConcurrencyToken);
 public record SubmitProgressRequest(int ProgressPercent, string? Note);
+public record RequestTakeoverRequest(string? Reason, double? WorkDurationHours);

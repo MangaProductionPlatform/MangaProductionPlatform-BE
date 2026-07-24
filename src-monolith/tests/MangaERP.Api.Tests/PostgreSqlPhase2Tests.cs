@@ -147,6 +147,65 @@ public sealed class PostgreSqlPhase2Tests
         await command.ExecuteNonQueryAsync();
     }
 
+    [Fact]
+    public async STTask PartialUniqueIndex_TaskAssignmentAttempts_Accepted_EnforcesSingleAcceptedAttempt()
+    {
+        await using var connection = await OpenAsync();
+        var mangakaId = Guid.NewGuid();
+        var assistant1Id = Guid.NewGuid();
+        var assistant2Id = Guid.NewGuid();
+        var collab1Id = Guid.NewGuid();
+        var collab2Id = Guid.NewGuid();
+        var inv1Id = Guid.NewGuid();
+        var inv2Id = Guid.NewGuid();
+        var seriesId = Guid.NewGuid();
+        var chapterId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+
+        await SeedUserAndCollabAsync(connection, mangakaId, assistant1Id, collab1Id, inv1Id, seriesId);
+
+        // Insert assistant 2 and collab 2 separately
+        await ExecuteAsync(connection, $"INSERT INTO \"Users\" (\"Id\",\"Username\",\"Email\",\"PasswordHash\",\"Role\",\"AccountStatus\",\"IsDeleted\",\"CreatedAt\") VALUES ('{assistant2Id}','ast_{assistant2Id}@test.local','ast_{assistant2Id}@test.local','x','Assistant','Active',false,now())");
+        await ExecuteAsync(connection, $"INSERT INTO \"StudioInvitations\" (\"Id\",\"SeriesId\",\"InviterMangakaId\",\"AssistantUserId\",\"AssistantEmail\",\"NormalizedAssistantEmail\",\"Status\",\"IsNewAccountFlow\",\"RegistrationDeliveryStatus\",\"CreatedAt\",\"ExpiresAt\") VALUES ('{inv2Id}','{seriesId}','{mangakaId}','{assistant2Id}','ast_{assistant2Id}@test.local','ast_{assistant2Id}@test.local','Accepted',false,'NotRequired',now(),now()+interval '1 day')");
+        await ExecuteAsync(connection, $"INSERT INTO \"MangakaAssistantCollaborations\" (\"Id\",\"MangakaId\",\"AssistantId\",\"InvitationId\",\"Status\",\"StartedAt\",\"CreatedAt\",\"UpdatedAt\",\"ConcurrencyToken\") VALUES ('{collab2Id}','{mangakaId}','{assistant2Id}','{inv2Id}','Active',now(),now(),now(),'{Guid.NewGuid()}')");
+
+        await SeedTaskAsync(connection, seriesId, chapterId, taskId);
+
+        var attempt1Id = Guid.NewGuid();
+        var attempt2Id = Guid.NewGuid();
+
+        await ExecuteAsync(connection, $"""
+            INSERT INTO "TaskAssignmentAttempts"
+              ("Id","TaskId","AssistantId","CollaborationId","AttemptNumber","Status","AssignedByUserId","AssignedAt","ResponseDeadline","WorkDeadline","CreatedAt","UpdatedAt","ConcurrencyToken","AssignmentRole")
+            VALUES
+              ('{attempt1Id}','{taskId}','{assistant1Id}','{collab1Id}',1,'PendingAcceptance','{mangakaId}',now(),now()+interval '1 day',now()+interval '2 days',now(),now(),'{Guid.NewGuid()}','Primary');
+            """);
+
+        // Attempt 1 accepts successfully (releasing PendingAcceptance index for task)
+        await ExecuteAsync(connection, $"UPDATE \"TaskAssignmentAttempts\" SET \"Status\" = 'Accepted' WHERE \"Id\" = '{attempt1Id}'");
+
+        // Insert attempt 2 (now PendingAcceptance is free)
+        await ExecuteAsync(connection, $"""
+            INSERT INTO "TaskAssignmentAttempts"
+              ("Id","TaskId","AssistantId","CollaborationId","AttemptNumber","Status","AssignedByUserId","AssignedAt","ResponseDeadline","WorkDeadline","CreatedAt","UpdatedAt","ConcurrencyToken","AssignmentRole")
+            VALUES
+              ('{attempt2Id}','{taskId}','{assistant2Id}','{collab2Id}',2,'PendingAcceptance','{mangakaId}',now(),now()+interval '1 day',now()+interval '2 days',now(),now(),'{Guid.NewGuid()}','BackupTakeover');
+            """);
+
+        // Attempt 2 try to accept -> Must throw PostgresException (23505 Unique Violation on IX_TaskAssignmentAttempts_TaskId_Accepted)
+        var ex = await Assert.ThrowsAsync<PostgresException>(async () =>
+        {
+            await ExecuteAsync(connection, $"UPDATE \"TaskAssignmentAttempts\" SET \"Status\" = 'Accepted' WHERE \"Id\" = '{attempt2Id}'");
+        });
+
+        Assert.Equal("23505", ex.SqlState); // 23505 = unique_violation
+
+        // Verify DB state: Exactly 1 Accepted attempt exists
+        await using var cmd = new NpgsqlCommand($"SELECT COUNT(*) FROM \"TaskAssignmentAttempts\" WHERE \"TaskId\" = '{taskId}' AND \"Status\" = 'Accepted'", connection);
+        var acceptedCount = (long)(await cmd.ExecuteScalarAsync() ?? 0L);
+        Assert.Equal(1L, acceptedCount);
+    }
+
     private static async STTask SeedUserAndCollabAsync(NpgsqlConnection connection, Guid mangaka, Guid assistant, Guid collab, Guid invitation, Guid series)
     {
         await ExecuteAsync(connection, $"""

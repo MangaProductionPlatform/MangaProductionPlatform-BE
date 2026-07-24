@@ -92,17 +92,44 @@ public class EditorialWorkflowController : ControllerBase
                 round = work.EditorialRound;
             }
 
-            if (await _db.EditorialReviewAssignments.AnyAsync(x => x.WorkType == type && x.WorkId == workId && x.RoundNumber == round, ct))
-                throw new ConflictException("This editorial round has already been assigned.");
+            Guid authorId = type == EditorialWorkType.SeriesSubmission
+                ? ((SeriesSubmission)lockedWork).SubmitterId
+                : await _db.MangaSeries.Where(s => s.Id == ((ChapterEntity)lockedWork).SeriesId).Select(s => s.AuthorId).SingleAsync(ct);
+
+            Guid? assignedTantouId = type == EditorialWorkType.SeriesSubmission
+                ? ((SeriesSubmission)lockedWork).AssignedEditorId
+                : ((ChapterEntity)lockedWork).AssignedEditorId;
+
+            var existingAssignedReviewerIds = await _db.EditorialReviewAssignments
+                .Where(x => x.WorkType == type && x.WorkId == workId && x.RoundNumber == round)
+                .Select(x => x.ReviewerId)
+                .ToListAsync(ct);
 
             var reviewers = await _db.Users
                 .Where(x => x.AccountStatus == AccountStatus.Active && !x.IsDeleted)
                 .Where(x => x.Role == UserRole.EditorialBoard || x.UserRoles.Any(ur => ur.Role.Name == RoleNames.EditorialBoard))
                 .Where(x => x.Role != UserRole.EditorInChief && !x.UserRoles.Any(ur => ur.Role.Name == RoleNames.EditorInChief))
+                .Where(x => x.Id != authorId)
+                .Where(x => !assignedTantouId.HasValue || x.Id != assignedTantouId.Value)
+                .Where(x => !existingAssignedReviewerIds.Contains(x.Id))
                 .OrderBy(x => _db.EditorialReviewAssignments.Count(a => a.ReviewerId == x.Id && a.Status == EditorialReviewAssignmentStatus.Pending))
                 .ThenBy(x => x.Id).Take(2).Select(x => x.Id).ToListAsync(ct);
             if (reviewers.Count != 2)
-                throw new ConflictException("Exactly two active, non-EIC Editorial Board reviewers are required.");
+            {
+                var eicIds = await _db.Users
+                    .Where(u => u.AccountStatus == AccountStatus.Active && !u.IsDeleted)
+                    .Where(u => u.Role == UserRole.EditorInChief || u.UserRoles.Any(ur => ur.Role.Name == RoleNames.EditorInChief))
+                    .Select(u => u.Id).ToListAsync(ct);
+
+                foreach (var eicId in eicIds)
+                {
+                    AddNotification(eicId, "ReviewerAssignmentRequired", "Insufficient eligible Editorial Board reviewers without conflict of interest. EIC intervention required.", workId, type.ToString(), "/editorial/conflicts");
+                }
+                await _db.SaveChangesAsync(ct);
+                if (transaction is not null) await transaction.CommitAsync(ct);
+
+                throw new ConflictException("ReviewerAssignmentRequired: Exactly two active, non-EIC Editorial Board reviewers without conflict of interest are required. Escalated to Editor-in-Chief.");
+            }
 
             foreach (var reviewer in reviewers)
             {

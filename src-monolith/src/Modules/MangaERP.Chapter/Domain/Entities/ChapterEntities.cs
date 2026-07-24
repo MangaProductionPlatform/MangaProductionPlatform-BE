@@ -204,6 +204,12 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public DateTime? WorkStartedAt { get; set; }
     public bool IsDeleted { get; set; } = false;
     public DateTime? DeletedAt { get; set; }
+    public Guid? PrimaryAssistantId { get; set; }
+    public Guid? BackupAssistantId { get; set; }
+    public Guid? CurrentAssignmentAttemptId { get; set; }
+    public string? TakeoverStatus { get; set; } = "None"; // "None" | "TakeoverRequested" | "TakeoverAccepted" | "TakeoverFailed"
+    public string? ReassignmentReason { get; set; }
+    public DateTime? ReassignmentRequiredAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public virtual Chapter Chapter { get; set; } = null!;
@@ -215,16 +221,49 @@ public class PageTask : AggregateRoot, ISoftDeletable
     }
     public virtual PreviewPage? PreviewPage { get; set; }
 
-    public void AssignPending(Guid assistantId, string? description = null, DateTime? deadline = null)
+    public void AssignPrimaryAndBackup(Guid primaryAssistantId, Guid? backupAssistantId, string? description = null, DateTime? deadline = null)
     {
-        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.ReassignmentRequired && TaskStatus != PageTaskStatus.Incomplete)
+        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.ReassignmentRequired && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.PendingAcceptance)
             throw new InvalidOperationException($"Cannot assign task in status '{TaskStatus}'.");
 
-        AssignedAssistantId = assistantId;
+        PrimaryAssistantId = primaryAssistantId;
+        BackupAssistantId = backupAssistantId;
+        AssignedAssistantId = primaryAssistantId;
         Description = description ?? Description;
         Deadline = deadline ?? Deadline;
         TaskStatus = PageTaskStatus.PendingAcceptance;
+        TakeoverStatus = "None";
+        ReassignmentReason = null;
+        ReassignmentRequiredAt = null;
         UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void RequestTakeover(string reason)
+    {
+        if (BackupAssistantId is null)
+            throw new InvalidOperationException("No backup assistant assigned for this task.");
+
+        TakeoverStatus = "TakeoverRequested";
+        ReassignmentReason = reason;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void AcceptTakeover(Guid backupAssistantId, DateTime acceptedAt, DateTime newDeadline)
+    {
+        if (BackupAssistantId != backupAssistantId)
+            throw new UnauthorizedAccessException("Only the assigned backup assistant can take over this task.");
+
+        AssignedAssistantId = backupAssistantId;
+        TaskStatus = PageTaskStatus.Incomplete;
+        TakeoverStatus = "TakeoverAccepted";
+        WorkStartedAt = acceptedAt;
+        Deadline = newDeadline;
+        UpdatedAt = acceptedAt;
+    }
+
+    public void AssignPending(Guid assistantId, string? description = null, DateTime? deadline = null)
+    {
+        AssignPrimaryAndBackup(assistantId, null, description, deadline);
     }
 
     public void AcceptAssignment(DateTime acceptedAt, TimeSpan? duration = null)
@@ -246,17 +285,21 @@ public class PageTask : AggregateRoot, ISoftDeletable
         AssignedAssistantId = null;
         WorkStartedAt = null;
         TaskStatus = PageTaskStatus.ReassignmentRequired;
+        ReassignmentReason = "Primary assistant rejected assignment.";
+        ReassignmentRequiredAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 
     public int ProgressPercent { get; set; } = 0;
 
-    public void MarkReassignmentRequired()
+    public void MarkReassignmentRequired(string? reason = null)
     {
         AssignedAssistantId = null;
         WorkStartedAt = null;
         Deadline = null;
         TaskStatus = PageTaskStatus.ReassignmentRequired;
+        ReassignmentReason = reason ?? "All candidate assistants rejected or timed out.";
+        ReassignmentRequiredAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
 

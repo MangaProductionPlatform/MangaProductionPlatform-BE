@@ -17,7 +17,8 @@ public record ActivatePageTaskCommand(
     Guid AssignedAssistantId,
     string TaskType,
     string? Description = null,
-    DateTime? Deadline = null
+    DateTime? Deadline = null,
+    Guid? BackupAssistantId = null
 ) : IRequest<ActivatePageTaskResult>;
 
 public record ActivatePageTaskResult(
@@ -26,7 +27,8 @@ public record ActivatePageTaskResult(
     Guid AssignedAssistantId,
     string TaskStatus,
     string? Description,
-    DateTime? Deadline);
+    DateTime? Deadline,
+    Guid? BackupAssistantId = null);
 
 public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, ActivatePageTaskResult>
 {
@@ -78,10 +80,26 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
         if (!await _collaborationAuth.CanReceiveNewAssignmentsAsync(series.AuthorId, series.Id, cmd.AssignedAssistantId, ct))
             throw new InvalidOperationException("Assistant must have an active collaboration and accepted series scope before assignment.");
 
+        if (cmd.BackupAssistantId.HasValue)
+        {
+            if (cmd.BackupAssistantId.Value == cmd.AssignedAssistantId)
+                throw new InvalidOperationException("Backup assistant cannot be the same as primary assistant.");
+
+            var backup = await _userRepo.GetByIdAsync(cmd.BackupAssistantId.Value, ct)
+                ?? throw new KeyNotFoundException($"Backup Assistant {cmd.BackupAssistantId} not found.");
+
+            if (backup.Role != UserRole.Assistant)
+                throw new InvalidOperationException("Backup user must have Assistant role.");
+
+            if (!await _collaborationAuth.CanReceiveNewAssignmentsAsync(series.AuthorId, series.Id, cmd.BackupAssistantId.Value, ct))
+                throw new InvalidOperationException("Backup assistant must have an active collaboration.");
+        }
+
         if (!Enum.TryParse<PageTaskType>(cmd.TaskType, ignoreCase: true, out var taskType))
             throw new InvalidOperationException($"Invalid TaskType '{cmd.TaskType}'. Valid values: {string.Join(", ", Enum.GetNames<PageTaskType>())}");
 
-        pageTask.Activate(cmd.AssignedAssistantId, taskType, cmd.Description, cmd.Deadline);
+        pageTask.TaskType = taskType;
+        pageTask.AssignPrimaryAndBackup(cmd.AssignedAssistantId, cmd.BackupAssistantId, cmd.Description, cmd.Deadline);
         await _pageTaskRepo.UpdateAsync(pageTask, ct);
         await _pageTaskRepo.SaveChangesAsync(ct);
 
@@ -94,7 +112,8 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
             pageTask.AssignedAssistantId!.Value,
             pageTask.TaskStatus.ToString(),
             pageTask.Description,
-            pageTask.Deadline);
+            pageTask.Deadline,
+            pageTask.BackupAssistantId);
     }
 }
 
