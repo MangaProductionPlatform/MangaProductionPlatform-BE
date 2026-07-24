@@ -228,12 +228,22 @@ public class EditorialWorkflowController : ControllerBase
     }
 
     [HttpGet("all-submissions")]
-    [Authorize(Roles = "EditorInChief")]
+    [Authorize(Roles = "EditorInChief,EditorialBoard")]
     public async Task<IActionResult> AllSubmissions(CancellationToken ct)
     {
-        await EnsureCurrentUserRoleAsync(UserRole.EditorInChief, RoleNames.EditorInChief, ct);
-        var submissions = await _db.SeriesSubmissions
-            .AsNoTracking()
+        var isEic = User.IsInRole("EditorInChief");
+        var isEb  = User.IsInRole("EditorialBoard");
+
+        if (!isEic && !isEb)
+            throw new UnauthorizedAccessException("Only EditorInChief or EditorialBoard may access this endpoint.");
+
+        var query = _db.SeriesSubmissions.AsNoTracking();
+
+        // EditorialBoard cannot see Mangaka's private Draft submissions.
+        if (isEb && !isEic)
+            query = query.Where(x => x.Status != SubmissionStatus.Draft);
+
+        var submissions = await query
             .OrderByDescending(x => x.CreatedAt)
             .Select(x => new
             {
