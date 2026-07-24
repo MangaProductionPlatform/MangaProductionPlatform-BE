@@ -38,8 +38,10 @@ public class GetSubmissionQueueHandler
         switch (query.RequesterRole)
         {
             case RoleNames.EditorialBoard:
-                // Only return submissions this editor hasn't voted on in the current round
-                submissions = await _repo.GetPendingQueueNotVotedByAsync(query.RequesterId, ct);
+                // Return ALL Pending_EB_Review submissions so every EB member can see the queue.
+                // Vote slot limit (max 2 per round) is enforced at the decision endpoint, not here.
+                // This means proposals stay visible even after 2/2 votes (read-only view for latecomers).
+                submissions = await _repo.GetRecommendedQueueAsync(ct);
                 break;
 
             case RoleNames.EditorInChief:
