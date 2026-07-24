@@ -420,6 +420,192 @@ public class AdminDashboardController : ControllerBase
             DateTime.UtcNow
         ));
     }
+
+    /// <summary>
+    /// [Admin] Biểu đồ so sánh cùng kỳ linh hoạt cho Demo:
+    /// - mode="week"  : So sánh Tuần này vs Tuần trước (Thứ Hai -> Chủ Nhật)
+    /// - mode="month" : So sánh Tháng này vs Tháng trước (Ngày 01 -> Ngày 31)
+    /// FE dùng tham số ?mode=week hoặc ?mode=month để toggle giữa 2 dạng so sánh.
+    /// </summary>
+    [HttpGet("charts/comparison")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(403)]
+    public async Task<IActionResult> GetComparisonCharts(
+        [FromQuery] string mode = "week",
+        CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var isMonthlyMode = string.Equals(mode, "month", StringComparison.OrdinalIgnoreCase);
+
+        if (isMonthlyMode)
+        {
+            // === MONTH-OVER-MONTH COMPARISON (Tháng này vs Tháng trước) ===
+            var thisMonthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var thisMonthEnd = thisMonthStart.AddMonths(1).AddTicks(-1);
+
+            var lastMonthStart = thisMonthStart.AddMonths(-1);
+            var lastMonthEnd = thisMonthStart.AddTicks(-1);
+
+            var subThisMonth = await _db.SeriesSubmissions.AsNoTracking()
+                .Where(s => s.CreatedAt >= thisMonthStart && s.CreatedAt <= thisMonthEnd)
+                .Select(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            var subLastMonth = await _db.SeriesSubmissions.AsNoTracking()
+                .Where(s => s.CreatedAt >= lastMonthStart && s.CreatedAt <= lastMonthEnd)
+                .Select(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            var seriesThisMonth = await _db.MangaSeries.AsNoTracking()
+                .Where(s => s.CreatedAt >= thisMonthStart && s.CreatedAt <= thisMonthEnd)
+                .Select(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            var seriesLastMonth = await _db.MangaSeries.AsNoTracking()
+                .Where(s => s.CreatedAt >= lastMonthStart && s.CreatedAt <= lastMonthEnd)
+                .Select(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            int daysInMonth = DateTime.DaysInMonth(now.Year, now.Month);
+
+            var comparisonPoints = Enumerable.Range(1, daysInMonth).Select(day => new PeriodComparisonPointDto(
+                Label: $"Ngày {day:D2}",
+                Index: day,
+                PeriodA_Submissions: subThisMonth.Count(dt => dt.Day == day),
+                PeriodB_Submissions: subLastMonth.Count(dt => dt.Day == day),
+                PeriodA_Series: seriesThisMonth.Count(dt => dt.Day == day),
+                PeriodB_Series: seriesLastMonth.Count(dt => dt.Day == day)
+            )).ToList();
+
+            return Ok(new
+            {
+                mode = "month",
+                labelA = $"Tháng này ({thisMonthStart:MM/yyyy})",
+                labelB = $"Tháng trước ({lastMonthStart:MM/yyyy})",
+                generatedAt = DateTime.UtcNow,
+                comparisonPoints
+            });
+        }
+        else
+        {
+            // === WEEK-OVER-WEEK COMPARISON (Tuần này vs Tuần trước) ===
+            var thisWeekStart = GetMonday(now);
+            var thisWeekEnd = thisWeekStart.AddDays(7).AddTicks(-1);
+
+            var lastWeekStart = thisWeekStart.AddDays(-7);
+            var lastWeekEnd = thisWeekStart.AddTicks(-1);
+
+            var subThisWeek = await _db.SeriesSubmissions.AsNoTracking()
+                .Where(s => s.CreatedAt >= thisWeekStart && s.CreatedAt <= thisWeekEnd)
+                .Select(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            var subLastWeek = await _db.SeriesSubmissions.AsNoTracking()
+                .Where(s => s.CreatedAt >= lastWeekStart && s.CreatedAt <= lastWeekEnd)
+                .Select(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            var seriesThisWeek = await _db.MangaSeries.AsNoTracking()
+                .Where(s => s.CreatedAt >= thisWeekStart && s.CreatedAt <= thisWeekEnd)
+                .Select(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            var seriesLastWeek = await _db.MangaSeries.AsNoTracking()
+                .Where(s => s.CreatedAt >= lastWeekStart && s.CreatedAt <= lastWeekEnd)
+                .Select(s => s.CreatedAt)
+                .ToListAsync(ct);
+
+            var daysInOrder = new[]
+            {
+                DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+                DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+            };
+
+            var comparisonPoints = daysInOrder.Select((day, idx) => new PeriodComparisonPointDto(
+                Label: GetVietnameseDayName(day),
+                Index: idx + 1,
+                PeriodA_Submissions: subThisWeek.Count(dt => dt.DayOfWeek == day),
+                PeriodB_Submissions: subLastWeek.Count(dt => dt.DayOfWeek == day),
+                PeriodA_Series: seriesThisWeek.Count(dt => dt.DayOfWeek == day),
+                PeriodB_Series: seriesLastWeek.Count(dt => dt.DayOfWeek == day)
+            )).ToList();
+
+            return Ok(new
+            {
+                mode = "week",
+                labelA = $"Tuần này ({thisWeekStart:dd/MM} - {thisWeekStart.AddDays(6):dd/MM})",
+                labelB = $"Tuần trước ({lastWeekStart:dd/MM} - {lastWeekStart.AddDays(6):dd/MM})",
+                generatedAt = DateTime.UtcNow,
+                comparisonPoints
+            });
+        }
+    }
+
+    private static DateTime GetMonday(DateTime date)
+    {
+        int diff = (7 + (date.DayOfWeek - DayOfWeek.Monday)) % 7;
+        return date.Date.AddDays(-1 * diff);
+    }
+
+    /// <summary>
+    /// [Admin] Biểu đồ tần suất nộp bài & làm chương truyện theo Thứ trong tuần (Thứ Hai -> Chủ Nhật).
+    /// </summary>
+    [HttpGet("charts/day-of-week")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(403)]
+    public async Task<IActionResult> GetDayOfWeekCharts(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate,
+        CancellationToken ct = default)
+    {
+        var start = startDate ?? DateTime.UtcNow.AddDays(-90);
+        var end = endDate ?? DateTime.UtcNow;
+
+        var rawSubmissions = await _db.SeriesSubmissions.AsNoTracking()
+            .Where(s => s.CreatedAt >= start && s.CreatedAt <= end)
+            .Select(s => s.CreatedAt)
+            .ToListAsync(ct);
+
+        var rawChapters = await _db.Chapters.AsNoTracking()
+            .Where(c => c.CreatedAt >= start && c.CreatedAt <= end)
+            .Select(c => c.CreatedAt)
+            .ToListAsync(ct);
+
+        var daysInOrder = new[]
+        {
+            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+            DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+        };
+
+        var dayOfWeekFrequencies = daysInOrder.Select(day => new DayOfWeekFrequencyDto(
+            DayName: GetVietnameseDayName(day),
+            DayOfWeek: day,
+            SubmissionsCount: rawSubmissions.Count(dt => dt.DayOfWeek == day),
+            ChaptersCount: rawChapters.Count(dt => dt.DayOfWeek == day)
+        )).ToList();
+
+        return Ok(new
+        {
+            startDate = start,
+            endDate = end,
+            generatedAt = DateTime.UtcNow,
+            dayOfWeekFrequencies
+        });
+    }
+
+    private static string GetVietnameseDayName(DayOfWeek day) => day switch
+    {
+        DayOfWeek.Monday => "Thứ Hai",
+        DayOfWeek.Tuesday => "Thứ Ba",
+        DayOfWeek.Wednesday => "Thứ Tư",
+        DayOfWeek.Thursday => "Thứ Năm",
+        DayOfWeek.Friday => "Thứ Sáu",
+        DayOfWeek.Saturday => "Thứ Bảy",
+        DayOfWeek.Sunday => "Chủ Nhật",
+        _ => day.ToString()
+    };
 }
 
 public record AdminChartsDto(
@@ -431,4 +617,20 @@ public record AdminChartsDto(
 public record TrendDataPointDto(
     string Date,
     int Count
+);
+
+public record PeriodComparisonPointDto(
+    string Label,
+    int Index,
+    int PeriodA_Submissions,
+    int PeriodB_Submissions,
+    int PeriodA_Series,
+    int PeriodB_Series
+);
+
+public record DayOfWeekFrequencyDto(
+    string DayName,
+    DayOfWeek DayOfWeek,
+    int SubmissionsCount,
+    int ChaptersCount
 );
