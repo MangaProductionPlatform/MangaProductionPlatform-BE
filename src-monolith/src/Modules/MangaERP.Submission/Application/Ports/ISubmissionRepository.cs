@@ -90,4 +90,9 @@ public interface ISubmissionRepository
     /// Dùng khi Admin buộc phải reject/approve hoàn toàn, đóng băng submission vĩnh viễn.
     /// </summary>
     Task DeleteAllVotesAsync(Guid submissionId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Tự động gán 2 Reviewers thuộc Editorial Board cho vòng hiện tại của submission và lưu persistent notification trong cùng transaction.
+    /// </summary>
+    Task AssignEditorialReviewersAsync(Guid submissionId, int roundNumber, string authorName, CancellationToken ct = default);
 }

@@ -8,7 +8,8 @@ namespace MangaERP.Submission.Application.Queries.GetSubmissionDetail;
 // ── Query ─────────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Lấy chi tiết 1 submission. Dùng bởi Mangaka (chủ sở hữu), TantouEditor, EditorialBoard.
+/// Lấy chi tiết 1 submission. Dùng bởi Mangaka (chủ sở hữu), EditorialBoard, EditorInChief, Admin.
+/// TantouEditor không tham gia SeriesSubmission (Mainflow 1) — dùng Chapter QA endpoints cho Mainflow 3.
 /// </summary>
 public record GetSubmissionDetailQuery(
     Guid SubmissionId,
@@ -71,9 +72,15 @@ public class GetSubmissionDetailHandler
             submitter.PenName,
             submitter.PersonalEmail);
         var isMangaka = query.RequesterRole == "Mangaka";
+        // Mangaka thấy:
+        //   - FeedbackMessage khi EB đã ra quyết định (Approved/Rejected/Conflict)
+        //   - null khi đang trong quá trình review (double-blind)
+        // Staff (EB/EIC/Admin) thấy toàn bộ FeedbackMessage.
         var visibleFeedback = isMangaka
-            ? submission.Status is SubmissionStatus.Tantou_Revision_Required or SubmissionStatus.Mangaka_Revision_Required
-                ? submission.TantouGuidance
+            ? submission.Status is SubmissionStatus.EB_Rejected
+                                or SubmissionStatus.EB_Approved
+                                or SubmissionStatus.Conflict_Escalated
+                ? submission.FeedbackMessage
                 : null
             : submission.FeedbackMessage;
 
@@ -82,8 +89,8 @@ public class GetSubmissionDetailHandler
             submission.Title,
             submission.Description,
             submission.Genre,
-            submission.CoverImageUrl,
-            submission.ManuscriptUrl,
+            MangaERP.Shared.Application.Helpers.MediaUrlSanitizer.Sanitize(submission.CoverImageUrl),
+            MangaERP.Shared.Application.Helpers.MediaUrlSanitizer.Sanitize(submission.ManuscriptUrl),
             submission.SubmitterId,
             submitterDto,
             submission.Status.ToString(),

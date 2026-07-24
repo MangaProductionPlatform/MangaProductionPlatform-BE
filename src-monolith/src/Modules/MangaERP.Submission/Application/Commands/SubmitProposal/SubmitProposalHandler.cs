@@ -9,9 +9,9 @@ namespace MangaERP.Submission.Application.Commands.SubmitProposal;
 // ── Command ───────────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Mangaka nộp draft lần đầu: Draft → Pending.
+/// Mangaka nộp draft lần đầu: Draft → Pending_EB_Review.
 /// Yêu cầu ManuscriptUrl phải đã có trong entity trước khi gọi.
-/// Sau khi chuyển trạng thái thành công, bắn thông báo tới toàn bộ Editorial Board (Mốc 1).
+/// Tự động gán 2 Reviewers thuộc Editorial Board và lưu persistent notification cho họ trong cùng transaction.
 /// </summary>
 public record SubmitProposalCommand(
     Guid SubmissionId,
@@ -45,14 +45,14 @@ public class SubmitProposalHandler
         var submission = await _repo.GetByIdAsync(cmd.SubmissionId, ct)
             ?? throw new KeyNotFoundException($"Submission {cmd.SubmissionId} not found.");
 
-        // Authorization guard: chỉ chủ sở hữu mới được submit
         if (submission.SubmitterId != cmd.SubmitterId)
             throw new UnauthorizedAccessException("You are not the owner of this submission.");
 
         var author = await _userRepo.GetByIdAsync(cmd.SubmitterId, ct)
             ?? throw new KeyNotFoundException("Submission owner not found.");
 
-        submission.SubmitDraft(author.ManagingTantouId);
+        submission.SubmitDraft();
+        await _repo.AssignEditorialReviewersAsync(submission.Id, submission.CurrentRound, author.FullName, ct);
         await _repo.SaveChangesAsync(ct);
 
         return new SubmitProposalResult(submission.Id, submission.Status.ToString());

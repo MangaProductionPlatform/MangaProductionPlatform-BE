@@ -50,9 +50,11 @@ public class GetMySubmissionsHandler
             s.Title,
             s.Genre,
             s.Status.ToString(),
-            s.Status is SubmissionStatus.Tantou_Revision_Required or SubmissionStatus.Mangaka_Revision_Required
-                ? s.TantouGuidance
-                : null,
+            s.Status is SubmissionStatus.EB_Rejected or SubmissionStatus.EB_Approved or SubmissionStatus.Conflict_Escalated
+                ? s.FeedbackMessage
+                : s.Status is SubmissionStatus.Tantou_Revision_Required or SubmissionStatus.Mangaka_Revision_Required
+                    ? s.TantouGuidance
+                    : null,
             s.CreatedAt,
             s.ReviewedAt));
     }

@@ -34,9 +34,7 @@ public class EditorialWorkflowController : ControllerBase
         await EnsureCurrentUserRoleAsync(UserRole.TantouEditor, RoleNames.TantouEditor, ct);
         return Ok(new
         {
-            submissions = await _db.SeriesSubmissions
-            .Where(x => x.AssignedEditorId == UserId)
-            .Select(x => new { x.Id, x.Title, x.Status, x.CurrentRound, x.FeedbackMessage }).ToListAsync(ct),
+            submissions = new List<object>(), // Tantou Editors have zero involvement in Mainflow 1 Series Submission vetting
             chapters = await _db.Chapters
             .Where(x => x.AssignedEditorId == UserId)
             .Select(x => new { x.Id, x.Title, x.Status, Round = x.EditorialRound, x.EditorialFeedback }).ToListAsync(ct)

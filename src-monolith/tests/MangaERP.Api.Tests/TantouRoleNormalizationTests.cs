@@ -54,8 +54,7 @@ public class TantouRoleNormalizationTests
     {
         var mangakaId = Guid.NewGuid();
         var submission = SeriesSubmission.CreateDraft(mangakaId, "Test Title", "Desc", "Genre", null, "https://example.com/manuscript.pdf");
-
-        submission.SubmitDraft(null); // No Tantou Editor assigned
+        submission.SubmitDraft(); // Directly to EB, no Tantou Editor in MF1
 
         Assert.Equal(SubmissionStatus.Pending_EB_Review, submission.Status);
     }

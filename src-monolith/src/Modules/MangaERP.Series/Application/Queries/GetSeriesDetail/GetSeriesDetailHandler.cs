@@ -61,7 +61,7 @@ public class GetSeriesDetailHandler
             series.Title,
             series.Description,
             series.Genre,
-            series.CoverImageUrl,
+            MangaERP.Shared.Application.Helpers.MediaUrlSanitizer.Sanitize(series.CoverImageUrl),
             series.Status.ToString(),
             series.AuthorId,
             series.SubmissionId,

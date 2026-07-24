@@ -72,18 +72,16 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
 
     /// <summary>
     /// Nộp draft lần đầu: Draft → Pending_EB_Review.
-    /// ManuscriptUrl phải có trước khi gọi. Nộp trực tiếp cho Editorial Board, không qua Tantou gatekeeping.
+    /// ManuscriptUrl phải có trước khi gọi. Nộp trực tiếp cho Editorial Board, Tantou Editor không tham gia MF1.
     /// </summary>
-    public void SubmitDraft(Guid? tantouEditorId = null)
+    public void SubmitDraft()
     {
         if (Status != SubmissionStatus.Draft)
             throw new InvalidStateTransitionException("Chỉ có bản thảo ở trạng thái Draft mới được nộp lần đầu.");
         if (string.IsNullOrWhiteSpace(ManuscriptUrl))
             throw new InvalidStateTransitionException("Vui lòng tải lên file bản thảo trước khi nộp.");
 
-        if (tantouEditorId.HasValue && tantouEditorId.Value != Guid.Empty)
-            AssignedEditorId = tantouEditorId;
-
+        AssignedEditorId = null;
         Status = SubmissionStatus.Pending_EB_Review;
     }
 

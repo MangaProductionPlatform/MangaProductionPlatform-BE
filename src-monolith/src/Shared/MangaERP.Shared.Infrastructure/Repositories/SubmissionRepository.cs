@@ -187,4 +187,65 @@ public class SubmissionRepository : ISubmissionRepository
             _db.SubmissionVotes.RemoveRange(votes);
         // Caller is responsible for SaveChanges inside the wrapping transaction.
     }
+
+    public async System.Threading.Tasks.Task AssignEditorialReviewersAsync(
+        Guid submissionId, int roundNumber, string authorName, CancellationToken ct = default)
+    {
+        var submission = await _db.SeriesSubmissions.FindAsync([submissionId], ct)
+            ?? throw new KeyNotFoundException($"Submission {submissionId} not found.");
+
+        var ebReviewers = await _db.Users
+            .Where(u => u.AccountStatus == MangaERP.Identity.Domain.Enums.AccountStatus.Active && !u.IsDeleted &&
+                (u.Role == MangaERP.Identity.Domain.Enums.UserRole.EditorialBoard || u.UserRoles.Any(ur => ur.Role.Name == MangaERP.Identity.Domain.Enums.RoleNames.EditorialBoard)))
+            .OrderBy(u => u.Id)
+            .ToListAsync(ct);
+
+        if (ebReviewers.Count < 2)
+            throw new InvalidOperationException("Hệ thống yêu cầu ít nhất 2 thành viên Ban Biên Tập (Editorial Board) đang hoạt động để phân công duyệt bản thảo.");
+
+        var reviewer1 = ebReviewers[0];
+        var reviewer2 = ebReviewers[1];
+
+        var existingAssignments = await _db.EditorialReviewAssignments
+            .Where(a => a.WorkType == EditorialWorkType.SeriesSubmission && a.WorkId == submissionId && a.RoundNumber == roundNumber)
+            .ToListAsync(ct);
+
+        if (!existingAssignments.Any(a => a.ReviewerId == reviewer1.Id))
+        {
+            _db.EditorialReviewAssignments.Add(
+                EditorialReviewAssignment.Assign(EditorialWorkType.SeriesSubmission, submissionId, roundNumber, reviewer1.Id));
+        }
+
+        if (!existingAssignments.Any(a => a.ReviewerId == reviewer2.Id))
+        {
+            _db.EditorialReviewAssignments.Add(
+                EditorialReviewAssignment.Assign(EditorialWorkType.SeriesSubmission, submissionId, roundNumber, reviewer2.Id));
+        }
+
+        var notifTitle = "Phân công duyệt bản thảo mới";
+        var notifMsg = $"Bản thảo \"{submission.Title}\" của Tác giả {authorName} đã được phân công cho bạn đánh giá.";
+
+        foreach (var reviewer in new[] { reviewer1, reviewer2 })
+        {
+            var notifExists = await _db.Notifications.AnyAsync(n =>
+                n.ReceiverId == reviewer.Id &&
+                n.RelatedEntityId == submissionId &&
+                n.NotifyType == "EditorialReviewAssignment" &&
+                n.Message.Contains($"Vòng {roundNumber}"), ct);
+
+            if (!notifExists)
+            {
+                _db.Notifications.Add(new MangaERP.Publishing.Domain.Entities.Notification
+                {
+                    ReceiverId = reviewer.Id,
+                    Title = notifTitle,
+                    Message = $"{notifMsg} (Vòng {roundNumber})",
+                    NotifyType = "EditorialReviewAssignment",
+                    RelatedEntityId = submissionId,
+                    RelatedEntityType = "SeriesSubmission",
+                    TargetUrl = "/editorial-workflow/reviews"
+                });
+            }
+        }
+    }
 }
