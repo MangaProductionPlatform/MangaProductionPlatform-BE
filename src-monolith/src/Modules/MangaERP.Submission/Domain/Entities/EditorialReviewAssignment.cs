@@ -49,4 +49,20 @@ public class EditorialReviewAssignment
         ReviewedAt = DateTime.UtcNow;
         ConcurrencyToken = Guid.NewGuid();
     }
+
+    /// <summary>
+    /// [DEMO ONLY] Reassign this slot to a different EB reviewer so any logged-in EB can vote
+    /// without needing to remember which specific account was originally assigned.
+    /// Only allowed while the slot is still Pending (has not been voted on yet).
+    /// Remove before production.
+    /// </summary>
+    public void OverrideReviewerForDemo(Guid newReviewerId)
+    {
+        if (Status == EditorialReviewAssignmentStatus.Completed)
+            throw new InvalidOperationException("Cannot override a review that has already been submitted.");
+        if (newReviewerId == Guid.Empty)
+            throw new ArgumentException("ReviewerId must not be empty.");
+        ReviewerId = newReviewerId;
+        ConcurrencyToken = Guid.NewGuid();
+    }
 }

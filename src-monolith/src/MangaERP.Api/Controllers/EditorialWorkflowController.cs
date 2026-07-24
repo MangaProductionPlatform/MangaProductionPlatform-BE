@@ -87,19 +87,55 @@ public class EditorialWorkflowController : ControllerBase
     public async Task<IActionResult> MyReviews(CancellationToken ct)
     {
         await EnsureCurrentUserRoleAsync(UserRole.EditorialBoard, RoleNames.EditorialBoard, ct);
-        return Ok(await _db.EditorialReviewAssignments
-            .Where(x => x.ReviewerId == UserId)
+
+        // [DEMO] Any EB sees proposals they can still act on:
+        //   - proposals where they already have their own slot (to track their submitted vote)
+        //   - proposals where at least one slot is still Pending (first-come-first-serve)
+        // Proposals where both slots are Completed are hidden from EB users who haven't voted.
+        var all = await _db.EditorialReviewAssignments
             .OrderByDescending(x => x.AssignedAt)
-            .Select(x => new { x.Id, x.WorkType, x.WorkId, x.RoundNumber, x.Status, x.AssignedAt, x.ReviewedAt })
-            .ToListAsync(ct));
+            .Select(x => new
+            {
+                x.Id,
+                x.WorkType,
+                x.WorkId,
+                x.RoundNumber,
+                x.Status,
+                x.AssignedAt,
+                x.ReviewedAt,
+                IsMyAssignment = x.ReviewerId == UserId
+            })
+            .ToListAsync(ct);
+
+        // Group by (WorkType, WorkId, RoundNumber)
+        var grouped = all.GroupBy(x => (x.WorkType.ToString(), x.WorkId, x.RoundNumber));
+
+        var result = new List<object>();
+        foreach (var grp in grouped)
+        {
+            var isMine = grp.Any(x => x.IsMyAssignment);
+            var hasPendingSlot = grp.Any(x => x.Status == EditorialReviewAssignmentStatus.Pending);
+
+            // Show if I already voted OR there is still a free slot for me to take
+            if (!isMine && !hasPendingSlot) continue;
+
+            // Return my own slot if I have one, otherwise return any pending slot as entry point
+            var entry = grp.FirstOrDefault(x => x.IsMyAssignment)
+                        ?? grp.First(x => x.Status == EditorialReviewAssignmentStatus.Pending);
+            result.Add(entry);
+        }
+
+        return Ok(result);
     }
+
 
     [HttpGet("reviews/{assignmentId:guid}")]
     [Authorize(Roles = "EditorialBoard")]
     public async Task<IActionResult> ReviewDetail(Guid assignmentId, CancellationToken ct)
     {
         await EnsureCurrentUserRoleAsync(UserRole.EditorialBoard, RoleNames.EditorialBoard, ct);
-        var mine = await _db.EditorialReviewAssignments.SingleOrDefaultAsync(x => x.Id == assignmentId && x.ReviewerId == UserId, ct)
+        // [DEMO] Any EB can view any assignment detail, not just their own assigned slot.
+        var mine = await _db.EditorialReviewAssignments.SingleOrDefaultAsync(x => x.Id == assignmentId, ct)
             ?? throw new KeyNotFoundException();
         var round = await _db.EditorialReviewAssignments
             .Where(x => x.WorkType == mine.WorkType && x.WorkId == mine.WorkId && x.RoundNumber == mine.RoundNumber).ToListAsync(ct);
@@ -116,8 +152,9 @@ public class EditorialWorkflowController : ControllerBase
     public async Task<IActionResult> Decide(Guid assignmentId, DecisionRequest request, CancellationToken ct)
     {
         await EnsureCurrentUserRoleAsync(UserRole.EditorialBoard, RoleNames.EditorialBoard, ct);
+        // [DEMO] Fetch the target assignment regardless of owner to get WorkType/WorkId/RoundNumber.
         var metadata = await _db.EditorialReviewAssignments.AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == assignmentId && x.ReviewerId == UserId, ct)
+            .SingleOrDefaultAsync(x => x.Id == assignmentId, ct)
             ?? throw new KeyNotFoundException();
         var strategy = _db.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(async () =>
@@ -126,8 +163,33 @@ public class EditorialWorkflowController : ControllerBase
                 ? await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct)
                 : null;
             await LockWorkAsync(metadata.WorkType, metadata.WorkId, ct);
+
+            // [DEMO] First-come-first-serve: any EB can take a Pending slot.
+            // Check if this EB already has their own slot for this work/round.
             var mine = await _db.EditorialReviewAssignments
-                .SingleAsync(x => x.Id == assignmentId && x.ReviewerId == UserId, ct);
+                .SingleOrDefaultAsync(x => x.WorkType == metadata.WorkType
+                    && x.WorkId == metadata.WorkId
+                    && x.RoundNumber == metadata.RoundNumber
+                    && x.ReviewerId == UserId, ct);
+
+            if (mine is null)
+            {
+                // Find any slot still Pending (i.e., not yet taken by another EB who voted first)
+                var pendingSlot = await _db.EditorialReviewAssignments
+                    .Where(x => x.WorkType == metadata.WorkType
+                        && x.WorkId == metadata.WorkId
+                        && x.RoundNumber == metadata.RoundNumber
+                        && x.Status == EditorialReviewAssignmentStatus.Pending)
+                    .FirstOrDefaultAsync(ct);
+
+                if (pendingSlot is null)
+                    return Conflict(new { message = "Both review slots have already been filled by other reviewers." });
+
+                // Take this slot (first-come-first-serve)
+                pendingSlot.OverrideReviewerForDemo(UserId);
+                mine = pendingSlot;
+            }
+
             mine.Complete(request.Decision, request.Feedback);
 
             var round = await _db.EditorialReviewAssignments
