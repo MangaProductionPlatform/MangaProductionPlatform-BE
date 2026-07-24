@@ -96,6 +96,7 @@ public class PageTaskRepository : IPageTaskRepository
     public async System.Threading.Tasks.Task<PageTask?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await _db.PageTasks
             .Include(p => p.PreviewPage)
+            .Include(p => p.BasePageVersions)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public async System.Threading.Tasks.Task<PageTask?> GetByChapterAndPageNumberAsync(
@@ -128,6 +129,19 @@ public class PageTaskRepository : IPageTaskRepository
     public async System.Threading.Tasks.Task<int> CountApprovedPagesAsync(Guid chapterId, CancellationToken ct = default)
         => await _db.PageTasks
             .CountAsync(p => p.ChapterId == chapterId && p.TaskStatus == PageTaskStatus.Approved, ct);
+
+    public async System.Threading.Tasks.Task<bool> HasSubmissionsAsync(Guid pageTaskId, CancellationToken ct = default)
+        => await _db.Set<MangaERP.Task.Domain.Entities.ArtworkLayer>()
+            .AnyAsync(al => al.PageTaskId == pageTaskId, ct);
+
+    public async System.Threading.Tasks.Task<int> GetNextNegativePageNumberAsync(Guid chapterId, CancellationToken ct = default)
+    {
+        var minPage = await _db.PageTasks
+            .IgnoreQueryFilters()
+            .Where(p => p.ChapterId == chapterId && p.PageNumber < 0)
+            .MinAsync(p => (int?)p.PageNumber, ct);
+        return (minPage ?? 0) - 1;
+    }
 
     public async System.Threading.Tasks.Task AddAsync(PageTask pageTask, CancellationToken ct = default)
         => await _db.PageTasks.AddAsync(pageTask, ct);

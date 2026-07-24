@@ -214,6 +214,19 @@ public class PageTask : AggregateRoot, ISoftDeletable
         UpdatedAt = DateTime.UtcNow;
     }
     public virtual PreviewPage? PreviewPage { get; set; }
+    public virtual ICollection<BasePageVersion> BasePageVersions { get; private set; } = new List<BasePageVersion>();
+
+    public void UpdateBaseImage(string newImageUrl, Guid updatedByUserId)
+    {
+        if (string.IsNullOrWhiteSpace(newImageUrl))
+            throw new ArgumentException("BaseImageUrl cannot be empty.");
+
+        BaseImageUrl = newImageUrl.Trim();
+        UpdatedAt = DateTime.UtcNow;
+
+        var nextVersion = BasePageVersions.Any() ? BasePageVersions.Max(v => v.VersionNumber) + 1 : 1;
+        BasePageVersions.Add(BasePageVersion.Create(Id, nextVersion, BaseImageUrl, updatedByUserId));
+    }
 
     public void AssignPending(Guid assistantId, string? description = null, DateTime? deadline = null)
     {
@@ -405,5 +418,30 @@ public class PreviewPage
     {
         CompositeFileUrl = compositeFileUrl;
         GeneratedAt = DateTime.UtcNow;
+    }
+}
+
+public class BasePageVersion
+{
+    public Guid Id { get; private set; }
+    public Guid PageTaskId { get; private set; }
+    public int VersionNumber { get; private set; }
+    public string BaseImageUrl { get; private set; } = string.Empty;
+    public Guid UpdatedByUserId { get; private set; }
+    public DateTime CreatedAt { get; private set; }
+
+    private BasePageVersion() { }
+
+    public static BasePageVersion Create(Guid pageTaskId, int versionNumber, string baseImageUrl, Guid updatedByUserId)
+    {
+        return new BasePageVersion
+        {
+            Id = Guid.NewGuid(),
+            PageTaskId = pageTaskId,
+            VersionNumber = versionNumber,
+            BaseImageUrl = baseImageUrl,
+            UpdatedByUserId = updatedByUserId,
+            CreatedAt = DateTime.UtcNow
+        };
     }
 }
