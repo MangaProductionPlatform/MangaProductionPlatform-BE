@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MangaERP.Shared.Domain.Exceptions;
+using MangaERP.Shared.Infrastructure.Hubs;
+using Microsoft.AspNetCore.SignalR;
 
 namespace MangaERP.Api.Controllers;
 
@@ -20,7 +22,13 @@ namespace MangaERP.Api.Controllers;
 public class EditorialWorkflowController : ControllerBase
 {
     private readonly AppDbContext _db;
-    public EditorialWorkflowController(AppDbContext db) => _db = db;
+    private readonly IHubContext<NotificationHub>? _hubContext;
+
+    public EditorialWorkflowController(AppDbContext db, IHubContext<NotificationHub>? hubContext = null)
+    {
+        _db = db;
+        _hubContext = hubContext;
+    }
 
     private Guid UserId => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : Guid.Empty;
 
@@ -69,14 +77,14 @@ public class EditorialWorkflowController : ControllerBase
         {
             var submission = await _db.SeriesSubmissions.FindAsync([workId], ct) ?? throw new KeyNotFoundException();
             submission.ReturnConsolidatedGuidanceToMangaka(UserId, request.Guidance);
-            AddNotification(submission.SubmitterId, "Advice from Tantou Editor", request.Guidance, workId, "SeriesSubmission", $"/submissions/{workId}");
+            await AddNotificationAsync(submission.SubmitterId, "Advice from Tantou Editor", request.Guidance, workId, "SeriesSubmission", $"/submissions/{workId}", ct);
         }
         else
         {
             var chapter = await _db.Chapters.FindAsync([workId], ct) ?? throw new KeyNotFoundException();
             chapter.ReturnConsolidatedGuidanceToMangaka(UserId, request.Guidance);
             var authorId = await _db.MangaSeries.Where(x => x.Id == chapter.SeriesId).Select(x => x.AuthorId).SingleAsync(ct);
-            AddNotification(authorId, "Chapter advice from Tantou Editor", request.Guidance, workId, "Chapter", $"/chapters/{workId}");
+            await AddNotificationAsync(authorId, "Chapter advice from Tantou Editor", request.Guidance, workId, "Chapter", $"/chapters/{workId}", ct);
         }
         await _db.SaveChangesAsync(ct);
         return NoContent();
@@ -334,14 +342,14 @@ public class EditorialWorkflowController : ControllerBase
         {
             var submission = await _db.SeriesSubmissions.FindAsync([workId], ct) ?? throw new KeyNotFoundException();
             submission.ReturnConsolidatedGuidanceToMangaka(UserId, request.Guidance);
-            AddNotification(submission.SubmitterId, "Revision guidance after editorial review", request.Guidance, workId, "SeriesSubmission", $"/submissions/{workId}");
+            await AddNotificationAsync(submission.SubmitterId, "Revision guidance after editorial review", request.Guidance, workId, "SeriesSubmission", $"/submissions/{workId}", ct);
         }
         else
         {
             var chapter = await _db.Chapters.FindAsync([workId], ct) ?? throw new KeyNotFoundException();
             chapter.ReturnConsolidatedGuidanceToMangaka(UserId, request.Guidance);
             var authorId = await _db.MangaSeries.Where(x => x.Id == chapter.SeriesId).Select(x => x.AuthorId).SingleAsync(ct);
-            AddNotification(authorId, "Chapter revision guidance after editorial review", request.Guidance, workId, "Chapter", $"/chapters/{workId}");
+            await AddNotificationAsync(authorId, "Chapter revision guidance after editorial review", request.Guidance, workId, "Chapter", $"/chapters/{workId}", ct);
         }
         await _db.SaveChangesAsync(ct);
         return NoContent();
@@ -367,7 +375,7 @@ public class EditorialWorkflowController : ControllerBase
             var chapter = await _db.Chapters.FindAsync([id], ct) ?? throw new KeyNotFoundException();
             chapter.Approve();
             var authorId = await _db.MangaSeries.Where(x => x.Id == chapter.SeriesId).Select(x => x.AuthorId).SingleAsync(ct);
-            AddNotification(authorId, "Chapter approved", chapter.Title, id, "Chapter", $"/chapters/{id}");
+            await AddNotificationAsync(authorId, "Chapter approved", chapter.Title, id, "Chapter", $"/chapters/{id}", ct);
             return;
         }
         var submission = await _db.SeriesSubmissions.FindAsync([id], ct) ?? throw new KeyNotFoundException();
@@ -376,7 +384,7 @@ public class EditorialWorkflowController : ControllerBase
         if (!await _db.MangaSeries.AnyAsync(x => x.SubmissionId == id, ct))
             _db.MangaSeries.Add(MangaSeries.Create(submission.SubmitterId, submission.Id, submission.Title, submission.Description, submission.Genre, submission.CoverImageUrl));
 
-        AddNotification(submission.SubmitterId, "Series submission approved", submission.Title, id, "SeriesSubmission", $"/submissions/{id}");
+        await AddNotificationAsync(submission.SubmitterId, "Series submission approved", submission.Title, id, "SeriesSubmission", $"/submissions/{id}", ct);
     }
 
     private async System.Threading.Tasks.Task RejectWork(EditorialWorkType type, Guid id, Guid actorId, string feedback, CancellationToken ct)
@@ -385,14 +393,14 @@ public class EditorialWorkflowController : ControllerBase
         {
             var submission = await _db.SeriesSubmissions.FindAsync([id], ct) ?? throw new KeyNotFoundException();
             submission.RejectByBoard(actorId, feedback); // Sets status to EB_Rejected
-            AddNotification(submission.SubmitterId, "Series submission rejected", feedback, id, "SeriesSubmission", $"/submissions/{id}");
+            await AddNotificationAsync(submission.SubmitterId, "Series submission rejected", feedback, id, "SeriesSubmission", $"/submissions/{id}", ct);
         }
         else
         {
             var chapter = await _db.Chapters.FindAsync([id], ct) ?? throw new KeyNotFoundException();
             chapter.RejectToTantou(feedback); // Sets status to QaRevisionRequired with feedback
             var authorId = await _db.MangaSeries.Where(x => x.Id == chapter.SeriesId).Select(x => x.AuthorId).SingleAsync(ct);
-            AddNotification(authorId, "Chapter revision requested", feedback, id, "Chapter", $"/chapters/{id}");
+            await AddNotificationAsync(authorId, "Chapter revision requested", feedback, id, "Chapter", $"/chapters/{id}", ct);
         }
     }
 
@@ -407,7 +415,7 @@ public class EditorialWorkflowController : ControllerBase
                 (x.Role == UserRole.EditorInChief || x.UserRoles.Any(ur => ur.Role.Name == RoleNames.EditorInChief)))
             .Select(x => x.Id).ToListAsync(ct);
         foreach (var eicId in eicIds)
-            AddNotification(eicId, "Split editorial decision requires resolution", "Two completed reviews disagree.", id, type.ToString(), "/editorial-workflow/conflicts");
+            await AddNotificationAsync(eicId, "Split editorial decision requires resolution", "Two completed reviews disagree.", id, type.ToString(), "/editorial-workflow/conflicts", ct);
     }
 
     private async System.Threading.Tasks.Task<object> LockWorkAsync(EditorialWorkType type, Guid id, CancellationToken ct)
@@ -434,6 +442,26 @@ public class EditorialWorkflowController : ControllerBase
         if (!authorized) throw new UnauthorizedAccessException("The authenticated account does not hold the required active role.");
     }
 
-    private void AddNotification(Guid receiverId, string title, string message, Guid workId, string entityType, string targetUrl) =>
-        _db.Notifications.Add(new Notification { ReceiverId = receiverId, Title = title, Message = message, NotifyType = "EditorialWorkflow", RelatedEntityId = workId, RelatedEntityType = entityType, TargetUrl = targetUrl });
+    private async System.Threading.Tasks.Task AddNotificationAsync(Guid receiverId, string title, string message, Guid workId, string entityType, string targetUrl, CancellationToken ct = default)
+    {
+        var notif = new Notification { ReceiverId = receiverId, Title = title, Message = message, NotifyType = "EditorialWorkflow", RelatedEntityId = workId, RelatedEntityType = entityType, TargetUrl = targetUrl };
+        _db.Notifications.Add(notif);
+
+        if (_hubContext is not null)
+        {
+            await _hubContext.Clients.User(receiverId.ToString())
+                .SendAsync("ReceiveNotification", new
+                {
+                    id = notif.Id,
+                    title = notif.Title,
+                    message = notif.Message,
+                    notifyType = notif.NotifyType,
+                    relatedEntityId = notif.RelatedEntityId,
+                    relatedEntityType = notif.RelatedEntityType,
+                    targetUrl = notif.TargetUrl,
+                    createdAt = notif.CreatedAt,
+                    isRead = notif.IsRead
+                }, ct);
+        }
+    }
 }

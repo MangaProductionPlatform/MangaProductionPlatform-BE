@@ -1,7 +1,9 @@
 using MangaERP.Shared.Application.Ports;
+using MangaERP.Shared.Infrastructure.Hubs;
 using MangaERP.Shared.Infrastructure.Persistence;
 using MangaERP.Submission.Application.Ports;
 using MangaERP.Submission.Domain.Entities;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace MangaERP.Shared.Infrastructure.Repositories;
@@ -9,9 +11,13 @@ namespace MangaERP.Shared.Infrastructure.Repositories;
 public class SubmissionRepository : ISubmissionRepository
 {
     private readonly AppDbContext _db;
+    private readonly IHubContext<NotificationHub>? _hubContext;
 
-    public SubmissionRepository(IDbContextProvider provider)
-        => _db = (AppDbContext)provider.GetDbContext();
+    public SubmissionRepository(IDbContextProvider provider, IHubContext<NotificationHub>? hubContext = null)
+    {
+        _db = (AppDbContext)provider.GetDbContext();
+        _hubContext = hubContext;
+    }
 
     public async System.Threading.Tasks.Task<SeriesSubmission?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await _db.SeriesSubmissions.FirstOrDefaultAsync(s => s.Id == id, ct);
@@ -237,7 +243,7 @@ public class SubmissionRepository : ISubmissionRepository
 
             if (!notifExists)
             {
-                _db.Notifications.Add(new MangaERP.Publishing.Domain.Entities.Notification
+                var notif = new MangaERP.Publishing.Domain.Entities.Notification
                 {
                     ReceiverId = reviewer.Id,
                     Title = notifTitle,
@@ -246,7 +252,25 @@ public class SubmissionRepository : ISubmissionRepository
                     RelatedEntityId = submissionId,
                     RelatedEntityType = "SeriesSubmission",
                     TargetUrl = "/editorial-workflow/reviews"
-                });
+                };
+                _db.Notifications.Add(notif);
+
+                if (_hubContext is not null)
+                {
+                    await _hubContext.Clients.User(reviewer.Id.ToString())
+                        .SendAsync("ReceiveNotification", new
+                        {
+                            id = notif.Id,
+                            title = notif.Title,
+                            message = notif.Message,
+                            notifyType = notif.NotifyType,
+                            relatedEntityId = notif.RelatedEntityId,
+                            relatedEntityType = notif.RelatedEntityType,
+                            targetUrl = notif.TargetUrl,
+                            createdAt = notif.CreatedAt,
+                            isRead = notif.IsRead
+                        }, ct);
+                }
             }
         }
     }
