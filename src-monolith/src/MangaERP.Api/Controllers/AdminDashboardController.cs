@@ -2,6 +2,7 @@ using MangaERP.Api.Queries.GetAdminDashboard;
 using MangaERP.Identity.Domain.Enums;
 using MangaERP.Ranking.Domain.Entities;
 using MangaERP.Shared.Infrastructure.Persistence;
+using MangaERP.Submission.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -252,5 +253,81 @@ public class AdminDashboardController : ControllerBase
         };
 
         return Ok(new { roles });
+    }
+
+    /// <summary>
+    /// [Admin] One-time data migration: chuyển tất cả submissions đang
+    /// Pending_Tantou_Review sang Pending_EB_Review và tạo EditorialReviewAssignment
+    /// slots cho chúng.
+    /// Dùng để fix dữ liệu cũ từ trước khi refactor MF1 (Tantou không còn tham gia
+    /// duyệt series submission nữa).
+    /// Idempotent: chạy nhiều lần vẫn an toàn.
+    /// </summary>
+    [HttpPost("migrate-tantou-submissions")]
+    [ProducesResponseType(200)]
+    public async Task<IActionResult> MigrateTantouSubmissions(CancellationToken ct)
+    {
+        var stuckSubmissions = await _db.SeriesSubmissions
+            .Where(s => s.Status == SubmissionStatus.Pending_Tantou_Review)
+            .ToListAsync(ct);
+
+        if (stuckSubmissions.Count == 0)
+            return Ok(new { migrated = 0, message = "No stuck Pending_Tantou_Review submissions found." });
+
+        // Lấy 2 EB đầu tiên để assign slots (idempotent — sẽ skip nếu đã có assignment)
+        var ebReviewers = await _db.Users
+            .Where(u => u.AccountStatus == AccountStatus.Active && !u.IsDeleted &&
+                (u.Role == UserRole.EditorialBoard ||
+                 u.UserRoles.Any(ur => ur.Role.Name == RoleNames.EditorialBoard)))
+            .OrderBy(u => u.Id)
+            .Take(2)
+            .Select(u => u.Id)
+            .ToListAsync(ct);
+
+        if (ebReviewers.Count < 2)
+            return BadRequest(new { error = "Cần ít nhất 2 EditorialBoard members đang active để tạo review slots." });
+
+        int migrated = 0;
+        foreach (var submission in stuckSubmissions)
+        {
+            // Chuyển status sang Pending_EB_Review
+            submission.PromoteToPendingEBReview();
+
+            // Tạo review slots nếu chưa có
+            var existingSlots = await _db.EditorialReviewAssignments
+                .Where(a => a.WorkType == EditorialWorkType.SeriesSubmission
+                    && a.WorkId == submission.Id
+                    && a.RoundNumber == submission.CurrentRound)
+                .CountAsync(ct);
+
+            if (existingSlots < 2)
+            {
+                if (existingSlots == 0)
+                {
+                    _db.EditorialReviewAssignments.Add(
+                        EditorialReviewAssignment.Assign(EditorialWorkType.SeriesSubmission, submission.Id, submission.CurrentRound, ebReviewers[0]));
+                    _db.EditorialReviewAssignments.Add(
+                        EditorialReviewAssignment.Assign(EditorialWorkType.SeriesSubmission, submission.Id, submission.CurrentRound, ebReviewers[1]));
+                }
+                else
+                {
+                    // Chỉ còn thiếu 1 slot
+                    var takenBy = await _db.EditorialReviewAssignments
+                        .Where(a => a.WorkType == EditorialWorkType.SeriesSubmission
+                            && a.WorkId == submission.Id
+                            && a.RoundNumber == submission.CurrentRound)
+                        .Select(a => a.ReviewerId)
+                        .FirstAsync(ct);
+                    var secondReviewer = ebReviewers.First(id => id != takenBy);
+                    _db.EditorialReviewAssignments.Add(
+                        EditorialReviewAssignment.Assign(EditorialWorkType.SeriesSubmission, submission.Id, submission.CurrentRound, secondReviewer));
+                }
+            }
+
+            migrated++;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return Ok(new { migrated, message = $"{migrated} submission(s) migrated from Pending_Tantou_Review to Pending_EB_Review." });
     }
 }

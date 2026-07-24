@@ -239,6 +239,19 @@ public class SeriesSubmission : AggregateRoot, ISoftDeletable
         ReviewedAt = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// [Admin migration only] Chuyển submission bị kẹt ở Pending_Tantou_Review
+    /// sang Pending_EB_Review theo luồng MF1 mới (Tantou không duyệt series nữa).
+    /// Chỉ gọi từ admin migration endpoint, không dùng trong luồng nghiệp vụ.
+    /// </summary>
+    public void PromoteToPendingEBReview()
+    {
+        if (Status != SubmissionStatus.Pending_Tantou_Review)
+            throw new InvalidStateTransitionException("PromoteToPendingEBReview chỉ áp dụng cho trạng thái Pending_Tantou_Review.");
+        AssignedEditorId = null;
+        Status = SubmissionStatus.Pending_EB_Review;
+    }
+
     // ── Editor-in-Chief arbitration ───────────────────────────────────────────
 
     public void ApproveByEIC(Guid eicId)
