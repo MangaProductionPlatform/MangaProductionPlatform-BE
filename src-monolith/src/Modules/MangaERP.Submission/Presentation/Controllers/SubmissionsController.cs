@@ -233,6 +233,30 @@ public class SubmissionsController : ControllerBase
         catch (InvalidOperationException ex)   { return BadRequest(new { message = ex.Message }); }
     }
 
+    // ── BOARD QUEUE ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// [EditorialBoard / EditorInChief / Admin] Get proposal queue.
+    /// - EditorialBoard: all Pending_EB_Review submissions (everyone can see, first-come-first-serve for 2 slots).
+    /// - EditorInChief: Conflict_Escalated (priority) + Pending_EB_Review.
+    /// - Admin: all Pending_EB_Review.
+    /// Returns proposals even after 2/2 votes so the list stays visible (vote button will be blocked server-side).
+    /// </summary>
+    [HttpGet("queue")]
+    [Authorize(Roles = "EditorialBoard,EditorInChief,Admin")]
+    [ProducesResponseType(typeof(IEnumerable<SubmissionSummaryDto>), 200)]
+    public async Task<IActionResult> GetQueue(CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetSubmissionQueueQuery(GetRbacRoleName(), GetUserId());
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { error = "Không có quyền", message = ex.Message }); }
+        catch (Exception ex) { return StatusCode(500, new { error = "Internal error", message = ex.Message }); }
+    }
+
     // ── SHARED FLOWS ──────────────────────────────────────────────────────────
 
     /// <summary>
