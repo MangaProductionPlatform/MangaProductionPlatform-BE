@@ -11,7 +11,7 @@ namespace MangaERP.Submission.Application.Queries.GetSubmissionStats;
 /// Được gọi bởi GetAdminDashboardHandler và GetBoardReportsHandler ở Api layer.
 /// KHÔNG leak ISubmissionRepository ra ngoài module.
 /// </summary>
-public record GetSubmissionStatsQuery : IRequest<SubmissionStatsResult>;
+public record GetSubmissionStatsQuery(DateTime? StartDate = null, DateTime? EndDate = null) : IRequest<SubmissionStatsResult>;
 
 public record SubmissionStatsResult(
     int TotalSubmissions,
@@ -37,7 +37,14 @@ public class GetSubmissionStatsHandler : IRequestHandler<GetSubmissionStatsQuery
     public async Task<SubmissionStatsResult> Handle(GetSubmissionStatsQuery request, CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddDays(-30);
-        var all = (await _repo.GetAllAsync(ct)).ToList();
+        var query = (await _repo.GetAllAsync(ct)).AsQueryable();
+
+        if (request.StartDate.HasValue)
+            query = query.Where(s => s.CreatedAt >= request.StartDate.Value);
+        if (request.EndDate.HasValue)
+            query = query.Where(s => s.CreatedAt <= request.EndDate.Value);
+
+        var all = query.ToList();
 
         return new SubmissionStatsResult(
             TotalSubmissions:  all.Count,

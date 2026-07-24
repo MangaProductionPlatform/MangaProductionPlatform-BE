@@ -7,7 +7,7 @@ namespace MangaERP.Api.Queries.GetAdminDashboard;
 
 // ── Query ─────────────────────────────────────────────────────────────────────
 
-public record GetAdminDashboardQuery : IRequest<AdminDashboardDto>;
+public record GetAdminDashboardQuery(DateTime? StartDate = null, DateTime? EndDate = null) : IRequest<AdminDashboardDto>;
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 
@@ -51,9 +51,9 @@ public class GetAdminDashboardHandler : IRequestHandler<GetAdminDashboardQuery, 
         GetAdminDashboardQuery request, CancellationToken ct)
     {
         // Run sequentially because these module queries share the same scoped DbContext.
-        var userResult       = await _mediator.Send(new GetUserStatsQuery(), ct);
-        var submissionResult = await _mediator.Send(new GetSubmissionStatsQuery(), ct);
-        var seriesResult     = await _mediator.Send(new GetSeriesStatsQuery(), ct);
+        var userResult       = await _mediator.Send(new GetUserStatsQuery(request.StartDate, request.EndDate), ct);
+        var submissionResult = await _mediator.Send(new GetSubmissionStatsQuery(request.StartDate, request.EndDate), ct);
+        var seriesResult     = await _mediator.Send(new GetSeriesStatsQuery(request.StartDate, request.EndDate), ct);
 
         return new AdminDashboardDto(
             new UserStatsDto(
