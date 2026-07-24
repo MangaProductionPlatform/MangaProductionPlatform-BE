@@ -11,7 +11,8 @@ public record ProvisionAccountCommand(
     string FullName,
     string PersonalEmail,
     UserRole Role,
-    string? PhoneNumber = null
+    string? PhoneNumber = null,
+    Guid? ManagingTantouId = null
 ) : IRequest<ProvisionAccountResult>;
 
 public record ProvisionAccountResult(
@@ -53,6 +54,17 @@ public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, 
         if (await _userRepo.PersonalEmailExistsActiveOrPendingAsync(request.PersonalEmail, cancellationToken))
             throw new UserAlreadyExistsException(request.PersonalEmail);
 
+        // Step 1b: Validate mandatory Tantou assignment for Mangaka role
+        if (request.Role == UserRole.Mangaka)
+        {
+            if (!request.ManagingTantouId.HasValue || request.ManagingTantouId.Value == Guid.Empty)
+                throw new InvalidOperationException("ManagingTantouId is required when provisioning a Mangaka account.");
+
+            var tantou = await _userRepo.GetByIdAsync(request.ManagingTantouId.Value, cancellationToken);
+            if (tantou == null || (tantou.Role != UserRole.TantouEditor && !tantou.UserRoles.Any(ur => ur.Role.Name == RoleNames.TantouEditor)) || tantou.AccountStatus != AccountStatus.Active || tantou.IsDeleted)
+                throw new InvalidOperationException("Assigned Tantou Editor must exist, hold TantouEditor role, and be Active.");
+        }
+
         // Step 2: Generate unique corporate username
         var username = await _usernameGenerator.GenerateAsync(request.FullName, request.Role, cancellationToken);
 
@@ -67,7 +79,7 @@ public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, 
             Role = request.Role,
             FullName = request.FullName,
             PhoneNumber = request.PhoneNumber,
-            ManagingTantouId = null,
+            ManagingTantouId = request.Role == UserRole.Mangaka ? request.ManagingTantouId : null,
             AccountStatus = AccountStatus.PendingActivation,
             CreatedAt = DateTime.UtcNow
         };

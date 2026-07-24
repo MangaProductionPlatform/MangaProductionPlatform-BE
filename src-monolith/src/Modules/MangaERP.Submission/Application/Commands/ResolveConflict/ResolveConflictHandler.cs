@@ -99,13 +99,8 @@ public async Task<ResolveConflictResult> Handle(ResolveConflictCommand cmd, Canc
                     break;
 
                 case VoteType.REQ_REVISION:
-                    // Increments CurrentRound — unlocks new voting round for EB
-                    submission.RequestRevisionByEIC(cmd.EicId, cmd.FeedbackMessage);
-                    postCommitAction = "REVISION";
-                    break;
-
                 default:
-                    throw new ArgumentException($"Quyết định không hợp lệ: {cmd.FinalDecision}");
+                    throw new ArgumentException($"Quyết định không hợp lệ cho Tổng biên tập (chỉ chấp nhận Approve hoặc Reject): {cmd.FinalDecision}");
             }
 
             await _submissionRepo.SaveChangesAsync(ct);

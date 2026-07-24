@@ -35,10 +35,10 @@ public class EditorialWorkflowController : ControllerBase
         return Ok(new
         {
             submissions = await _db.SeriesSubmissions
-            .Where(x => x.AssignedEditorId == UserId && (x.Status == SubmissionStatus.Pending_Tantou_Review || x.Status == SubmissionStatus.Editorial_Rejected_To_Tantou))
+            .Where(x => x.AssignedEditorId == UserId)
             .Select(x => new { x.Id, x.Title, x.Status, x.CurrentRound, x.FeedbackMessage }).ToListAsync(ct),
             chapters = await _db.Chapters
-            .Where(x => x.AssignedEditorId == UserId && (x.Status == ChapterStatus.ReadyForQA || x.Status == ChapterStatus.EditorialRejectedToTantou))
+            .Where(x => x.AssignedEditorId == UserId)
             .Select(x => new { x.Id, x.Title, x.Status, Round = x.EditorialRound, x.EditorialFeedback }).ToListAsync(ct)
         });
     }
@@ -48,21 +48,8 @@ public class EditorialWorkflowController : ControllerBase
     public async Task<IActionResult> ReturnFromTantou(string workType, Guid workId, GuidanceRequest request, CancellationToken ct)
     {
         await EnsureCurrentUserRoleAsync(UserRole.TantouEditor, RoleNames.TantouEditor, ct);
-        if (ParseType(workType) == EditorialWorkType.SeriesSubmission)
-        {
-            var submission = await _db.SeriesSubmissions.FindAsync([workId], ct) ?? throw new KeyNotFoundException();
-            submission.ReturnByTantou(UserId, request.Guidance);
-            AddNotification(submission.SubmitterId, "Revision guidance from Tantou", request.Guidance, workId, "SeriesSubmission", $"/submissions/{workId}");
-        }
-        else
-        {
-            var chapter = await _db.Chapters.FindAsync([workId], ct) ?? throw new KeyNotFoundException();
-            chapter.ReturnByTantou(UserId, request.Guidance);
-            var authorId = await _db.MangaSeries.Where(x => x.Id == chapter.SeriesId).Select(x => x.AuthorId).SingleAsync(ct);
-            AddNotification(authorId, "Chapter revision guidance from Tantou", request.Guidance, workId, "Chapter", $"/chapters/{workId}");
-        }
-        await _db.SaveChangesAsync(ct);
-        return NoContent();
+        // Tantou Editors are forbidden from approving, rejecting, or gatekeeping submissions/chapters.
+        return Forbid();
     }
 
     [HttpPost("tantou/{workType}/{workId:guid}/recommend")]
@@ -70,76 +57,31 @@ public class EditorialWorkflowController : ControllerBase
     public async Task<IActionResult> Recommend(string workType, Guid workId, CancellationToken ct)
     {
         await EnsureCurrentUserRoleAsync(UserRole.TantouEditor, RoleNames.TantouEditor, ct);
+        // Tantou Editors cannot gatekeep or trigger recommendation approvals.
+        return Forbid();
+    }
+
+    [HttpPost("tantou/{workType}/{workId:guid}/advice")]
+    [Authorize(Roles = "TantouEditor")]
+    public async Task<IActionResult> AddAdvice(string workType, Guid workId, GuidanceRequest request, CancellationToken ct)
+    {
+        await EnsureCurrentUserRoleAsync(UserRole.TantouEditor, RoleNames.TantouEditor, ct);
         var type = ParseType(workType);
-        var strategy = _db.Database.CreateExecutionStrategy();
-        return await strategy.ExecuteAsync<IActionResult>(async () =>
+        if (type == EditorialWorkType.SeriesSubmission)
         {
-            await using var transaction = _db.Database.IsRelational()
-                ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
-                : null;
-            var lockedWork = await LockWorkAsync(type, workId, ct);
-            int round;
-            if (type == EditorialWorkType.SeriesSubmission)
-            {
-                var work = (SeriesSubmission)lockedWork;
-                work.RecommendToEditorialBoard(UserId);
-                round = work.CurrentRound;
-            }
-            else
-            {
-                var work = (ChapterEntity)lockedWork;
-                work.RecommendToEditorialBoard(UserId);
-                round = work.EditorialRound;
-            }
-
-            Guid authorId = type == EditorialWorkType.SeriesSubmission
-                ? ((SeriesSubmission)lockedWork).SubmitterId
-                : await _db.MangaSeries.Where(s => s.Id == ((ChapterEntity)lockedWork).SeriesId).Select(s => s.AuthorId).SingleAsync(ct);
-
-            Guid? assignedTantouId = type == EditorialWorkType.SeriesSubmission
-                ? ((SeriesSubmission)lockedWork).AssignedEditorId
-                : ((ChapterEntity)lockedWork).AssignedEditorId;
-
-            var existingAssignedReviewerIds = await _db.EditorialReviewAssignments
-                .Where(x => x.WorkType == type && x.WorkId == workId && x.RoundNumber == round)
-                .Select(x => x.ReviewerId)
-                .ToListAsync(ct);
-
-            var reviewers = await _db.Users
-                .Where(x => x.AccountStatus == AccountStatus.Active && !x.IsDeleted)
-                .Where(x => x.Role == UserRole.EditorialBoard || x.UserRoles.Any(ur => ur.Role.Name == RoleNames.EditorialBoard))
-                .Where(x => x.Role != UserRole.EditorInChief && !x.UserRoles.Any(ur => ur.Role.Name == RoleNames.EditorInChief))
-                .Where(x => x.Id != authorId)
-                .Where(x => !assignedTantouId.HasValue || x.Id != assignedTantouId.Value)
-                .Where(x => !existingAssignedReviewerIds.Contains(x.Id))
-                .OrderBy(x => _db.EditorialReviewAssignments.Count(a => a.ReviewerId == x.Id && a.Status == EditorialReviewAssignmentStatus.Pending))
-                .ThenBy(x => x.Id).Take(2).Select(x => x.Id).ToListAsync(ct);
-            if (reviewers.Count != 2)
-            {
-                var eicIds = await _db.Users
-                    .Where(u => u.AccountStatus == AccountStatus.Active && !u.IsDeleted)
-                    .Where(u => u.Role == UserRole.EditorInChief || u.UserRoles.Any(ur => ur.Role.Name == RoleNames.EditorInChief))
-                    .Select(u => u.Id).ToListAsync(ct);
-
-                foreach (var eicId in eicIds)
-                {
-                    AddNotification(eicId, "ReviewerAssignmentRequired", "Insufficient eligible Editorial Board reviewers without conflict of interest. EIC intervention required.", workId, type.ToString(), "/editorial/conflicts");
-                }
-                await _db.SaveChangesAsync(ct);
-                if (transaction is not null) await transaction.CommitAsync(ct);
-
-                throw new ConflictException("ReviewerAssignmentRequired: Exactly two active, non-EIC Editorial Board reviewers without conflict of interest are required. Escalated to Editor-in-Chief.");
-            }
-
-            foreach (var reviewer in reviewers)
-            {
-                _db.EditorialReviewAssignments.Add(EditorialReviewAssignment.Assign(type, workId, round, reviewer));
-                AddNotification(reviewer, "Editorial review assigned", "A confidential independent review is ready.", workId, type.ToString(), "/editorial/reviews");
-            }
-            await _db.SaveChangesAsync(ct);
-            if (transaction is not null) await transaction.CommitAsync(ct);
-            return Ok(new { workId, round, reviewerCount = 2 });
-        });
+            var submission = await _db.SeriesSubmissions.FindAsync([workId], ct) ?? throw new KeyNotFoundException();
+            submission.ReturnConsolidatedGuidanceToMangaka(UserId, request.Guidance);
+            AddNotification(submission.SubmitterId, "Advice from Tantou Editor", request.Guidance, workId, "SeriesSubmission", $"/submissions/{workId}");
+        }
+        else
+        {
+            var chapter = await _db.Chapters.FindAsync([workId], ct) ?? throw new KeyNotFoundException();
+            chapter.ReturnConsolidatedGuidanceToMangaka(UserId, request.Guidance);
+            var authorId = await _db.MangaSeries.Where(x => x.Id == chapter.SeriesId).Select(x => x.AuthorId).SingleAsync(ct);
+            AddNotification(authorId, "Chapter advice from Tantou Editor", request.Guidance, workId, "Chapter", $"/chapters/{workId}");
+        }
+        await _db.SaveChangesAsync(ct);
+        return NoContent();
     }
 
     [HttpGet("reviews")]
@@ -223,6 +165,28 @@ public class EditorialWorkflowController : ControllerBase
             submissions = await _db.SeriesSubmissions.Where(x => x.Status == SubmissionStatus.Conflict_Escalated).Select(x => new { x.Id, x.Title, WorkType = "SeriesSubmission", x.CurrentRound }).ToListAsync(ct),
             chapters = await _db.Chapters.Where(x => x.Status == ChapterStatus.ConflictEscalated).Select(x => new { x.Id, x.Title, WorkType = "Chapter", Round = x.EditorialRound }).ToListAsync(ct)
         });
+    }
+
+    [HttpGet("all-submissions")]
+    [Authorize(Roles = "EditorInChief")]
+    public async Task<IActionResult> AllSubmissions(CancellationToken ct)
+    {
+        await EnsureCurrentUserRoleAsync(UserRole.EditorInChief, RoleNames.EditorInChief, ct);
+        var submissions = await _db.SeriesSubmissions
+            .AsNoTracking()
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new
+            {
+                x.Id,
+                x.Title,
+                x.Status,
+                x.SubmitterId,
+                x.CurrentRound,
+                x.FeedbackMessage,
+                x.CreatedAt
+            })
+            .ToListAsync(ct);
+        return Ok(submissions);
     }
 
     [HttpGet("conflicts/{workType}/{workId:guid}")]
@@ -338,8 +302,10 @@ public class EditorialWorkflowController : ControllerBase
         }
         var submission = await _db.SeriesSubmissions.FindAsync([id], ct) ?? throw new KeyNotFoundException();
         if (eic) submission.ApproveByEIC(actorId); else submission.ApproveByBoard(actorId);
+
         if (!await _db.MangaSeries.AnyAsync(x => x.SubmissionId == id, ct))
             _db.MangaSeries.Add(MangaSeries.Create(submission.SubmitterId, submission.Id, submission.Title, submission.Description, submission.Genre, submission.CoverImageUrl));
+
         AddNotification(submission.SubmitterId, "Series submission approved", submission.Title, id, "SeriesSubmission", $"/submissions/{id}");
     }
 
@@ -348,14 +314,15 @@ public class EditorialWorkflowController : ControllerBase
         if (type == EditorialWorkType.SeriesSubmission)
         {
             var submission = await _db.SeriesSubmissions.FindAsync([id], ct) ?? throw new KeyNotFoundException();
-            submission.RejectToTantou(actorId, feedback);
-            AddNotification(submission.AssignedEditorId!.Value, "Editorial feedback ready for consolidation", "A rejected submission is waiting for Tantou guidance.", id, "SeriesSubmission", $"/editorial-workflow/tantou/SeriesSubmission/{id}/feedback");
+            submission.RejectByBoard(actorId, feedback); // Sets status to EB_Rejected
+            AddNotification(submission.SubmitterId, "Series submission rejected", feedback, id, "SeriesSubmission", $"/submissions/{id}");
         }
         else
         {
             var chapter = await _db.Chapters.FindAsync([id], ct) ?? throw new KeyNotFoundException();
-            chapter.RejectToTantou(feedback);
-            AddNotification(chapter.AssignedEditorId!.Value, "Editorial feedback ready for consolidation", "A rejected chapter is waiting for Tantou guidance.", id, "Chapter", $"/editorial-workflow/tantou/Chapter/{id}/feedback");
+            chapter.RejectToTantou(feedback); // Sets status to QaRevisionRequired with feedback
+            var authorId = await _db.MangaSeries.Where(x => x.Id == chapter.SeriesId).Select(x => x.AuthorId).SingleAsync(ct);
+            AddNotification(authorId, "Chapter revision requested", feedback, id, "Chapter", $"/chapters/{id}");
         }
     }
 

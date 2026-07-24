@@ -7,6 +7,9 @@ public interface IRankingRepository
     Task<IEnumerable<RankingSnapshot>> GetLatestAsync(RankingPeriod period, int limit, CancellationToken ct = default);
     Task<RankingSnapshot?> GetBySeriesIdAsync(Guid seriesId, RankingPeriod period, CancellationToken ct = default);
     Task ReplaceSnapshotAsync(RankingPeriod period, IEnumerable<RankingSnapshot> snapshots, CancellationToken ct = default);
+    Task<HashSet<Guid>> GetValidSeriesIdsAsync(CancellationToken ct = default);
+    Task ImportBatchAsync(RankingImportBatch batch, IEnumerable<RankingSnapshot> snapshots, CancellationToken ct = default);
+    Task RecordFailedBatchAsync(RankingImportBatch batch, CancellationToken ct = default);
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 

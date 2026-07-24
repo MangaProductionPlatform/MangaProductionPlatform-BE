@@ -86,25 +86,18 @@ public class Chapter : AggregateRoot, ISoftDeletable
             throw new InvalidOperationException(
                 $"All {TotalPages} pages must be approved before submitting for QA.");
 
-        Status = ChapterStatus.ReadyForQA;
+        Status = ChapterStatus.PendingEditorialReview;
     }
 
+    [Obsolete("Tantou Editor cannot return or gatekeep chapters.")]
     public void ReturnByTantou(Guid tantouId, string guidance)
     {
-        EnsureAssignedTantou(tantouId);
-        if (Status != ChapterStatus.ReadyForQA)
-            throw new InvalidOperationException("Only chapters awaiting Tantou review can be returned.");
-        if (string.IsNullOrWhiteSpace(guidance))
-            throw new InvalidOperationException("Revision guidance is required.");
-        TantouGuidance = guidance.Trim();
-        Status = ChapterStatus.QaRevisionRequired;
+        throw new InvalidOperationException("Tantou Editors cannot approve, return, or gatekeep chapters.");
     }
 
+    [Obsolete("Tantou Editor recommendation is not required.")]
     public void RecommendToEditorialBoard(Guid tantouId)
     {
-        EnsureAssignedTantou(tantouId);
-        if (Status != ChapterStatus.ReadyForQA)
-            throw new InvalidOperationException("Only chapters awaiting Tantou review can be recommended.");
         Status = ChapterStatus.PendingEditorialReview;
     }
 
@@ -115,7 +108,7 @@ public class Chapter : AggregateRoot, ISoftDeletable
         if (string.IsNullOrWhiteSpace(feedback))
             throw new InvalidOperationException("Rejection feedback is required.");
         EditorialFeedback = feedback.Trim();
-        Status = ChapterStatus.EditorialRejectedToTantou;
+        Status = ChapterStatus.QaRevisionRequired;
     }
 
     public void EscalateEditorialConflict()
@@ -128,13 +121,9 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public void ReturnConsolidatedGuidanceToMangaka(Guid tantouId, string guidance)
     {
         EnsureAssignedTantou(tantouId);
-        if (Status != ChapterStatus.EditorialRejectedToTantou)
-            throw new InvalidOperationException("Only rejected chapters can be returned to the Mangaka.");
         if (string.IsNullOrWhiteSpace(guidance))
             throw new InvalidOperationException("Consolidated revision guidance is required.");
         TantouGuidance = guidance.Trim();
-        Status = ChapterStatus.MangakaRevisionRequired;
-        EditorialRound++;
     }
 
     private void EnsureAssignedTantou(Guid tantouId)

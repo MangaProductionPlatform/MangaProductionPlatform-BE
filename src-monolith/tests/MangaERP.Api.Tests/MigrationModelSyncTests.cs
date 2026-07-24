@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations.Operations;
 
 namespace MangaERP.Api.Tests;
 
-public class MigrationModelSyncTests
+public class PostgreSqlMigrationModelSyncTests
 {
     [Fact]
     public void FinalizeEditorialWorkflowFailsClearlyOnDuplicatePendingInvitations()

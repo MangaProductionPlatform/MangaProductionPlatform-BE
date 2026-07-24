@@ -24,6 +24,9 @@ public interface IUserRepository
 
     /// <summary>Returns all RBAC role names assigned to a user.</summary>
     Task<IEnumerable<string>> GetUserRoleNamesAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Returns true if the Tantou Editor is currently managing one or more active Mangaka accounts.</summary>
+    Task<bool> HasAssignedMangakasAsync(Guid tantouId, CancellationToken ct = default);
 }
 
 public interface IRefreshTokenRepository

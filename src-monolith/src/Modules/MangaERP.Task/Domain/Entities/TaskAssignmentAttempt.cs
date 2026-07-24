@@ -23,7 +23,9 @@ public class TaskAssignmentAttempt : AggregateRoot
     public DateTime? RespondedAt { get; private set; }
     public DateTime? AcceptedAt { get; private set; }
     public DateTime? RejectedAt { get; private set; }
+    public DateTime? DeclinedAt => RejectedAt;
     public string? RejectionReason { get; private set; }
+    public string? DeclineReason => RejectionReason;
     public DateTime? ExpiresAt { get; private set; }
     public Guid AssignedByUserId { get; private set; }
     public string AssignmentRole { get; private set; } = "Primary"; // "Primary" | "BackupTakeover"

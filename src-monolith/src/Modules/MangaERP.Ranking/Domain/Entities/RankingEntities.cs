@@ -42,6 +42,26 @@ public class SystemAuditLog
     public string? EntityType { get; set; }
     public Guid? EntityId { get; set; }
     public string Description { get; set; } = string.Empty;
+    public string? PreviousState { get; set; }
+    public string? NewState { get; set; }
+    public string? Reason { get; set; }
+    public string? CorrelationId { get; set; }
     public string? IpAddress { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+}
+
+public class RankingImportBatch
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UploaderId { get; set; }
+    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
+    public string Filename { get; set; } = string.Empty;
+    public string FileChecksum { get; set; } = string.Empty;
+    public RankingPeriod Period { get; set; } = RankingPeriod.Weekly;
+    public string? PeriodIdentifier { get; set; }
+    public int TotalRows { get; set; }
+    public int SuccessCount { get; set; }
+    public int ErrorCount { get; set; }
+    public string Status { get; set; } = "Completed"; // Completed, Failed, Validated
+    public string? ErrorSummary { get; set; }
 }
