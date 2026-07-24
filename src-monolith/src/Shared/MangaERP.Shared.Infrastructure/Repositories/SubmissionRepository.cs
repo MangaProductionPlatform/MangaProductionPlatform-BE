@@ -222,10 +222,12 @@ public class SubmissionRepository : ISubmissionRepository
                 EditorialReviewAssignment.Assign(EditorialWorkType.SeriesSubmission, submissionId, roundNumber, reviewer2.Id));
         }
 
-        var notifTitle = "Phân công duyệt bản thảo mới";
-        var notifMsg = $"Bản thảo \"{submission.Title}\" của Tác giả {authorName} đã được phân công cho bạn đánh giá.";
+        var notifTitle = "Bản thảo mới cần duyệt";
+        var notifMsg = $"Bản thảo \"{submission.Title}\" của Tác giả {authorName} đang chờ đánh giá từ Ban Biên Tập.";
 
-        foreach (var reviewer in new[] { reviewer1, reviewer2 })
+        // [DEMO] Broadcast to ALL active EB members so any EB account can see and vote.
+        // In production, replace ebReviewers with new[] { reviewer1, reviewer2 } to notify only assigned reviewers.
+        foreach (var reviewer in ebReviewers)
         {
             var notifExists = await _db.Notifications.AnyAsync(n =>
                 n.ReceiverId == reviewer.Id &&
