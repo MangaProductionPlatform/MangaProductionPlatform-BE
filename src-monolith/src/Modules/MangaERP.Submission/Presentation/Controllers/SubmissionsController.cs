@@ -5,7 +5,6 @@ using MangaERP.Submission.Application.Commands.UpdateManuscript;
 using MangaERP.Submission.Application.Commands.ReSubmitProposal;
 using MangaERP.Submission.Application.Commands.UpdateDraftMetadata;
 using MangaERP.Submission.Application.Commands.RejectSubmission;
-using MangaERP.Submission.Application.Commands.RequestRevision;
 using MangaERP.Submission.Application.Commands.ApproveSubmission;
 using MangaERP.Submission.Application.Commands.CastVote;
 using MangaERP.Submission.Application.Commands.ResolveConflict;
@@ -304,33 +303,7 @@ public class SubmissionsController : ControllerBase
 
     // ── LEGACY SINGLE-VOTE ENDPOINTS (DEPRECATED — kept for Admin/backward compat) ──
 
-    /// <summary>
-    /// [DEPRECATED] [EditorialBoard / EditorInChief] Request revision for a submission with visual feedback pins.
-    /// Use POST /{id}/vote instead for normal EB voting.
-    /// TantouEditor is NOT authorized — TE has no business with the Submission vetting flow.
-    /// </summary>
-    [HttpPost("{id:guid}/request-revision")]
-    [Authorize(Roles = "EditorialBoard,EditorInChief")]
-    [ProducesResponseType(typeof(RequestRevisionResult), 200)]
-    [ProducesResponseType(400)]
-    [ProducesResponseType(404)]
-    [NonAction]
-    public async Task<IActionResult> RequestRevision(Guid id, [FromBody] RevisionWithPinsRequest request, CancellationToken ct)
-    {
-        try
-        {
-            var pins = request.Pins?.Select(p => new FeedbackPinInput(
-                p.PageIdentifier, p.CoordinateX, p.CoordinateY, p.Comment, p.Category
-            )).ToList() ?? new List<FeedbackPinInput>();
 
-            var command = new RequestRevisionCommand(id, GetUserId(), "EditorialBoard", request.Reason, pins);
-            var result = await _mediator.Send(command, ct);
-            return Ok(result);
-        }
-        catch (ValidationException ex) { return BadRequest(new { error = "Dữ liệu không hợp lệ", details = ex.Errors.Select(e => new { field = e.PropertyName, message = e.ErrorMessage }) }); }
-        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (InvalidStateTransitionException ex) { return BadRequest(new { error = "Lỗi quy trình nghiệp vụ", message = ex.Message }); }
-    }
 
     /// <summary>
     /// [DEPRECATED] [EditorInChief override / Legacy] Reject a submission permanently.

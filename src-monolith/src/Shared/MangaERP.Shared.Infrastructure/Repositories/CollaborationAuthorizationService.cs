@@ -59,6 +59,13 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
         var chapter = await _db.Chapters.AsNoTracking().FirstOrDefaultAsync(c => c.Id == task.ChapterId, ct);
         if (chapter == null) return false;
 
+        var series = await _db.MangaSeries.AsNoTracking().FirstOrDefaultAsync(s => s.Id == chapter.SeriesId, ct);
+        if (series != null && series.AuthorId == assistantId)
+            return true;
+
+        if (task.AssignedAssistantId != null && task.AssignedAssistantId != assistantId)
+            return false;
+
         var collab = await _db.MangakaAssistantCollaborations.AsNoTracking()
             .FirstOrDefaultAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct);
 
@@ -75,7 +82,6 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
             return false;
         }
 
-        // For SuspendNewAssignments or EndingRequested: only allow if assistant holds Accepted assignment attempt for this task
         return await _db.TaskAssignmentAttempts.AsNoTracking()
             .AnyAsync(a => a.TaskId == taskId && a.AssistantId == assistantId && a.Status == TaskAssignmentAttemptStatus.Accepted, ct);
     }

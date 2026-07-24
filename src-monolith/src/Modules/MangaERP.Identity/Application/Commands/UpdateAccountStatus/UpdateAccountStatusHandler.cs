@@ -36,13 +36,19 @@ public class UpdateAccountStatusHandler : IRequestHandler<UpdateAccountStatusCom
 
         if (user.AccountStatus != request.Status)
         {
-            user.AccountStatus = request.Status;
-            await _userRepo.UpdateAsync(user, cancellationToken);
-
             if (request.Status == AccountStatus.Suspended || request.Status == AccountStatus.Deactivated)
             {
+                var isTantou = user.Role == UserRole.TantouEditor || await _userRepo.HasRbacRoleAsync(user.Id, RoleNames.TantouEditor, cancellationToken);
+                if (isTantou && await _userRepo.HasAssignedMangakasAsync(user.Id, cancellationToken))
+                {
+                    throw new InvalidOperationException("Cannot suspend or deactivate a Tantou Editor currently managing one or more active Mangakas. Reassign their Mangakas first.");
+                }
+
                 await _refreshTokenRepo.RevokeAllForUserAsync(user.Id, cancellationToken);
             }
+
+            user.AccountStatus = request.Status;
+            await _userRepo.UpdateAsync(user, cancellationToken);
         }
 
         return new UpdateAccountStatusResult(user.Id, user.Username, user.AccountStatus.ToString());

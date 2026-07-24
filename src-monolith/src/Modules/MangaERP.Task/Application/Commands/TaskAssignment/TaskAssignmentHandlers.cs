@@ -216,7 +216,52 @@ public sealed class RespondTaskAssignmentHandler : IRequestHandler<RespondTaskAs
 
         DateTime now = DateTime.UtcNow;
 
-        if (request.Accept)
+        if (attempt.AssignmentRole == "BackupTakeover")
+        {
+            if (task.TaskStatus == MangaERP.Chapter.Domain.Entities.PageTaskStatus.Approved)
+                throw new ConflictException("Task has already been completed and approved.");
+
+            if (request.Accept)
+            {
+                attempt.Accept(request.ActorUserId, now);
+                DateTime newDeadline = attempt.WorkDeadline ?? task.Deadline ?? now.AddDays(3);
+                task.AcceptTakeover(attempt.AssistantId, now, newDeadline);
+                task.CurrentAssignmentAttemptId = attempt.Id;
+
+                await _attemptRepo.UpdateAsync(attempt, ct);
+                await _taskRepo.UpdateAsync(task, ct);
+                await _attemptRepo.SaveChangesAsync(ct);
+
+                await _notifications.NotifyCollaborationEventAsync(
+                    collaboration.MangakaId,
+                    "BackupTakeoverAccepted",
+                    "Backup Takeover Accepted",
+                    $"Backup assistant accepted takeover for task #{task.PageNumber} in chapter '{chapter.Title}'. New deadline: {newDeadline:g}",
+                    task.Id,
+                    ct);
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(request.RejectionReason))
+                    throw new ArgumentException("Rejection reason is required when rejecting a takeover assignment.");
+
+                attempt.Reject(request.ActorUserId, request.RejectionReason, now);
+                task.MarkReassignmentRequired($"Backup takeover rejected: {request.RejectionReason.Trim()}");
+
+                await _attemptRepo.UpdateAsync(attempt, ct);
+                await _taskRepo.UpdateAsync(task, ct);
+                await _attemptRepo.SaveChangesAsync(ct);
+
+                await _notifications.NotifyCollaborationEventAsync(
+                    collaboration.MangakaId,
+                    "BackupTakeoverFailed",
+                    "Backup Takeover Rejected",
+                    $"Backup assistant rejected takeover for task #{task.PageNumber} in chapter '{chapter.Title}'. Reassignment required.",
+                    task.Id,
+                    ct);
+            }
+        }
+        else if (request.Accept)
         {
             if (collaboration.Status != CollaborationStatus.Active)
                 throw new ConflictException($"Cannot accept assignment when collaboration is in status '{collaboration.Status}'.");
@@ -227,6 +272,7 @@ public sealed class RespondTaskAssignmentHandler : IRequestHandler<RespondTaskAs
 
             attempt.Accept(request.ActorUserId, now);
             task.AcceptAssignment(now);
+            task.CurrentAssignmentAttemptId = attempt.Id;
 
             await _attemptRepo.UpdateAsync(attempt, ct);
             await _taskRepo.UpdateAsync(task, ct);

@@ -50,11 +50,13 @@ public class AdminController : ControllerBase
                 request.FullName,
                 request.PersonalEmail,
                 request.Role,
-                request.PhoneNumber);
+                request.PhoneNumber,
+                request.ManagingTantouId);
             var result = await _mediator.Send(command, ct);
             return CreatedAtAction(nameof(ProvisionAccount), new { result.UserId }, result);
         }
         catch (UserAlreadyExistsException ex) { return Conflict(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
     /// <summary>
@@ -201,17 +203,51 @@ public class AdminController : ControllerBase
         }
         catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
     }
+
+    /// <summary>
+    /// Reassign Tantou Editor for a Mangaka account.
+    /// </summary>
+    [HttpPatch("mangaka/{mangakaId:guid}/tantou")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> ChangeMangakaTantou(
+        Guid mangakaId, [FromBody] ChangeTantouRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var user = await _mediator.Send(new ListUsersQuery(), ct);
+            var mangakaDto = user.Users.FirstOrDefault(u => u.UserId == mangakaId);
+            if (mangakaDto is null) return NotFound(new { message = $"Mangaka {mangakaId} not found." });
+
+            var command = new UpdateAccountCommand(
+                mangakaId,
+                mangakaDto.FullName ?? string.Empty,
+                mangakaDto.PersonalEmail ?? $"{mangakaDto.Username}@company.com",
+                UserRole.Mangaka,
+                mangakaDto.PhoneNumber,
+                request.NewTantouId);
+
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
 
 public record ProvisionAccountRequest(
     string FullName,
     string PersonalEmail,
     UserRole Role,
-    string? PhoneNumber = null
+    string? PhoneNumber = null,
+    Guid? ManagingTantouId = null
 );
 
 public record UpdateRoleRequest(UserRole Role);
 public record UpdateStatusRequest(AccountStatus Status);
+public record ChangeTantouRequest(Guid NewTantouId);
 public record UpdateAccountRequest(
     string FullName,
     string PersonalEmail,

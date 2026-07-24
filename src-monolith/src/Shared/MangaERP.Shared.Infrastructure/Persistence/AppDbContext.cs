@@ -75,9 +75,10 @@ public class AppDbContext : DbContext
     public DbSet<Notification>      Notifications      => Set<Notification>();
 
     // ── Ranking / System ─────────────────────────────────────
-    public DbSet<VoteData>        VoteData         => Set<VoteData>();
-    public DbSet<RankingSnapshot> RankingSnapshots => Set<RankingSnapshot>();
-    public DbSet<SystemAuditLog>  SystemAuditLogs  => Set<SystemAuditLog>();
+    public DbSet<VoteData>           VoteData             => Set<VoteData>();
+    public DbSet<RankingSnapshot>    RankingSnapshots     => Set<RankingSnapshot>();
+    public DbSet<RankingImportBatch> RankingImportBatches => Set<RankingImportBatch>();
+    public DbSet<SystemAuditLog>     SystemAuditLogs      => Set<SystemAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

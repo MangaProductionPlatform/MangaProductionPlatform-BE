@@ -15,7 +15,7 @@ public class EditorialWorkflowIntegrationTests
 {
     [Theory]
     [InlineData(EditorialDecision.Approved, EditorialDecision.Approved, SubmissionStatus.EB_Approved)]
-    [InlineData(EditorialDecision.Rejected, EditorialDecision.Rejected, SubmissionStatus.Editorial_Rejected_To_Tantou)]
+    [InlineData(EditorialDecision.Rejected, EditorialDecision.Rejected, SubmissionStatus.EB_Rejected)]
     [InlineData(EditorialDecision.Approved, EditorialDecision.Rejected, SubmissionStatus.Conflict_Escalated)]
     public async System.Threading.Tasks.Task TwoReviewerDecisionMatrixProducesRequiredOutcome(
         EditorialDecision first, EditorialDecision second, SubmissionStatus expected)
@@ -62,7 +62,7 @@ public class EditorialWorkflowIntegrationTests
         await Controller(db, eic).Resolve("SeriesSubmission", setup.WorkId, new(EditorialDecision.Rejected, "Final rejection"), default);
 
         var work = await db.SeriesSubmissions.SingleAsync(x => x.Id == setup.WorkId);
-        Assert.Equal(SubmissionStatus.Editorial_Rejected_To_Tantou, work.Status);
+        Assert.Equal(SubmissionStatus.EB_Rejected, work.Status);
         Assert.DoesNotContain(eic, await db.EditorialReviewAssignments.Select(x => x.ReviewerId).ToListAsync());
     }
 
@@ -106,8 +106,7 @@ public class EditorialWorkflowIntegrationTests
             ActiveUser(reviewer1, UserRole.EditorialBoard),
             ActiveUser(reviewer2, UserRole.EditorialBoard));
         var work = SeriesSubmission.CreateDraft(mangaka, "Proposal", null, null, null, "manuscript.pdf");
-        work.SubmitDraft(tantou);
-        work.RecommendToEditorialBoard(tantou);
+        work.SubmitDraft();
         var a1 = EditorialReviewAssignment.Assign(EditorialWorkType.SeriesSubmission, work.Id, work.CurrentRound, reviewer1);
         var a2 = EditorialReviewAssignment.Assign(EditorialWorkType.SeriesSubmission, work.Id, work.CurrentRound, reviewer2);
         db.SeriesSubmissions.Add(work);

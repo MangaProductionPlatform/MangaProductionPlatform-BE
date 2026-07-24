@@ -12,6 +12,7 @@ public interface ICloudinaryService
     Task<bool> DeleteImageAsync(string publicId, CancellationToken ct = default);
     Task<object> GetUsageQuotaAsync(CancellationToken ct = default);
     Task<IEnumerable<object>> ListImagesAsync(string folder = "manga-platform", CancellationToken ct = default);
+    string GenerateSignedUrl(string publicId, int expirationMinutes = 15);
 }
 
 public record CloudinaryUploadResult(string SecureUrl, string PublicId);
@@ -36,6 +37,13 @@ public class CloudinaryService : ICloudinaryService
 
         var account = new Account(cloudName, apiKey, apiSecret);
         _cloudinary = new Cloudinary(account) { Api = { Secure = true } };
+    }
+
+    public string GenerateSignedUrl(string publicId, int expirationMinutes = 15)
+    {
+        if (string.IsNullOrWhiteSpace(publicId)) return string.Empty;
+        var expirationTime = DateTimeOffset.UtcNow.AddMinutes(expirationMinutes).ToUnixTimeSeconds();
+        return _cloudinary.Api.UrlImgUp.Signed(true).Action("download").BuildUrl(publicId) + $"?expires={expirationTime}";
     }
 
     public async Task<CloudinaryUploadResult> UploadImageAsync(Stream stream, string fileName, CancellationToken ct = default)

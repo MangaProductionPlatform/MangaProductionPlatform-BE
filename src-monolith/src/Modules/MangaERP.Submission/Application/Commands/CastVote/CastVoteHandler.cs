@@ -4,7 +4,6 @@ using MangaERP.Identity.Domain.Enums;
 using MangaERP.Series.Application.Ports;
 using MangaERP.Series.Domain.Entities;
 using MangaERP.Shared.Application.Ports;
-using MangaERP.Submission.Application.Commands.RequestRevision;
 using MangaERP.Submission.Application.Ports;
 using MangaERP.Submission.Domain.Entities;
 using MangaERP.Submission.Domain.Exceptions;
@@ -14,7 +13,12 @@ using System.Data;
 
 namespace MangaERP.Submission.Application.Commands.CastVote;
 
-// ── DTOs ──────────────────────────────────────────────────────────────────────
+public record FeedbackPinInput(
+    string PageIdentifier,
+    double CoordinateX,
+    double CoordinateY,
+    string Comment,
+    FeedbackPinCategory Category);
 
 public record CastVoteRequest(
     string VoteType,           // "APPROVE" | "REJECT" | "REQ_REVISION"
@@ -192,20 +196,20 @@ public async Task<CastVoteResult> Handle(CastVoteCommand cmd, CancellationToken 
                         .FirstOrDefault() ?? "Bản thảo bị từ chối bởi đa số Ban Biên Tập.";
                     submission.Reject("EditorialBoard", cmd.EditorId, feedbackMsg);
                 }
-                else if (revisionCount >= 2)
+                else if (rejectCount >= 2)
                 {
-                    // Majority REVISION → Requires_Revision
-                    outcome = "MAJORITY_REVISION";
-                    postCommitAction = "REVISION";
+                    // Double REJECT → EB_Rejected
+                    outcome = "DOUBLE_REJECT";
+                    postCommitAction = "REJECT";
                     var feedbackMsg = allVotes
-                        .Where(v => v.VoteType == VoteType.REQ_REVISION && v.Comment != null)
+                        .Where(v => v.VoteType == VoteType.REJECT && v.Comment != null)
                         .Select(v => v.Comment!)
-                        .FirstOrDefault() ?? "Ban Biên Tập yêu cầu chỉnh sửa bản thảo.";
-                    submission.RequestRevision("EditorialBoard", cmd.EditorId, feedbackMsg);
+                        .FirstOrDefault() ?? "Bản thảo đã bị Ban Biên Tập từ chối.";
+                    submission.RejectByBoard(cmd.EditorId, feedbackMsg);
                 }
                 else
                 {
-                    // 1-1-1 deadlock → Conflict_Escalated
+                    // 1-1 Split (Approved + Rejected) → Conflict_Escalated
                     outcome = "CONFLICT_ESCALATED";
                     postCommitAction = "CONFLICT";
                     submission.EscalateConflict();

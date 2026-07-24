@@ -83,6 +83,9 @@ public class UserRepository : IUserRepository
             .ToListAsync(ct);
         return roleNames;
     }
+
+    public Task<bool> HasAssignedMangakasAsync(Guid tantouId, CancellationToken ct = default)
+        => _db.Set<User>().AnyAsync(u => u.ManagingTantouId == tantouId && !u.IsDeleted && u.AccountStatus != AccountStatus.Deactivated, ct);
 }
 
 public class RefreshTokenRepository : IRefreshTokenRepository

@@ -25,6 +25,7 @@ public class TaskEnhancementTests
     private readonly Mock<ISeriesRepository> _seriesRepoMock = new();
     private readonly Mock<IUserRepository> _userRepoMock = new();
     private readonly Mock<IStudioInvitationRepository> _studioRepoMock = new();
+    private readonly Mock<ICollaborationAuthorizationService> _collabAuthMock = new();
     private readonly Mock<INotificationService> _notificationServiceMock = new();
 
     [Fact]
@@ -147,7 +148,7 @@ public class TaskEnhancementTests
             _pageTaskRepoMock.Object,
             _seriesRepoMock.Object,
             _userRepoMock.Object,
-            _studioRepoMock.Object,
+            _collabAuthMock.Object,
             _notificationServiceMock.Object);
 
         var authorId = Guid.NewGuid();

@@ -3,6 +3,7 @@ using System;
 using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724034931_Phase2PrimaryBackupTaskWorkflow")]
+    partial class Phase2PrimaryBackupTaskWorkflow
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,37 +24,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("MangaERP.Chapter.Domain.Entities.BasePageVersion", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BaseImageUrl")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("PageTaskId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("VersionNumber")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PageTaskId", "VersionNumber")
-                        .IsUnique();
-
-                    b.ToTable("BasePageVersions", (string)null);
-                });
 
             modelBuilder.Entity("MangaERP.Chapter.Domain.Entities.Chapter", b =>
                 {
@@ -643,53 +615,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.ToTable("QASessions", (string)null);
                 });
 
-            modelBuilder.Entity("MangaERP.Ranking.Domain.Entities.RankingImportBatch", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("ErrorCount")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("ErrorSummary")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FileChecksum")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Filename")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("Period")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("PeriodIdentifier")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("SuccessCount")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("TotalRows")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("UploaderId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("RankingImportBatches");
-                });
-
             modelBuilder.Entity("MangaERP.Ranking.Domain.Entities.RankingSnapshot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -756,9 +681,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ActorId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("CorrelationId")
-                        .HasColumnType("text");
-
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text");
@@ -773,15 +695,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.Property<string>("IpAddress")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
-
-                    b.Property<string>("NewState")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PreviousState")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Reason")
-                        .HasColumnType("text");
 
                     b.Property<DateTime>("Timestamp")
                         .HasColumnType("timestamp with time zone");
@@ -1791,15 +1704,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                     b.ToTable("TaskProgressUpdates", (string)null);
                 });
 
-            modelBuilder.Entity("MangaERP.Chapter.Domain.Entities.BasePageVersion", b =>
-                {
-                    b.HasOne("MangaERP.Chapter.Domain.Entities.PageTask", null)
-                        .WithMany("BasePageVersions")
-                        .HasForeignKey("PageTaskId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("MangaERP.Chapter.Domain.Entities.PageTask", b =>
                 {
                     b.HasOne("MangaERP.Chapter.Domain.Entities.Chapter", "Chapter")
@@ -2019,8 +1923,6 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("MangaERP.Chapter.Domain.Entities.PageTask", b =>
                 {
-                    b.Navigation("BasePageVersions");
-
                     b.Navigation("PreviewPage");
                 });
 

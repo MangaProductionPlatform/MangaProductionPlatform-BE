@@ -22,22 +22,21 @@ public class EditorialWorkflowRulesTests
     }
 
     [Fact]
-    public void SubmissionReturnsThroughTantouAfterEditorialRejection()
+    public void SubmissionGoesDirectlyToEBAndCanResubmitDirectly()
     {
         var mangaka = Guid.NewGuid();
-        var tantou = Guid.NewGuid();
         var reviewer = Guid.NewGuid();
         var work = SeriesSubmission.CreateDraft(mangaka, "Title", null, null, null, "manuscript.pdf");
 
-        work.SubmitDraft(tantou);
-        Assert.Equal(SubmissionStatus.Pending_Tantou_Review, work.Status);
-        work.RecommendToEditorialBoard(tantou);
+        work.SubmitDraft();
+        Assert.Equal(SubmissionStatus.Pending_EB_Review, work.Status);
         work.RejectToTantou(reviewer, "The pacing needs work.");
-        Assert.Equal(SubmissionStatus.Editorial_Rejected_To_Tantou, work.Status);
-        work.ReturnConsolidatedGuidanceToMangaka(tantou, "Shorten the opening and clarify the conflict.");
-        Assert.Equal(SubmissionStatus.Mangaka_Revision_Required, work.Status);
+        Assert.Equal(SubmissionStatus.Requires_Revision, work.Status);
+        Assert.Equal("The pacing needs work.", work.FeedbackMessage);
+
         work.ReSubmit();
-        Assert.Equal(SubmissionStatus.Pending_Tantou_Review, work.Status);
+        Assert.Equal(SubmissionStatus.Pending_EB_Review, work.Status);
+        Assert.Null(work.FeedbackMessage);
     }
 
     [Fact]

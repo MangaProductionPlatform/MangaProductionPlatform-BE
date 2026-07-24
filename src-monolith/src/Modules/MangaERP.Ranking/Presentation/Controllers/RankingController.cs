@@ -58,4 +58,46 @@ public class RankingController : ControllerBase
         var result = await _mediator.Send(command, ct);
         return Ok(result);
     }
+
+    /// <summary>
+    /// [Admin, EditorInChief] Upload CSV file to import/update ranking data snapshot.
+    /// </summary>
+    [HttpPost("import-csv")]
+    [Authorize(Roles = "Admin,EditorInChief")]
+    [ProducesResponseType(typeof(MangaERP.Ranking.Application.Commands.ImportRankingCsv.ImportRankingCsvResult), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> ImportCsv(
+        Microsoft.AspNetCore.Http.IFormFile file,
+        [FromQuery] RankingPeriod period = RankingPeriod.Weekly,
+        [FromQuery] string? periodIdentifier = null,
+        [FromQuery] bool dryRun = false,
+        CancellationToken ct = default)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "Please upload a non-empty CSV file." });
+
+        if (!file.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Only .csv files are supported." });
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var fileBytes = ms.ToArray();
+
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        Guid.TryParse(userIdClaim, out var uploaderId);
+
+        var command = new MangaERP.Ranking.Application.Commands.ImportRankingCsv.ImportRankingCsvCommand(
+            uploaderId,
+            file.FileName,
+            fileBytes,
+            period,
+            periodIdentifier,
+            dryRun);
+
+        var result = await _mediator.Send(command, ct);
+        if (!result.Success && !dryRun)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
 }
