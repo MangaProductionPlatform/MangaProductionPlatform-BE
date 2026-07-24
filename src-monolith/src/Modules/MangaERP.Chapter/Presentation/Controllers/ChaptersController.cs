@@ -245,7 +245,8 @@ public class ChaptersController : ControllerBase
                 chapterId,
                 pageNumber,
                 request.NewAssistantId,
-                request.Description);
+                request.Description,
+                request.ConfirmIfSubmitted);
 
             var result = await _mediator.Send(command, ct);
             return Ok(result);
@@ -383,4 +384,4 @@ public record BulkActivatePageTasksRequest(List<int> PageNumbers, Guid AssignedA
 /// </summary>
 public record SetPageRegionRequest(int PageNumber, string RegionMask, string TaskType);
 
-public record ReassignPageTaskRequest(Guid NewAssistantId, string? Description);
+public record ReassignPageTaskRequest(Guid NewAssistantId, string? Description, bool ConfirmIfSubmitted = false);

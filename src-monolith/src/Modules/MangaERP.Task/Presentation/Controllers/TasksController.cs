@@ -7,6 +7,9 @@ using MangaERP.Task.Application.Queries.GetChapterTasks;
 using MangaERP.Task.Application.Queries.GetLayerHistory;
 using MangaERP.Chapter.Application.Queries.GetTaskDetail;
 using MangaERP.Chapter.Application.Commands.UpdateTaskDeadline;
+using MangaERP.Chapter.Application.Commands.UpdateTaskDetails;
+using MangaERP.Chapter.Application.Commands.CancelAndRecreateTask;
+using MangaERP.Chapter.Application.Queries.GetBasePageVersions;
 using MangaERP.Task.Application.Queries.GetLayerVersions;
 using MangaERP.Task.Application.Commands.RollbackLayer;
 using MangaERP.Task.Application.Queries.GetTaskComments;
@@ -353,7 +356,80 @@ public class TasksController : ControllerBase
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }
+
+    [HttpPut("{pageTaskId:guid}")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(UpdateTaskDetailsResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> UpdateTaskDetails(
+        Guid pageTaskId,
+        [FromBody] UpdateTaskDetailsRequest request,
+        CancellationToken ct)
+    {
+        try
+        {
+            var command = new UpdateTaskDetailsCommand(
+                GetUserId(),
+                pageTaskId,
+                request.Description,
+                request.Deadline,
+                request.TaskType,
+                request.BaseImageUrl);
+
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
+    [HttpGet("{pageTaskId:guid}/base-pages/versions")]
+    [Authorize(Roles = "Mangaka,Assistant")]
+    [ProducesResponseType(typeof(IEnumerable<BasePageVersionDto>), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetBasePageVersions(Guid pageTaskId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new GetBasePageVersionsQuery(GetUserId(), pageTaskId);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
+
+    [HttpPost("{pageTaskId:guid}/cancel-and-recreate")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(CancelAndRecreateTaskResult), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> CancelAndRecreateTask(Guid pageTaskId, CancellationToken ct)
+    {
+        try
+        {
+            var command = new CancelAndRecreateTaskCommand(GetUserId(), pageTaskId);
+            var result = await _mediator.Send(command, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+    }
 }
+
+public record UpdateTaskDetailsRequest(
+    string? Description,
+    DateTime? Deadline,
+    string? TaskType,
+    string? BaseImageUrl
+);
 
 public record CreateExtensionReq(string Reason, DateTime RequestedDeadline);
 public record HandleExtensionReq(bool IsApproved, string? RejectionReason);
