@@ -633,4 +633,38 @@ public class NotificationService : INotificationService
                 createdAt         = notification.CreatedAt
             }, ct);
     }
+
+    public async System.Threading.Tasks.Task NotifyDirectAsync(
+        Guid receiverId, string title, string message,
+        string notifyType, Guid relatedEntityId, string relatedEntityType, string targetUrl,
+        CancellationToken ct = default)
+    {
+        var notification = new Notification
+        {
+            ReceiverId        = receiverId,
+            Title             = title,
+            Message           = message,
+            NotifyType        = notifyType,
+            RelatedEntityId   = relatedEntityId,
+            RelatedEntityType = relatedEntityType,
+            TargetUrl         = targetUrl
+        };
+
+        await _notificationRepo.AddAsync(notification, ct);
+        await _notificationRepo.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.User(receiverId.ToString())
+            .SendAsync("ReceiveNotification", new
+            {
+                id                = notification.Id,
+                title             = notification.Title,
+                message           = notification.Message,
+                notifyType        = notification.NotifyType,
+                relatedEntityId   = notification.RelatedEntityId,
+                relatedEntityType = notification.RelatedEntityType,
+                targetUrl         = notification.TargetUrl,
+                createdAt         = notification.CreatedAt,
+                isRead            = notification.IsRead
+            }, ct);
+    }
 }

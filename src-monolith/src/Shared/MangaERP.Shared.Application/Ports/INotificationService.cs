@@ -106,4 +106,12 @@ public interface INotificationService
     Task NotifyExtensionRequestHandledAsync(
         Guid assistantId, Guid pageTaskId, int pageNumber, bool isApproved, string? rejectionReason, DateTime? newDeadline,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Gửi thông báo trực tiếp tới một User ID qua cả Database persistence và SignalR realtime push.
+    /// </summary>
+    Task NotifyDirectAsync(
+        Guid receiverId, string title, string message,
+        string notifyType, Guid relatedEntityId, string relatedEntityType, string targetUrl,
+        CancellationToken ct = default);
 }
