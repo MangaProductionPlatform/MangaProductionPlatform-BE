@@ -99,6 +99,9 @@ public class PageTaskRepository : IPageTaskRepository
             .Include(p => p.BasePageVersions)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
+    public async System.Threading.Tasks.Task<IEnumerable<PageTask>> GetAllAsync(CancellationToken ct = default)
+        => await _db.PageTasks.ToListAsync(ct);
+
     public async System.Threading.Tasks.Task<PageTask?> GetByChapterAndPageNumberAsync(
         Guid chapterId, int pageNumber, CancellationToken ct = default)
         => await _db.PageTasks
@@ -133,6 +136,10 @@ public class PageTaskRepository : IPageTaskRepository
     public async System.Threading.Tasks.Task<bool> HasSubmissionsAsync(Guid pageTaskId, CancellationToken ct = default)
         => await _db.Set<MangaERP.Task.Domain.Entities.ArtworkLayer>()
             .AnyAsync(al => al.PageTaskId == pageTaskId, ct);
+
+    public async System.Threading.Tasks.Task<bool> HasProgressUpdatesAsync(Guid pageTaskId, CancellationToken ct = default)
+        => await _db.TaskProgressUpdates
+            .AnyAsync(pu => pu.TaskId == pageTaskId, ct);
 
     public async System.Threading.Tasks.Task<int> GetNextNegativePageNumberAsync(Guid chapterId, CancellationToken ct = default)
     {

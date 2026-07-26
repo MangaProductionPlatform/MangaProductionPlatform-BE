@@ -73,8 +73,9 @@ public static class SharedInfrastructureExtensions
         // Shared Services
         services.AddScoped<INotificationService, NotificationService>();
 
-        // Task deadline monitor background service
+        // Task deadline monitor background services
         services.AddHostedService<TaskDeadlineMonitorService>();
+        services.AddHostedService<HalfwayDeadlineWarningBackgroundService>();
 
         // Infrastructure Reliability & Security services
         services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();

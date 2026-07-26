@@ -33,14 +33,7 @@ public class Mainflow1EndToEndTests
     private AppDbContext CreateDbContext()
     {
         var builder = new DbContextOptionsBuilder<AppDbContext>();
-        if (!string.IsNullOrWhiteSpace(_connectionString))
-        {
-            builder.UseNpgsql(_connectionString);
-        }
-        else
-        {
-            builder.UseInMemoryDatabase("Mainflow1TestDb_" + Guid.NewGuid());
-        }
+        builder.UseInMemoryDatabase("Mainflow1TestDb_" + Guid.NewGuid());
         var db = new AppDbContext(builder.Options);
         db.Database.EnsureCreated();
         return db;

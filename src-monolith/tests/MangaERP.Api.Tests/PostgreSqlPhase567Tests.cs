@@ -22,6 +22,7 @@ public class PostgreSqlPhase567Tests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseNpgsql(GetPostgreSqlConnectionString())
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
             .Options;
         return new AppDbContext(options);
     }

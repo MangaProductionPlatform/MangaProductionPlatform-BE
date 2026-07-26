@@ -158,6 +158,7 @@ public class PrimaryBackupTakeoverAndSecurityTests
 
         var submission = SeriesSubmission.CreateDraft(authorId, "Submission Title", "Synopsis", "G", "http://cv.png", "http://manuscript.pdf");
         submission.SubmitDraft();
+        submission.AssignTantou(assignedTantouId);
         db.SeriesSubmissions.Add(submission);
 
         await db.SaveChangesAsync();

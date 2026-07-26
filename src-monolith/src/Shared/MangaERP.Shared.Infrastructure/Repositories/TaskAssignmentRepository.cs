@@ -65,25 +65,48 @@ public sealed class TaskAssignmentRepository : ITaskAssignmentAttemptRepository
         return attempts.Count != 0 ? attempts.Max() : 0;
     }
 
-    public async System.Threading.Tasks.Task<int> GetActiveWorkloadCountAsync(Guid assistantId, CancellationToken ct = default)
+    public async System.Threading.Tasks.Task<int> GetActiveWorkloadCountAsync(Guid assistantId, CancellationToken ct = default, Guid? excludeTaskId = null)
     {
         var pendingCount = await _db.TaskAssignmentAttempts.AsNoTracking()
-            .CountAsync(a => a.AssistantId == assistantId && a.Status == TaskAssignmentAttemptStatus.PendingAcceptance, ct);
+            .Where(a => a.AssistantId == assistantId && a.Status == TaskAssignmentAttemptStatus.PendingAcceptance)
+            .Where(a => excludeTaskId == null || a.TaskId != excludeTaskId.Value)
+            .CountAsync(ct);
 
         var acceptedTaskIds = await _db.TaskAssignmentAttempts.AsNoTracking()
             .Where(a => a.AssistantId == assistantId && a.Status == TaskAssignmentAttemptStatus.Accepted)
+            .Where(a => excludeTaskId == null || a.TaskId != excludeTaskId.Value)
+            .Select(a => a.TaskId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        int nonCompletedAcceptedTasksCount = 0;
+        if (acceptedTaskIds.Count > 0)
+        {
+            nonCompletedAcceptedTasksCount = await _db.PageTasks.AsNoTracking()
+                .CountAsync(t => acceptedTaskIds.Contains(t.Id) &&
+                                 (t.AssignedAssistantId == assistantId || t.BackupAssistantId == assistantId) &&
+                                 t.TaskStatus != PageTaskStatus.Approved &&
+                                 t.TaskStatus != PageTaskStatus.Reviewing &&
+                                 t.TaskStatus != PageTaskStatus.Cancelled, ct);
+        }
+
+        var pendingAttemptTaskIds = await _db.TaskAssignmentAttempts.AsNoTracking()
+            .Where(a => a.AssistantId == assistantId && a.Status == TaskAssignmentAttemptStatus.PendingAcceptance)
+            .Where(a => excludeTaskId == null || a.TaskId != excludeTaskId.Value)
             .Select(a => a.TaskId)
             .ToListAsync(ct);
 
-        if (acceptedTaskIds.Count == 0) return pendingCount;
+        var accountedTaskIds = acceptedTaskIds.Concat(pendingAttemptTaskIds).Distinct().ToList();
 
-        var nonCompletedTasksCount = await _db.PageTasks.AsNoTracking()
-            .CountAsync(t => acceptedTaskIds.Contains(t.Id) &&
+        var directPageTasksCount = await _db.PageTasks.AsNoTracking()
+            .Where(t => excludeTaskId == null || t.Id != excludeTaskId.Value)
+            .CountAsync(t => !accountedTaskIds.Contains(t.Id) &&
+                             (t.AssignedAssistantId == assistantId || t.BackupAssistantId == assistantId) &&
                              t.TaskStatus != PageTaskStatus.Approved &&
                              t.TaskStatus != PageTaskStatus.Reviewing &&
                              t.TaskStatus != PageTaskStatus.Cancelled, ct);
 
-        return pendingCount + nonCompletedTasksCount;
+        return pendingCount + nonCompletedAcceptedTasksCount + directPageTasksCount;
     }
 
     public async System.Threading.Tasks.Task AddAsync(TaskAssignmentAttempt attempt, CancellationToken ct = default)

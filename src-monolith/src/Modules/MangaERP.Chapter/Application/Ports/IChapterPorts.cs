@@ -22,12 +22,14 @@ public interface IChapterRepository
 public interface IPageTaskRepository
 {
     Task<PageTask?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<IEnumerable<PageTask>> GetAllAsync(CancellationToken ct = default);
     Task<PageTask?> GetByChapterAndPageNumberAsync(Guid chapterId, int pageNumber, CancellationToken ct = default);
     Task<IEnumerable<PageTask>> GetByChapterAndPageNumbersAsync(Guid chapterId, IEnumerable<int> pageNumbers, CancellationToken ct = default);
     Task<IEnumerable<PageTask>> GetByChapterIdAsync(Guid chapterId, CancellationToken ct = default);
     Task<IEnumerable<PageTask>> GetByAssistantAsync(Guid assistantId, CancellationToken ct = default);
     Task<int> CountApprovedPagesAsync(Guid chapterId, CancellationToken ct = default);
     Task<bool> HasSubmissionsAsync(Guid pageTaskId, CancellationToken ct = default);
+    Task<bool> HasProgressUpdatesAsync(Guid pageTaskId, CancellationToken ct = default);
     Task<int> GetNextNegativePageNumberAsync(Guid chapterId, CancellationToken ct = default);
     Task AddAsync(PageTask pageTask, CancellationToken ct = default);
     Task UpdateAsync(PageTask pageTask, CancellationToken ct = default);

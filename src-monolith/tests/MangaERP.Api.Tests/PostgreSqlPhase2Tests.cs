@@ -189,7 +189,7 @@ public sealed class PostgreSqlPhase2Tests
             INSERT INTO "TaskAssignmentAttempts"
               ("Id","TaskId","AssistantId","CollaborationId","AttemptNumber","Status","AssignedByUserId","AssignedAt","ResponseDeadline","WorkDeadline","CreatedAt","UpdatedAt","ConcurrencyToken","AssignmentRole")
             VALUES
-              ('{attempt2Id}','{taskId}','{assistant2Id}','{collab2Id}',2,'PendingAcceptance','{mangakaId}',now(),now()+interval '1 day',now()+interval '2 days',now(),now(),'{Guid.NewGuid()}','BackupTakeover');
+              ('{attempt2Id}','{taskId}','{assistant2Id}','{collab2Id}',2,'PendingAcceptance','{mangakaId}',now(),now()+interval '1 day',now()+interval '2 days',now(),now(),'{Guid.NewGuid()}','Primary');
             """);
 
         // Attempt 2 try to accept -> Must throw PostgresException (23505 Unique Violation on IX_TaskAssignmentAttempts_TaskId_Accepted)
@@ -227,8 +227,8 @@ public sealed class PostgreSqlPhase2Tests
             """);
 
         await ExecuteAsync(connection, $"""
-            INSERT INTO "MangaSeries" ("Id","Title","AuthorId","Status","IsDeleted","CreatedAt")
-            VALUES ('{series}','Series {series}','{mangaka}','Ongoing',false,now())
+            INSERT INTO "MangaSeries" ("Id","Title","AuthorId","Status","CancellationStatus","IsDeleted","CreatedAt")
+            VALUES ('{series}','Series {series}','{mangaka}','Ongoing',0,false,now())
             """);
     }
 
@@ -240,10 +240,11 @@ public sealed class PostgreSqlPhase2Tests
             """);
 
         await ExecuteAsync(connection, $"""
-            INSERT INTO "PageTasks" ("Id","ChapterId","PageNumber","BaseImageUrl","TaskStatus","TaskType","IsDeleted","CreatedAt","UpdatedAt")
-            VALUES ('{task}','{chapter}',1,'http://base.img/1.png','Pending','General',false,now(),now())
+            INSERT INTO "PageTasks" ("Id","ChapterId","PageNumber","BaseImageUrl","TaskStatus","TaskType","ProgressPercent","IsDeleted","CreatedAt","UpdatedAt")
+            VALUES ('{task}','{chapter}',1,'http://base.img/1.png','Pending','General',0,false,now(),now())
             """);
     }
+    private AppDbContext CreateDbContext() => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_connectionString).ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)).Options);
 }
 
 [CollectionDefinition("Phase2 PostgreSQL", DisableParallelization = true)]
