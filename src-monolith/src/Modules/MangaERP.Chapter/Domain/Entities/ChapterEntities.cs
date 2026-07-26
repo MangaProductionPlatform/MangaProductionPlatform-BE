@@ -199,6 +199,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public string? TakeoverStatus { get; set; } = "None"; // "None" | "TakeoverRequested" | "TakeoverAccepted" | "TakeoverFailed"
     public string? ReassignmentReason { get; set; }
     public DateTime? ReassignmentRequiredAt { get; set; }
+    public DateTime? HalfwayWarningSentAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public virtual Chapter Chapter { get; set; } = null!;
@@ -234,6 +235,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
         Description = description ?? Description;
         Deadline = deadline ?? Deadline;
         TaskStatus = PageTaskStatus.PendingAcceptance;
+        WorkStartedAt = null;
         TakeoverStatus = "None";
         ReassignmentReason = null;
         ReassignmentRequiredAt = null;

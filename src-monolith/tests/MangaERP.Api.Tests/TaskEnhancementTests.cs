@@ -133,7 +133,7 @@ public class TaskEnhancementTests
         Assert.NotEqual(Guid.Empty, result.NewPageTaskId);
         Assert.Equal(1, result.PageNumber);
         Assert.True(pageTask.IsDeleted);
-        Assert.True(pageTask.PageNumber < 0); // Check negative page number shift
+        Assert.Equal(1, pageTask.PageNumber); // Keeps original PageNumber (partial unique index handles IsDeleted = false)
 
         _pageTaskRepoMock.Verify(r => r.UpdateAsync(pageTask, It.IsAny<CancellationToken>()), Times.Once);
         _pageTaskRepoMock.Verify(r => r.AddAsync(It.IsAny<PageTask>(), It.IsAny<CancellationToken>()), Times.Once);

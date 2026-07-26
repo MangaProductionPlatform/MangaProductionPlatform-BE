@@ -410,19 +410,35 @@ public class TasksController : ControllerBase
     [ProducesResponseType(400)]
     [ProducesResponseType(403)]
     [ProducesResponseType(404)]
-    public async Task<IActionResult> CancelAndRecreateTask(Guid pageTaskId, CancellationToken ct)
+    [ProducesResponseType(409)]
+    public async Task<IActionResult> CancelAndRecreateTask(
+        Guid pageTaskId,
+        [FromBody] CancelAndRecreateTaskRequest? request,
+        CancellationToken ct)
     {
         try
         {
-            var command = new CancelAndRecreateTaskCommand(GetUserId(), pageTaskId);
+            var command = new CancelAndRecreateTaskCommand(
+                GetUserId(),
+                pageTaskId,
+                request?.Reason,
+                request?.ConfirmProgressLoss ?? false,
+                request?.CopyTaskDetails ?? true);
+
             var result = await _mediator.Send(command, ct);
             return Ok(result);
         }
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
-        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return Conflict(new { message = ex.Message }); }
     }
 }
+
+public record CancelAndRecreateTaskRequest(
+    string? Reason,
+    bool ConfirmProgressLoss = false,
+    bool CopyTaskDetails = true
+);
 
 public record UpdateTaskDetailsRequest(
     string? Description,

@@ -41,7 +41,7 @@ public interface ITaskAssignmentAttemptRepository
     System.Threading.Tasks.Task<IEnumerable<TaskAssignmentAttempt>> GetPendingByCollaborationIdAsync(Guid collaborationId, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<TaskAssignmentAttempt>> GetAcceptedByAssistantIdAsync(Guid assistantId, CancellationToken ct = default);
     System.Threading.Tasks.Task<int> GetMaxAttemptNumberAsync(Guid taskId, CancellationToken ct = default);
-    System.Threading.Tasks.Task<int> GetActiveWorkloadCountAsync(Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<int> GetActiveWorkloadCountAsync(Guid assistantId, CancellationToken ct = default, Guid? excludeTaskId = null);
     System.Threading.Tasks.Task AddAsync(TaskAssignmentAttempt attempt, CancellationToken ct = default);
     System.Threading.Tasks.Task UpdateAsync(TaskAssignmentAttempt attempt, CancellationToken ct = default);
     System.Threading.Tasks.Task<int> SaveChangesAsync(CancellationToken ct = default);

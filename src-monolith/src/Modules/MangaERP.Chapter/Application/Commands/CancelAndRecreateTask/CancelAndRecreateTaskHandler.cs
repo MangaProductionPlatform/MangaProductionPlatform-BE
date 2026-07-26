@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using MangaERP.Chapter.Application.Ports;
 using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Series.Application.Ports;
@@ -7,16 +11,26 @@ namespace MangaERP.Chapter.Application.Commands.CancelAndRecreateTask;
 
 public record CancelAndRecreateTaskCommand(
     Guid MangakaId,
-    Guid PageTaskId
-) : IRequest<CancelAndRecreateTaskResult>;
+    Guid PageTaskId,
+    string? Reason = null,
+    bool ConfirmProgressLoss = false,
+    bool CopyTaskDetails = true
+) : IRequest<CancelAndRecreateTaskResult>
+{
+    public CancelAndRecreateTaskCommand(Guid mangakaId, Guid pageTaskId)
+        : this(mangakaId, pageTaskId, null, false, true) { }
+}
 
 public record CancelAndRecreateTaskResult(
-    Guid OldPageTaskId,
+    Guid CancelledTaskId,
     Guid NewPageTaskId,
+    string Status,
     int PageNumber,
-    string BaseImageUrl,
-    string TaskStatus
-);
+    string BaseImageUrl
+)
+{
+    public Guid OldPageTaskId => CancelledTaskId;
+}
 
 public class CancelAndRecreateTaskHandler : IRequestHandler<CancelAndRecreateTaskCommand, CancelAndRecreateTaskResult>
 {
@@ -49,19 +63,51 @@ public class CancelAndRecreateTaskHandler : IRequestHandler<CancelAndRecreateTas
         if (series.AuthorId != cmd.MangakaId)
             throw new UnauthorizedAccessException("Only the author of the series can cancel and recreate page tasks.");
 
-        int originalPageNumber = oldTask.PageNumber;
-        int nextNegativePageNumber = await _pageTaskRepo.GetNextNegativePageNumberAsync(oldTask.ChapterId, ct);
+        // Rule 1: Always block cancel-and-recreate if task already has real artwork submissions or is completed/reviewing
+        bool hasArtworkSubmissions = await _pageTaskRepo.HasSubmissionsAsync(oldTask.Id, ct);
+        if (hasArtworkSubmissions ||
+            oldTask.TaskStatus == PageTaskStatus.Approved ||
+            oldTask.TaskStatus == PageTaskStatus.Reviewing)
+        {
+            throw new InvalidOperationException("Cannot cancel and recreate a task that already has artwork submissions or is completed.");
+        }
 
-        // 1. Soft-delete the old task and change its page number to negative to bypass Unique Index constraint (ChapterId, PageNumber)
-        oldTask.PageNumber = nextNegativePageNumber;
+        // Rule 2: If task has progress updates (but no artwork submissions), confirmProgressLoss is required
+        bool hasProgress = oldTask.ProgressPercent > 0 || await _pageTaskRepo.HasProgressUpdatesAsync(oldTask.Id, ct);
+        if (hasProgress && !cmd.ConfirmProgressLoss)
+        {
+            throw new InvalidOperationException("Task has progress updates. Set confirmProgressLoss to true to confirm progress deletion and recreate task.");
+        }
+
+        int originalPageNumber = oldTask.PageNumber;
+
+        // 1. Soft-delete the old task (preserves original PageNumber and history; partial unique index filters IsDeleted = false)
+        oldTask.TaskStatus = PageTaskStatus.Cancelled;
         oldTask.IsDeleted = true;
         oldTask.DeletedAt = DateTime.UtcNow;
         oldTask.UpdatedAt = DateTime.UtcNow;
 
         await _pageTaskRepo.UpdateAsync(oldTask, ct);
 
-        // 2. Create the new PageTask with the original page number
-        var newTask = PageTask.CreatePending(oldTask.ChapterId, originalPageNumber, oldTask.BaseImageUrl);
+        // 2. Create the new PageTask with the original PageNumber (unassigned Pending state)
+        string baseImage = !string.IsNullOrWhiteSpace(oldTask.BaseImageUrl) ? oldTask.BaseImageUrl : "https://example.com/page-placeholder.png";
+        var newTask = PageTask.CreatePending(oldTask.ChapterId, originalPageNumber, baseImage);
+
+        if (cmd.CopyTaskDetails)
+        {
+            newTask.Description = oldTask.Description;
+            newTask.Deadline = oldTask.Deadline;
+            newTask.TaskType = oldTask.TaskType;
+        }
+
+        newTask.AssignedAssistantId = null;
+        newTask.PrimaryAssistantId = null;
+        newTask.BackupAssistantId = null;
+        newTask.CurrentAssignmentAttemptId = null;
+        newTask.WorkStartedAt = null;
+        newTask.ProgressPercent = 0;
+        newTask.HalfwayWarningSentAt = null;
+
         await _pageTaskRepo.AddAsync(newTask, ct);
 
         // Save changes for both update and create
@@ -70,9 +116,9 @@ public class CancelAndRecreateTaskHandler : IRequestHandler<CancelAndRecreateTas
         return new CancelAndRecreateTaskResult(
             oldTask.Id,
             newTask.Id,
+            newTask.TaskStatus.ToString(),
             newTask.PageNumber,
-            newTask.BaseImageUrl,
-            newTask.TaskStatus.ToString()
+            newTask.BaseImageUrl
         );
     }
 }

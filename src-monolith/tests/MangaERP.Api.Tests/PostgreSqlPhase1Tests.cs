@@ -213,7 +213,7 @@ public sealed class PostgreSqlPhase1Tests
         return (assistant, invitation1, invitation2);
     }
 
-    private AppDbContext CreateDbContext() => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_connectionString).Options);
+    private AppDbContext CreateDbContext() => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(_connectionString).ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)).Options);
 
     private sealed class TestDbContextProvider(AppDbContext context) : IDbContextProvider
     {

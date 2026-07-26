@@ -9,7 +9,8 @@ public enum TaskAssignmentAttemptStatus
     Accepted,
     Rejected,
     Expired,
-    Cancelled
+    Cancelled,
+    Superseded
 }
 
 public class TaskAssignmentAttempt : AggregateRoot
@@ -129,6 +130,18 @@ public class TaskAssignmentAttempt : AggregateRoot
 
         Status = TaskAssignmentAttemptStatus.Expired;
         RespondedAt = now;
+        UpdatedAt = now;
+        ConcurrencyToken = Guid.NewGuid();
+    }
+
+    public void Supersede(DateTime now, string? reason = null)
+    {
+        if (Status == TaskAssignmentAttemptStatus.Superseded)
+            return;
+
+        Status = TaskAssignmentAttemptStatus.Superseded;
+        RespondedAt ??= now;
+        RejectionReason = reason ?? RejectionReason;
         UpdatedAt = now;
         ConcurrencyToken = Guid.NewGuid();
     }

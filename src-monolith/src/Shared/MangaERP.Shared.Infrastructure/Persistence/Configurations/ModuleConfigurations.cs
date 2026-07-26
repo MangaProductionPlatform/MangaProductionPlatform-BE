@@ -135,7 +135,7 @@ public class PageTaskConfiguration : IEntityTypeConfiguration<PageTask>
     public void Configure(EntityTypeBuilder<PageTask> b)
     {
         b.ToTable("PageTasks"); b.HasKey(e => e.Id);
-        b.HasIndex(e => new { e.ChapterId, e.PageNumber }).IsUnique();
+        b.HasIndex(e => new { e.ChapterId, e.PageNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         b.Property(e => e.Description).HasMaxLength(2000);
         b.Property(e => e.BaseImageUrl).IsRequired().HasMaxLength(2048);
         b.Property(e => e.TaskStatus).HasConversion(v => v.ToString(),
@@ -432,13 +432,17 @@ public class TaskAssignmentAttemptConfiguration : IEntityTypeConfiguration<TaskA
 
         b.HasIndex(e => new { e.TaskId, e.AttemptNumber }).IsUnique();
 
-        b.HasIndex(e => e.TaskId, "IX_TaskAssignmentAttempts_TaskId_PendingAcceptance")
+        b.HasIndex(e => new { e.TaskId, e.AssignmentRole }, "IX_TaskAssignmentAttempts_TaskId_AssignmentRole_PendingAcceptance")
             .IsUnique()
             .HasFilter("\"Status\" = 'PendingAcceptance'");
 
-        b.HasIndex(e => e.TaskId, "IX_TaskAssignmentAttempts_TaskId_Accepted")
+        b.HasIndex(e => new { e.TaskId, e.AssignmentRole }, "IX_TaskAssignmentAttempts_TaskId_AssignmentRole_Accepted")
             .IsUnique()
             .HasFilter("\"Status\" = 'Accepted'");
+
+        b.HasIndex(e => new { e.TaskId, e.AssistantId }, "IX_TaskAssignmentAttempts_TaskId_AssistantId_Active")
+            .IsUnique()
+            .HasFilter("\"Status\" IN ('PendingAcceptance', 'Accepted')");
 
         b.HasIndex(e => new { e.AssistantId, e.Status });
         b.HasIndex(e => new { e.TaskId, e.Status });

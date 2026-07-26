@@ -20,6 +20,7 @@ public interface IStudioInvitationRepository
     System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetCollaborationAsync(Guid id, CancellationToken ct = default);
     System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetNonEndedCollaborationByAssistantAsync(Guid assistantId, CancellationToken ct = default);
     System.Threading.Tasks.Task<MangakaAssistantCollaboration> AcceptInvitationAsync(Guid invitationId, Guid assistantId, Guid actorId, DateTime now, string? correlationId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<MangakaAssistantCollaboration>> GetNonEndedCollaborationsByMangakaAsync(Guid mangakaId, CancellationToken ct = default);
     System.Threading.Tasks.Task AddCollaborationEventAsync(CollaborationEvent collaborationEvent, CancellationToken ct = default);
 }
 

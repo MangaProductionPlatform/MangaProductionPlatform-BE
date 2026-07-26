@@ -84,6 +84,9 @@ public class StudioInvitationRepository : IStudioInvitationRepository
     public System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetCollaborationAsync(Guid id, CancellationToken ct = default)
         => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.Id == id, ct);
 
+    public async System.Threading.Tasks.Task<IEnumerable<MangakaAssistantCollaboration>> GetNonEndedCollaborationsByMangakaAsync(Guid mangakaId, CancellationToken ct = default)
+        => await _db.MangakaAssistantCollaborations.Where(c => c.MangakaId == mangakaId && c.Status != CollaborationStatus.Ended).ToListAsync(ct);
+
     public System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetNonEndedCollaborationByAssistantAsync(Guid assistantId, CancellationToken ct = default)
         => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct);
 
