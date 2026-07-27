@@ -74,13 +74,10 @@ public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, 
                 throw new InvalidOperationException("Assigned Tantou Editor must exist, hold TantouEditor role, and be Active.");
         }
 
-        // Step 1c: Validate mandatory ManagingMangakaId for Assistant role
+        // Step 1c: Validate optional ManagingMangakaId for Assistant role
         User? mangaka = null;
-        if (request.Role == UserRole.Assistant)
+        if (request.Role == UserRole.Assistant && request.ManagingMangakaId.HasValue && request.ManagingMangakaId.Value != Guid.Empty)
         {
-            if (!request.ManagingMangakaId.HasValue || request.ManagingMangakaId.Value == Guid.Empty)
-                throw new InvalidOperationException("ManagingMangakaId is required when provisioning an Assistant account.");
-
             mangaka = await _userRepo.GetByIdAsync(request.ManagingMangakaId.Value, cancellationToken);
             if (mangaka == null || (mangaka.Role != UserRole.Mangaka && !mangaka.UserRoles.Any(ur => ur.Role.Name == RoleNames.Mangaka)) || mangaka.AccountStatus != AccountStatus.Active || mangaka.IsDeleted)
                 throw new InvalidOperationException("Assigned Mangaka must exist, hold Mangaka role, and be Active.");

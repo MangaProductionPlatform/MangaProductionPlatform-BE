@@ -87,19 +87,34 @@ public class ThreeStageWorkflowTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task Stage1_AdminProvisionAssistant_Fails_WhenManagingMangakaIdIsMissing()
+    public async System.Threading.Tasks.Task Stage1_AdminProvisionAssistant_Succeeds_WhenManagingMangakaIdIsOptional()
     {
         using var db = CreateInMemoryDb();
         var provider = new TestDbContextProvider(db);
 
+        var usernameGenMock = new Mock<IUsernameGenerator>();
+        usernameGenMock.Setup(x => x.GenerateAsync(It.IsAny<string>(), UserRole.Assistant, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("ast.new@company.com");
+
+        var emailServiceMock = new Mock<IEmailService>();
+        emailServiceMock.Setup(e => e.SendInvitationEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns(System.Threading.Tasks.Task.CompletedTask);
+
+        var tokenServiceMock = new Mock<ITokenService>();
+        tokenServiceMock.Setup(t => t.GenerateInvitationToken(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Returns("valid-invitation-jwt-token");
+
         var handler = new ProvisionAccountHandler(
             new UserRepository(provider), new InvitationTokenRepository(provider),
-            Mock.Of<ITokenService>(), Mock.Of<IEmailService>(), Mock.Of<IUsernameGenerator>(),
+            tokenServiceMock.Object, emailServiceMock.Object, usernameGenMock.Object,
             new AssistantCollaborationProvisionService(provider), provider, GetTestConfig());
 
-        // Test 2: Role Assistant missing managingMangakaId throws InvalidOperationException
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.Handle(new ProvisionAccountCommand("Assistant New", "ast@gmail.com", UserRole.Assistant, null, null, null), default));
+        // Test: Role Assistant without managingMangakaId succeeds and creates unassigned Assistant account
+        var result = await handler.Handle(new ProvisionAccountCommand("Assistant New", "ast@gmail.com", UserRole.Assistant, null, null, null), default);
+
+        Assert.NotNull(result);
+        Assert.Equal("ast.new@company.com", result.GeneratedUsername);
+        Assert.False(db.MangakaAssistantCollaborations.Any(c => c.AssistantId == result.UserId));
     }
 
     [Fact]
