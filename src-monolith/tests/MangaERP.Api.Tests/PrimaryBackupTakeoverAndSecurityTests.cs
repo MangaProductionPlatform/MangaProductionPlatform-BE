@@ -26,7 +26,7 @@ public class PrimaryBackupTakeoverAndSecurityTests
     }
 
     [Fact]
-    public void PageTask_AssignPrimaryAndBackup_SetsCorrectFields()
+    public void PageTask_AssignPending_SetsCorrectFields()
     {
         // Arrange
         var task = new PageTask
@@ -35,22 +35,20 @@ public class PrimaryBackupTakeoverAndSecurityTests
             PageNumber = 1,
             TaskStatus = PageTaskStatus.Pending
         };
-        var primaryId = Guid.NewGuid();
-        var backupId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
 
         // Act
-        task.AssignPrimaryAndBackup(primaryId, backupId, "Background drawing", DateTime.UtcNow.AddDays(2));
+        task.AssignPending(assistantId, "Background drawing", DateTime.UtcNow.AddDays(2));
 
         // Assert
-        Assert.Equal(primaryId, task.PrimaryAssistantId);
-        Assert.Equal(backupId, task.BackupAssistantId);
-        Assert.Equal(primaryId, task.AssignedAssistantId);
         Assert.Equal(PageTaskStatus.PendingAcceptance, task.TaskStatus);
+        Assert.Equal("Background drawing", task.Description);
         Assert.Equal("None", task.TakeoverStatus);
+        Assert.Null(task.AssignedAssistantId); // Not set before Accept
     }
 
     [Fact]
-    public void PageTask_RequestAndAcceptTakeover_TransfersAssignmentToBackup()
+    public void PageTask_AcceptAssignment_SetsExecutorAndWorkStartedAt()
     {
         // Arrange
         var task = new PageTask
@@ -59,40 +57,35 @@ public class PrimaryBackupTakeoverAndSecurityTests
             PageNumber = 1,
             TaskStatus = PageTaskStatus.Pending
         };
-        var primaryId = Guid.NewGuid();
-        var backupId = Guid.NewGuid();
-        task.AssignPrimaryAndBackup(primaryId, backupId, "Lineart", DateTime.UtcNow.AddDays(2));
+        var assistantId = Guid.NewGuid();
+        task.AssignPending(assistantId, "Lineart", DateTime.UtcNow.AddDays(2));
 
-        // Act 1: Request Takeover
-        task.RequestTakeover("Primary unavailable due to emergency.");
-        Assert.Equal("TakeoverRequested", task.TakeoverStatus);
-
-        // Act 2: Backup Accept Takeover
-        var newDeadline = DateTime.UtcNow.AddDays(3);
-        task.AcceptTakeover(backupId, DateTime.UtcNow, newDeadline);
+        // Act
+        var now = DateTime.UtcNow;
+        task.AcceptAssignment(now);
+        task.AssignedAssistantId = assistantId;
 
         // Assert
-        Assert.Equal(backupId, task.AssignedAssistantId);
+        Assert.Equal(assistantId, task.AssignedAssistantId);
         Assert.Equal(PageTaskStatus.Incomplete, task.TaskStatus);
-        Assert.Equal("TakeoverAccepted", task.TakeoverStatus);
-        Assert.Equal(newDeadline, task.Deadline);
+        Assert.Equal(now, task.WorkStartedAt);
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task AuthorizationService_RevokesPrimaryAccess_AfterTakeover()
+    public async System.Threading.Tasks.Task AuthorizationService_RevokesOldAssistantAccess_AfterReassignAccept()
     {
         // Arrange
         using var db = GetInMemoryDbContext();
         var authService = new CollaborationAuthorizationService(db);
 
         var mangakaId = Guid.NewGuid();
-        var primaryId = Guid.NewGuid();
-        var backupId = Guid.NewGuid();
+        var assistant1Id = Guid.NewGuid();
+        var assistant2Id = Guid.NewGuid();
 
         var author = new User { Id = mangakaId, Username = "mangaka1", Role = UserRole.Mangaka, AccountStatus = AccountStatus.Active };
-        var primary = new User { Id = primaryId, Username = "primary1", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        var backup = new User { Id = backupId, Username = "backup1", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        db.Users.AddRange(author, primary, backup);
+        var ast1 = new User { Id = assistant1Id, Username = "ast1", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
+        var ast2 = new User { Id = assistant2Id, Username = "ast2", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
+        db.Users.AddRange(author, ast1, ast2);
 
         var series = MangaSeries.Create(mangakaId, null, "Test Series", "Description", "Action", null);
         db.MangaSeries.Add(series);
@@ -101,37 +94,46 @@ public class PrimaryBackupTakeoverAndSecurityTests
         db.Chapters.Add(chapter);
 
         var task = new PageTask { ChapterId = chapter.Id, PageNumber = 1, TaskStatus = PageTaskStatus.Pending };
-        task.AssignPrimaryAndBackup(primaryId, backupId, "Coloring", DateTime.UtcNow.AddDays(2));
+        task.AssignPending(assistant1Id, "Coloring", DateTime.UtcNow.AddDays(2));
         db.PageTasks.Add(task);
 
-        var collabPrimary = new MangakaAssistantCollaboration(mangakaId, primaryId, Guid.NewGuid(), DateTime.UtcNow);
-        var collabBackup = new MangakaAssistantCollaboration(mangakaId, backupId, Guid.NewGuid(), DateTime.UtcNow);
-        db.MangakaAssistantCollaborations.AddRange(collabPrimary, collabBackup);
+        var collab1 = new MangakaAssistantCollaboration(mangakaId, assistant1Id, Guid.NewGuid(), DateTime.UtcNow);
+        var collab2 = new MangakaAssistantCollaboration(mangakaId, assistant2Id, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.AddRange(collab1, collab2);
 
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabPrimary.Id, series.Id, mangakaId));
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabBackup.Id, series.Id, mangakaId));
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab1.Id, series.Id, mangakaId));
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab2.Id, series.Id, mangakaId));
 
-        db.TaskAssignmentAttempts.Add(TaskAssignmentAttempt.CreatePending(task.Id, primaryId, collabPrimary.Id, 1, mangakaId));
+        var attempt1 = TaskAssignmentAttempt.CreatePending(task.Id, assistant1Id, collab1.Id, 1, mangakaId);
+        attempt1.Accept(assistant1Id, DateTime.UtcNow);
+        db.TaskAssignmentAttempts.Add(attempt1);
+        task.AcceptAssignment(DateTime.UtcNow);
+        task.AssignedAssistantId = assistant1Id;
         await db.SaveChangesAsync();
 
-        // 1. Author has full access
+        // 1. Author has access
         Assert.True(await authService.CanAccessTaskAsync(mangakaId, task.Id));
 
-        // 2. Primary has access initially
-        Assert.True(await authService.CanAccessTaskAsync(primaryId, task.Id));
+        // 2. Assistant 1 has submit progress access initially
+        Assert.True(await authService.CanSubmitProgressAsync(assistant1Id, task.Id));
 
-        // 3. Backup does NOT have access before takeover
-        Assert.False(await authService.CanAccessTaskAsync(backupId, task.Id));
+        // 3. Assistant 2 does NOT have submit progress access before Accept
+        Assert.False(await authService.CanSubmitProgressAsync(assistant2Id, task.Id));
 
-        // 4. Perform Takeover
-        task.AcceptTakeover(backupId, DateTime.UtcNow, DateTime.UtcNow.AddDays(3));
+        // 4. Reassign to Assistant 2 and Assistant 2 Accepts
+        attempt1.Supersede(DateTime.UtcNow, "Reassigned to Assistant 2");
+        var attempt2 = TaskAssignmentAttempt.CreatePending(task.Id, assistant2Id, collab2.Id, 2, mangakaId);
+        attempt2.Accept(assistant2Id, DateTime.UtcNow);
+        db.TaskAssignmentAttempts.Add(attempt2);
+
+        task.AcceptReplacement(assistant2Id, DateTime.UtcNow);
         await db.SaveChangesAsync();
 
-        // 5. Post Takeover: Backup now HAS access
-        Assert.True(await authService.CanAccessTaskAsync(backupId, task.Id));
+        // 5. Post Reassign: Assistant 2 HAS submit progress access
+        Assert.True(await authService.CanSubmitProgressAsync(assistant2Id, task.Id));
 
-        // 6. Post Takeover: Primary access is REVOKED
-        Assert.False(await authService.CanAccessTaskAsync(primaryId, task.Id));
+        // 6. Post Reassign: Assistant 1 submit progress access is REVOKED
+        Assert.False(await authService.CanSubmitProgressAsync(assistant1Id, task.Id));
     }
 
     [Fact]
@@ -141,7 +143,7 @@ public class PrimaryBackupTakeoverAndSecurityTests
         using var db = GetInMemoryDbContext();
 
         var authorId = Guid.NewGuid();
-        var assignedTantouId = Guid.NewGuid(); // Has EditorialBoard role
+        var assignedTantouId = Guid.NewGuid();
         var eicUserId = Guid.NewGuid();
         var reviewer1Id = Guid.NewGuid();
         var reviewer2Id = Guid.NewGuid();
@@ -163,7 +165,7 @@ public class PrimaryBackupTakeoverAndSecurityTests
 
         await db.SaveChangesAsync();
 
-        // Query candidates excluding authorId and assignedTantouId (work.AssignedEditorId)
+        // Query candidates excluding authorId and assignedTantouId
         var selectedReviewers = await db.Users
             .Where(x => x.AccountStatus == AccountStatus.Active && !x.IsDeleted)
             .Where(x => x.Role == UserRole.EditorialBoard || x.UserRoles.Any(ur => ur.Role.Name == "EditorialBoard"))
@@ -179,81 +181,5 @@ public class PrimaryBackupTakeoverAndSecurityTests
         Assert.DoesNotContain(eicUserId, selectedReviewers);
         Assert.Contains(reviewer1Id, selectedReviewers);
         Assert.Contains(reviewer2Id, selectedReviewers);
-    }
-
-    [Fact]
-    public async System.Threading.Tasks.Task TaskFileStreamingEndpoint_AuthorizationAndRevocation_ReturnsExpectedStatus()
-    {
-        // Arrange
-        using var db = GetInMemoryDbContext();
-        var authService = new CollaborationAuthorizationService(db);
-
-        var mangakaId = Guid.NewGuid();
-        var primaryId = Guid.NewGuid();
-        var backupId = Guid.NewGuid();
-        var randomUserId = Guid.NewGuid();
-
-        var series = MangaSeries.Create(mangakaId, null, "Series Task Files", "Desc", "Genre", null);
-        var chapter = MangaERP.Chapter.Domain.Entities.Chapter.Create(series.Id, "Chapter 1", 1.0m, 10);
-        db.MangaSeries.Add(series);
-        db.Chapters.Add(chapter);
-
-        var task = new PageTask { ChapterId = chapter.Id, PageNumber = 1, TaskStatus = PageTaskStatus.Pending };
-        task.AssignPrimaryAndBackup(primaryId, backupId, "Inking", DateTime.UtcNow.AddDays(2));
-        db.PageTasks.Add(task);
-
-        var collabPrimary = new MangakaAssistantCollaboration(mangakaId, primaryId, Guid.NewGuid(), DateTime.UtcNow);
-        var collabBackup = new MangakaAssistantCollaboration(mangakaId, backupId, Guid.NewGuid(), DateTime.UtcNow);
-        db.MangakaAssistantCollaborations.AddRange(collabPrimary, collabBackup);
-
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabPrimary.Id, series.Id, mangakaId));
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabBackup.Id, series.Id, mangakaId));
-
-        var attemptPrimary = TaskAssignmentAttempt.CreatePending(task.Id, primaryId, collabPrimary.Id, 1, mangakaId);
-        attemptPrimary.Accept(primaryId, DateTime.UtcNow);
-        db.TaskAssignmentAttempts.Add(attemptPrimary);
-        task.CurrentAssignmentAttemptId = attemptPrimary.Id;
-        task.AssignedAssistantId = primaryId;
-        task.TaskStatus = PageTaskStatus.Approved;
-
-        await db.SaveChangesAsync();
-
-        // 1. Author (Mangaka) HAS file access
-        Assert.True(await authService.CanAccessTaskResourcesAsync(mangakaId, task.Id));
-
-        // 2. Active Primary HAS file access
-        Assert.True(await authService.CanAccessTaskResourcesAsync(primaryId, task.Id));
-
-        // 3. Pending Backup DOES NOT HAVE file access before takeover
-        Assert.False(await authService.CanAccessTaskResourcesAsync(backupId, task.Id));
-
-        // 4. Random user DOES NOT HAVE file access
-        Assert.False(await authService.CanAccessTaskResourcesAsync(randomUserId, task.Id));
-
-        // 5. Takeover performed -> Backup accepts takeover
-        task.AcceptTakeover(backupId, DateTime.UtcNow, DateTime.UtcNow.AddDays(3));
-        await db.SaveChangesAsync();
-
-        // 6. Post Takeover: Backup HAS file access
-        Assert.True(await authService.CanAccessTaskResourcesAsync(backupId, task.Id));
-
-        // 7. Post Takeover: Primary access is REVOKED (returns 403 Forbidden)
-        Assert.False(await authService.CanAccessTaskResourcesAsync(primaryId, task.Id));
-    }
-
-    [Fact]
-    public void TaskFileMetadataResponse_DoesNotExposeRawPublicCloudinaryUrl()
-    {
-        // Arrange
-        var taskId = Guid.NewGuid();
-        var safeFileType = "inking";
-
-        // Construct streaming endpoint URL format
-        var streamingEndpointUrl = $"/api/tasks/{taskId}/files/{safeFileType}";
-
-        // Assert: Endpoint URL points to backend streaming route, NOT public Cloudinary URL
-        Assert.DoesNotContain("res.cloudinary.com", streamingEndpointUrl);
-        Assert.StartsWith("/api/tasks/", streamingEndpointUrl);
-        Assert.EndsWith("/files/inking", streamingEndpointUrl);
     }
 }

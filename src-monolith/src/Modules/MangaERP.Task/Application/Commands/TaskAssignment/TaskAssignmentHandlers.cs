@@ -14,15 +14,26 @@ namespace MangaERP.Task.Application.Commands.TaskAssignment;
 
 public record AssignTaskToAssistantCommand(
     Guid TaskId,
-    Guid PrimaryAssistantId,
-    Guid? BackupAssistantId,
+    Guid AssistantId,
     Guid ActorUserId,
     string? Description = null,
     DateTime? Deadline = null,
     TimeSpan? Duration = null,
     DateTime? ResponseDeadline = null) : IRequest<AssignTaskResultDto>
 {
-    // Backwards compatibility constructor
+    // Backwards compatibility constructor (8 parameters)
+    public AssignTaskToAssistantCommand(
+        Guid taskId,
+        Guid primaryAssistantId,
+        Guid? backupAssistantId,
+        Guid actorUserId,
+        string? description = null,
+        DateTime? deadline = null,
+        TimeSpan? duration = null,
+        DateTime? responseDeadline = null)
+        : this(taskId, primaryAssistantId, actorUserId, description, deadline, duration, responseDeadline) { }
+
+    // Backwards compatibility constructor (6 parameters)
     public AssignTaskToAssistantCommand(
         Guid taskId,
         Guid assistantId,
@@ -30,13 +41,16 @@ public record AssignTaskToAssistantCommand(
         string? description,
         DateTime? deadline,
         TimeSpan? duration)
-        : this(taskId, assistantId, null, actorUserId, description, deadline, duration, null) { }
+        : this(taskId, assistantId, actorUserId, description, deadline, duration, null) { }
 }
 
 public record AssignTaskResultDto(
     Guid TaskId,
-    TaskAssignmentAttemptDto PrimaryAttempt,
-    TaskAssignmentAttemptDto? BackupAttempt);
+    TaskAssignmentAttemptDto Attempt,
+    TaskAssignmentAttemptDto? BackupAttempt = null)
+{
+    public TaskAssignmentAttemptDto PrimaryAttempt => Attempt;
+}
 
 public record RespondTaskAssignmentCommand(
     Guid AttemptId,
@@ -66,9 +80,12 @@ public record TaskAssignmentAttemptDto(
     Guid ConcurrencyToken);
 
 public record TaskAssignmentHistoryResponseDto(
-    TaskAssignmentAttemptDto? CurrentPrimary,
-    TaskAssignmentAttemptDto? CurrentBackup,
-    IEnumerable<TaskAssignmentAttemptDto> History);
+    TaskAssignmentAttemptDto? CurrentAssignment,
+    IEnumerable<TaskAssignmentAttemptDto> History)
+{
+    public TaskAssignmentAttemptDto? CurrentPrimary => CurrentAssignment;
+    public TaskAssignmentAttemptDto? CurrentBackup => null;
+}
 
 public record AssistantWorkloadDto(
     Guid AssistantId,
@@ -121,124 +138,66 @@ public sealed class AssignTaskToAssistantHandler : IRequestHandler<AssignTaskToA
         if (series.AuthorId != request.ActorUserId)
             throw new UnauthorizedAccessException("Only the Mangaka who owns the series can assign tasks.");
 
-        if (request.BackupAssistantId.HasValue && request.BackupAssistantId.Value == request.PrimaryAssistantId)
-            throw new ConflictException("Primary and Backup assistant cannot be the same person.");
-
         int maxWorkload = _config.GetValue<int?>("AssistantWorkload:MaximumActiveAssignments") ?? 3;
 
-        // 1. Validate Primary Assistant
-        var primaryCollab = await _collabRepo.GetNonEndedCollaborationByAssistantAsync(request.PrimaryAssistantId, ct)
-            ?? throw new ConflictException("Primary assistant has no collaboration with this Mangaka.");
+        // 1. Validate Assistant
+        var collab = await _collabRepo.GetNonEndedCollaborationByAssistantAsync(request.AssistantId, ct)
+            ?? throw new ConflictException("Assistant has no collaboration with this Mangaka.");
 
-        if (primaryCollab.MangakaId != request.ActorUserId)
-            throw new ConflictException("Primary assistant collaboration is with a different Mangaka.");
+        if (collab.MangakaId != request.ActorUserId)
+            throw new ConflictException("Assistant collaboration is with a different Mangaka.");
 
-        if (primaryCollab.Status != CollaborationStatus.Active)
-            throw new ConflictException($"Cannot assign task to primary assistant in collaboration status '{primaryCollab.Status}'.");
+        if (collab.Status != CollaborationStatus.Active)
+            throw new ConflictException($"Cannot assign task to assistant in collaboration status '{collab.Status}'.");
 
-        var primaryGrant = await _grantRepo.GetActiveGrantAsync(primaryCollab.Id, series.Id, ct);
-        if (primaryGrant == null)
-            throw new ConflictException("Primary assistant does not have active series access for this series.");
+        var grant = await _grantRepo.GetActiveGrantAsync(collab.Id, series.Id, ct);
+        if (grant == null)
+            throw new ConflictException("Assistant does not have active series access for this series.");
 
-        int primaryWorkload = await _attemptRepo.GetActiveWorkloadCountAsync(request.PrimaryAssistantId, ct);
-        if (primaryWorkload >= maxWorkload)
-            throw new ConflictException($"Primary assistant has reached maximum active task capacity ({maxWorkload}).");
+        int workload = await _attemptRepo.GetActiveWorkloadCountAsync(request.AssistantId, ct);
+        if (workload >= maxWorkload)
+            throw new ConflictException($"Assistant has reached maximum active task capacity ({maxWorkload}).");
 
-        // 2. Validate Optional Backup Assistant
-        MangakaAssistantCollaboration? backupCollab = null;
-        if (request.BackupAssistantId.HasValue)
-        {
-            backupCollab = await _collabRepo.GetNonEndedCollaborationByAssistantAsync(request.BackupAssistantId.Value, ct)
-                ?? throw new ConflictException("Backup assistant has no collaboration with this Mangaka.");
-
-            if (backupCollab.MangakaId != request.ActorUserId)
-                throw new ConflictException("Backup assistant collaboration is with a different Mangaka.");
-
-            if (backupCollab.Status != CollaborationStatus.Active)
-                throw new ConflictException($"Cannot assign task to backup assistant in collaboration status '{backupCollab.Status}'.");
-
-            var backupGrant = await _grantRepo.GetActiveGrantAsync(backupCollab.Id, series.Id, ct);
-            if (backupGrant == null)
-                throw new ConflictException("Backup assistant does not have active series access for this series.");
-
-            int backupWorkload = await _attemptRepo.GetActiveWorkloadCountAsync(request.BackupAssistantId.Value, ct);
-            if (backupWorkload >= maxWorkload)
-                throw new ConflictException($"Backup assistant has reached maximum active task capacity ({maxWorkload}).");
-        }
-
-        // 3. Conflict checks on Task
+        // 2. Conflict check on Task: only one pending attempt allowed
         var activeAttempts = await _attemptRepo.GetByTaskIdAsync(task.Id, ct);
-        if (activeAttempts.Any(a => a.AssignmentRole == "Primary" && (a.Status == TaskAssignmentAttemptStatus.PendingAcceptance || a.Status == TaskAssignmentAttemptStatus.Accepted)))
-            throw new ConflictException("Task already has an active Primary assignment attempt.");
-
-        if (request.BackupAssistantId.HasValue && activeAttempts.Any(a => a.AssignmentRole == "Backup" && (a.Status == TaskAssignmentAttemptStatus.PendingAcceptance || a.Status == TaskAssignmentAttemptStatus.Accepted)))
-            throw new ConflictException("Task already has an active Backup assignment attempt.");
+        if (activeAttempts.Any(a => a.Status == TaskAssignmentAttemptStatus.PendingAcceptance || a.Status == TaskAssignmentAttemptStatus.Accepted))
+            throw new ConflictException("Task already has an active assignment attempt.");
 
         int maxAttemptNumber = await _attemptRepo.GetMaxAttemptNumberAsync(task.Id, ct);
 
-        // 4. Create Primary Attempt
-        int primaryAttemptNumber = maxAttemptNumber + 1;
-        var primaryAttempt = TaskAssignmentAttempt.CreatePending(
+        // 3. Create single Direct Attempt
+        int attemptNumber = maxAttemptNumber + 1;
+        var attempt = TaskAssignmentAttempt.CreatePending(
             task.Id,
-            request.PrimaryAssistantId,
-            primaryCollab.Id,
-            primaryAttemptNumber,
+            request.AssistantId,
+            collab.Id,
+            attemptNumber,
             request.ActorUserId,
             expiresAt: request.ResponseDeadline,
-            assignmentRole: "Primary",
-            responseDeadline: request.ResponseDeadline);
+            assignmentRole: "Direct",
+            responseDeadline: request.ResponseDeadline,
+            workDeadline: request.Deadline);
 
-        await _attemptRepo.AddAsync(primaryAttempt, ct);
+        await _attemptRepo.AddAsync(attempt, ct);
 
-        // 5. Create Backup Attempt if provided
-        TaskAssignmentAttempt? backupAttempt = null;
-        if (request.BackupAssistantId.HasValue && backupCollab != null)
-        {
-            int backupAttemptNumber = maxAttemptNumber + 2;
-            backupAttempt = TaskAssignmentAttempt.CreatePending(
-                task.Id,
-                request.BackupAssistantId.Value,
-                backupCollab.Id,
-                backupAttemptNumber,
-                request.ActorUserId,
-                expiresAt: request.ResponseDeadline,
-                assignmentRole: "Backup",
-                responseDeadline: request.ResponseDeadline);
-
-            await _attemptRepo.AddAsync(backupAttempt, ct);
-        }
-
-        // 6. Update Task state
-        task.AssignPrimaryAndBackup(request.PrimaryAssistantId, request.BackupAssistantId, request.Description, request.Deadline);
-        task.CurrentAssignmentAttemptId = primaryAttempt.Id;
+        // 4. Update Task state to PendingAcceptance (do NOT set AssignedAssistantId before Accept)
+        task.AssignPending(request.AssistantId, request.Description, request.Deadline);
+        task.CurrentAssignmentAttemptId = attempt.Id;
 
         await _taskRepo.UpdateAsync(task, ct);
         await _attemptRepo.SaveChangesAsync(ct);
 
-        // 7. Send Notifications
+        // 5. Send Notification
         await _notifications.NotifyCollaborationEventAsync(
-            request.PrimaryAssistantId,
+            request.AssistantId,
             "TaskAssigned",
-            "New Task Assigned (Primary)",
-            $"You have been assigned as Primary assistant for task #{task.PageNumber} in chapter '{chapter.Title}'.",
+            "New Task Assigned",
+            $"You have been assigned task #{task.PageNumber} in chapter '{chapter.Title}'.",
             task.Id,
             ct);
 
-        if (request.BackupAssistantId.HasValue)
-        {
-            await _notifications.NotifyCollaborationEventAsync(
-                request.BackupAssistantId.Value,
-                "BackupTaskAssigned",
-                "New Task Assigned (Backup)",
-                $"You have been assigned as Backup assistant for task #{task.PageNumber} in chapter '{chapter.Title}'.",
-                task.Id,
-                ct);
-        }
-
-        var primaryDto = MapToAttemptDto(primaryAttempt);
-        var backupDto = backupAttempt != null ? MapToAttemptDto(backupAttempt) : null;
-
-        return new AssignTaskResultDto(task.Id, primaryDto, backupDto);
+        var attemptDto = MapToAttemptDto(attempt);
+        return new AssignTaskResultDto(task.Id, attemptDto, null);
     }
 
     private static TaskAssignmentAttemptDto MapToAttemptDto(TaskAssignmentAttempt attempt)
@@ -312,97 +271,7 @@ public sealed class RespondTaskAssignmentHandler : IRequestHandler<RespondTaskAs
 
         DateTime now = DateTime.UtcNow;
 
-        if (attempt.AssignmentRole == "BackupTakeover")
-        {
-            if (task.TaskStatus == MangaERP.Chapter.Domain.Entities.PageTaskStatus.Approved)
-                throw new ConflictException("Task has already been completed and approved.");
-
-            if (request.Accept)
-            {
-                attempt.Accept(request.ActorUserId, now);
-                DateTime newDeadline = attempt.WorkDeadline ?? task.Deadline ?? now.AddDays(3);
-                task.AcceptTakeover(attempt.AssistantId, now, newDeadline);
-                task.CurrentAssignmentAttemptId = attempt.Id;
-
-                await _attemptRepo.UpdateAsync(attempt, ct);
-                await _taskRepo.UpdateAsync(task, ct);
-                await _attemptRepo.SaveChangesAsync(ct);
-
-                await _notifications.NotifyCollaborationEventAsync(
-                    collaboration.MangakaId,
-                    "BackupTakeoverAccepted",
-                    "Backup Takeover Accepted",
-                    $"Backup assistant accepted takeover for task #{task.PageNumber} in chapter '{chapter.Title}'. New deadline: {newDeadline:g}",
-                    task.Id,
-                    ct);
-            }
-            else
-            {
-                if (string.IsNullOrWhiteSpace(request.RejectionReason))
-                    throw new ArgumentException("Rejection reason is required when rejecting a takeover assignment.");
-
-                attempt.Reject(request.ActorUserId, request.RejectionReason, now);
-                task.MarkReassignmentRequired($"Backup takeover rejected: {request.RejectionReason.Trim()}");
-
-                await _attemptRepo.UpdateAsync(attempt, ct);
-                await _taskRepo.UpdateAsync(task, ct);
-                await _attemptRepo.SaveChangesAsync(ct);
-
-                await _notifications.NotifyCollaborationEventAsync(
-                    collaboration.MangakaId,
-                    "BackupTakeoverFailed",
-                    "Backup Takeover Rejected",
-                    $"Backup assistant rejected takeover for task #{task.PageNumber} in chapter '{chapter.Title}'. Reassignment required.",
-                    task.Id,
-                    ct);
-            }
-        }
-        else if (attempt.AssignmentRole == "Backup")
-        {
-            if (request.Accept)
-            {
-                if (collaboration.Status != CollaborationStatus.Active)
-                    throw new ConflictException($"Cannot accept assignment when collaboration is in status '{collaboration.Status}'.");
-
-                var grant = await _grantRepo.GetActiveGrantAsync(collaboration.Id, chapter.SeriesId, ct);
-                if (grant == null)
-                    throw new ConflictException("Cannot accept assignment because series access grant is no longer active.");
-
-                attempt.Accept(request.ActorUserId, now);
-                // Backup remains confirmed standby, Primary remains assigned executor
-                await _attemptRepo.UpdateAsync(attempt, ct);
-                await _attemptRepo.SaveChangesAsync(ct);
-
-                await _notifications.NotifyCollaborationEventAsync(
-                    collaboration.MangakaId,
-                    "BackupAssignmentAccepted",
-                    "Backup Assignment Accepted",
-                    $"Backup assistant accepted standby assignment for task #{task.PageNumber} in chapter '{chapter.Title}'.",
-                    task.Id,
-                    ct);
-            }
-            else
-            {
-                if (string.IsNullOrWhiteSpace(request.RejectionReason))
-                    throw new ArgumentException("Rejection reason is required when rejecting an assignment.");
-
-                attempt.Reject(request.ActorUserId, request.RejectionReason, now);
-                task.BackupAssistantId = null;
-
-                await _attemptRepo.UpdateAsync(attempt, ct);
-                await _taskRepo.UpdateAsync(task, ct);
-                await _attemptRepo.SaveChangesAsync(ct);
-
-                await _notifications.NotifyCollaborationEventAsync(
-                    collaboration.MangakaId,
-                    "BackupAssignmentRejected",
-                    "Backup Assignment Rejected",
-                    $"Backup assistant rejected assignment for task #{task.PageNumber} in chapter '{chapter.Title}'. Reason: {request.RejectionReason.Trim()}",
-                    task.Id,
-                    ct);
-            }
-        }
-        else if (request.Accept)
+        if (request.Accept)
         {
             if (collaboration.Status != CollaborationStatus.Active)
                 throw new ConflictException($"Cannot accept assignment when collaboration is in status '{collaboration.Status}'.");
@@ -411,8 +280,34 @@ public sealed class RespondTaskAssignmentHandler : IRequestHandler<RespondTaskAs
             if (grant == null)
                 throw new ConflictException("Cannot accept assignment because series access grant is no longer active.");
 
+            // Check if there is a previous accepted assignment on this task (Reassign scenario)
+            var allAttempts = await _attemptRepo.GetByTaskIdAsync(task.Id, ct);
+            var previousAccepted = allAttempts.FirstOrDefault(a => a.Id != attempt.Id && a.Status == TaskAssignmentAttemptStatus.Accepted);
+            if (previousAccepted != null)
+            {
+                previousAccepted.Supersede(now, $"Superseded by replacement assignment (Attempt #{attempt.AttemptNumber}).");
+                await _attemptRepo.UpdateAsync(previousAccepted, ct);
+
+                await _notifications.NotifyCollaborationEventAsync(
+                    previousAccepted.AssistantId,
+                    "AssignmentSuperseded",
+                    "Assignment Superseded",
+                    $"Your assignment for task #{task.PageNumber} in chapter '{chapter.Title}' has been superseded by a new assistant.",
+                    task.Id,
+                    ct);
+            }
+
             attempt.Accept(request.ActorUserId, now);
-            task.AcceptAssignment(now);
+
+            if (task.WorkStartedAt != null || previousAccepted != null)
+            {
+                task.AcceptReplacement(attempt.AssistantId, now, attempt.WorkDeadline);
+            }
+            else
+            {
+                task.AcceptAssignment(now);
+                task.AssignedAssistantId = attempt.AssistantId;
+            }
             task.CurrentAssignmentAttemptId = attempt.Id;
 
             await _attemptRepo.UpdateAsync(attempt, ct);
@@ -423,7 +318,7 @@ public sealed class RespondTaskAssignmentHandler : IRequestHandler<RespondTaskAs
                 collaboration.MangakaId,
                 "TaskAssignmentAccepted",
                 "Task Assignment Accepted",
-                $"Primary assistant accepted task #{task.PageNumber} in chapter '{chapter.Title}'.",
+                $"Assistant accepted task #{task.PageNumber} in chapter '{chapter.Title}'.",
                 task.Id,
                 ct);
         }
@@ -443,7 +338,7 @@ public sealed class RespondTaskAssignmentHandler : IRequestHandler<RespondTaskAs
                 collaboration.MangakaId,
                 "TaskAssignmentRejected",
                 "Task Assignment Rejected",
-                $"Primary assistant rejected task #{task.PageNumber} in chapter '{chapter.Title}'. Reason: {request.RejectionReason.Trim()}",
+                $"Assistant rejected task #{task.PageNumber} in chapter '{chapter.Title}'. Reason: {request.RejectionReason.Trim()}",
                 task.Id,
                 ct);
         }
@@ -497,10 +392,10 @@ public sealed class GetTaskAssignmentHistoryHandler : IRequestHandler<GetTaskAss
             a.AssignedByUserId,
             a.ConcurrencyToken)).ToList();
 
-        var currentPrimary = dtoList.FirstOrDefault(a => a.AssignmentRole == "Primary" && (a.Status == "PendingAcceptance" || a.Status == "Accepted"));
-        var currentBackup = dtoList.FirstOrDefault(a => (a.AssignmentRole == "Backup" || a.AssignmentRole == "BackupTakeover") && (a.Status == "PendingAcceptance" || a.Status == "Accepted"));
+        var currentAssignment = dtoList.FirstOrDefault(a => a.Status == "Accepted")
+                                ?? dtoList.FirstOrDefault(a => a.Status == "PendingAcceptance");
 
-        return new TaskAssignmentHistoryResponseDto(currentPrimary, currentBackup, dtoList);
+        return new TaskAssignmentHistoryResponseDto(currentAssignment, dtoList);
     }
 }
 

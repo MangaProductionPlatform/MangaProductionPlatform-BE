@@ -9,7 +9,6 @@ using MangaERP.Task.Application.Commands.ReassignTask;
 using MangaERP.Task.Application.Queries.GetAssistantCandidates;
 using MangaERP.Task.Application.Queries.TaskCheckpoints;
 using System.Security.Claims;
-using System.Threading.Tasks;
 
 namespace MangaERP.Task.Presentation.Controllers;
 
@@ -34,7 +33,6 @@ public class TaskAssignmentsController : ControllerBase
     /// <summary>
     /// [Mangaka] Lấy danh sách Assistant candidate cho một task (kèm mã lý do không khả dụng và workload).
     /// Route Canonical: GET /api/v1/tasks/{taskId}/assistant-candidates
-    /// Tantou, Assistant và các role khác không có quyền gọi (Trả về 403 Forbidden).
     /// </summary>
     [HttpGet("api/v1/tasks/{taskId:guid}/assistant-candidates")]
     [HttpGet("api/v1/page-tasks/{taskId:guid}/assistant-candidates")]
@@ -50,9 +48,8 @@ public class TaskAssignmentsController : ControllerBase
     }
 
     /// <summary>
-    /// [Mangaka] Gửi lời mời giao task cho Primary Assistant và tùy chọn Backup Assistant.
+    /// [Mangaka] Gửi lời mời giao task cho Assistant (Single Assistant Model).
     /// Route Canonical: POST /api/v1/tasks/{taskId}/assignments
-    /// Tantou, Assistant và các role khác không có quyền gọi (Trả về 403 Forbidden).
     /// </summary>
     [HttpPost("api/v1/tasks/{taskId:guid}/assignments")]
     [HttpPost("api/tasks/{taskId:guid}/assign")]
@@ -62,17 +59,16 @@ public class TaskAssignmentsController : ControllerBase
         [FromBody] AssignTaskRequest request,
         CancellationToken ct)
     {
-        Guid primaryId = request.PrimaryAssistantId != Guid.Empty
-            ? request.PrimaryAssistantId
-            : (request.AssistantId ?? Guid.Empty);
+        Guid targetAssistantId = request.AssistantId != null && request.AssistantId != Guid.Empty
+            ? request.AssistantId.Value
+            : request.PrimaryAssistantId;
 
-        if (primaryId == Guid.Empty)
-            return BadRequest(new { message = "Primary assistant ID is required." });
+        if (targetAssistantId == Guid.Empty)
+            return BadRequest(new { message = "Assistant ID is required." });
 
         var command = new AssignTaskToAssistantCommand(
             taskId,
-            primaryId,
-            request.BackupAssistantId,
+            targetAssistantId,
             GetCurrentUserId(),
             request.Description,
             request.Deadline,
@@ -85,6 +81,7 @@ public class TaskAssignmentsController : ControllerBase
 
     /// <summary>
     /// [Assistant] Chấp nhận hoặc từ chối lời mời giao task.
+    /// Route Canonical: POST /api/v1/tasks/assignments/{attemptId}/respond
     /// </summary>
     [HttpPost("api/v1/tasks/assignments/{attemptId:guid}/respond")]
     [HttpPost("api/tasks/assignments/{attemptId:guid}/respond")]
@@ -123,7 +120,7 @@ public class TaskAssignmentsController : ControllerBase
     }
 
     /// <summary>
-    /// [Mangaka] Phân công lại (Reassign) task cho Primary/Backup mới.
+    /// [Mangaka] Phân công lại (Reassign) task cho Assistant mới.
     /// Route Canonical: POST /api/v1/tasks/{taskId}/reassign
     /// </summary>
     [HttpPost("api/v1/tasks/{taskId:guid}/reassign")]
@@ -134,22 +131,22 @@ public class TaskAssignmentsController : ControllerBase
         [FromBody] ReassignTaskRequest request,
         CancellationToken ct)
     {
-        Guid primaryId = request.PrimaryAssistantId != Guid.Empty
-            ? request.PrimaryAssistantId
-            : (request.AssistantId ?? Guid.Empty);
+        Guid targetAssistantId = request.NewAssistantId != null && request.NewAssistantId != Guid.Empty
+            ? request.NewAssistantId.Value
+            : (request.AssistantId != null && request.AssistantId != Guid.Empty ? request.AssistantId.Value : request.PrimaryAssistantId);
 
-        if (primaryId == Guid.Empty)
-            return BadRequest(new { message = "Primary assistant ID is required for reassignment." });
+        if (targetAssistantId == Guid.Empty)
+            return BadRequest(new { message = "New assistant ID is required for reassignment." });
 
         if (string.IsNullOrWhiteSpace(request.Reason))
             return BadRequest(new { message = "Reassignment reason is required." });
 
         var command = new ReassignTaskCommand(
             taskId,
-            primaryId,
-            request.BackupAssistantId,
+            targetAssistantId,
             GetCurrentUserId(),
             request.Reason,
+            request.Deadline,
             request.ResponseDeadline,
             request.Description);
 
@@ -158,31 +155,20 @@ public class TaskAssignmentsController : ControllerBase
     }
 
     /// <summary>
-    /// [Mangaka] Kích hoạt Takeover cho Backup Assistant.
-    /// Route Canonical: POST /api/v1/tasks/{taskId}/takeover
-    /// Tantou, Assistant và các role khác không có quyền gọi (Trả về 403 Forbidden).
+    /// [Deprecated] Takeover workflow has been retired.
     /// </summary>
     [HttpPost("api/v1/tasks/{taskId:guid}/takeover")]
     [HttpPost("api/tasks/{taskId:guid}/request-takeover")]
     [Authorize(Roles = "Mangaka")]
-    public async Task<IActionResult> RequestTakeover(
-        [FromRoute] Guid taskId,
-        [FromBody] RequestTakeoverRequest request,
-        CancellationToken ct)
+    [Obsolete("Takeover workflow has been retired. Use POST /api/v1/tasks/{taskId}/reassign instead.")]
+    public IActionResult RequestTakeover([FromRoute] Guid taskId)
     {
-        var command = new MangaERP.Task.Application.Commands.RequestTakeover.RequestTakeoverCommand(
-            taskId,
-            GetCurrentUserId(),
-            request.Reason ?? "Assistant incident or timeout.",
-            request.WorkDurationHours.HasValue ? TimeSpan.FromHours(request.WorkDurationHours.Value) : null);
-
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        return StatusCode(410, new { message = "Takeover workflow has been retired. Use POST /api/v1/tasks/{taskId}/reassign instead." });
     }
 
     /// <summary>
-    /// Xem lịch sử phân công công việc của task (bao gồm Current Primary, Current Backup và attempts).
-    /// Read-only cho Mangaka, Assistant, và Tantou Editor quản lý series.
+    /// Xem lịch sử phân công công việc của task (bao gồm currentAssignment và history).
+    /// Route Canonical: GET /api/v1/tasks/{taskId}/assignment-history
     /// </summary>
     [HttpGet("api/v1/tasks/{taskId:guid}/assignment-history")]
     [HttpGet("api/tasks/{taskId:guid}/assignment-history")]
@@ -262,9 +248,9 @@ public class TaskAssignmentsController : ControllerBase
 }
 
 public record AssignTaskRequest(
+    Guid? AssistantId,
     Guid PrimaryAssistantId,
     Guid? BackupAssistantId,
-    Guid? AssistantId,
     string? Description,
     DateTime? Deadline,
     double? DurationHours,
@@ -275,6 +261,7 @@ public record SubmitProgressRequest(int ProgressPercent, string? Note);
 public record RequestTakeoverRequest(string? Reason, double? WorkDurationHours);
 public record CancelAssignmentRequest(string? Reason);
 public record ReassignTaskRequest(
+    Guid? NewAssistantId,
     Guid PrimaryAssistantId,
     Guid? BackupAssistantId,
     Guid? AssistantId,

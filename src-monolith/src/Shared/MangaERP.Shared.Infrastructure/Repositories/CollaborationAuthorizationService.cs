@@ -120,6 +120,9 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
         if (task == null || (task.TaskStatus != PageTaskStatus.Incomplete && task.TaskStatus != PageTaskStatus.RevisionAlert))
             return false;
 
+        if (task.AssignedAssistantId != assistantId)
+            return false;
+
         var collab = await _db.MangakaAssistantCollaborations.AsNoTracking()
             .FirstOrDefaultAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct);
 

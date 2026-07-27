@@ -84,7 +84,7 @@ public sealed class TaskAssignmentRepository : ITaskAssignmentAttemptRepository
         {
             nonCompletedAcceptedTasksCount = await _db.PageTasks.AsNoTracking()
                 .CountAsync(t => acceptedTaskIds.Contains(t.Id) &&
-                                 (t.AssignedAssistantId == assistantId || t.BackupAssistantId == assistantId) &&
+                                 t.AssignedAssistantId == assistantId &&
                                  t.TaskStatus != PageTaskStatus.Approved &&
                                  t.TaskStatus != PageTaskStatus.Reviewing &&
                                  t.TaskStatus != PageTaskStatus.Cancelled, ct);
@@ -101,7 +101,7 @@ public sealed class TaskAssignmentRepository : ITaskAssignmentAttemptRepository
         var directPageTasksCount = await _db.PageTasks.AsNoTracking()
             .Where(t => excludeTaskId == null || t.Id != excludeTaskId.Value)
             .CountAsync(t => !accountedTaskIds.Contains(t.Id) &&
-                             (t.AssignedAssistantId == assistantId || t.BackupAssistantId == assistantId) &&
+                             t.AssignedAssistantId == assistantId &&
                              t.TaskStatus != PageTaskStatus.Approved &&
                              t.TaskStatus != PageTaskStatus.Reviewing &&
                              t.TaskStatus != PageTaskStatus.Cancelled, ct);

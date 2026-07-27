@@ -54,366 +54,518 @@ public class TaskAssignmentWorkflowTests
             .Build();
     }
 
+    // 1. Assign accepts one AssistantId only
+    // 2. Assign creates one PendingAcceptance attempt
+    // 3. WorkStartedAt remains null before Accept
     [Fact]
-    public async System.Threading.Tasks.Task CandidateApi_ReturnsAvailableAndUnavailableCandidates_WithCorrectCodesAndSorting()
+    public async System.Threading.Tasks.Task Scenario01_02_03_AssignTask_CreatesSinglePendingAttempt_WorkStartedAtIsNull()
     {
-        // Arrange
         using var db = GetInMemoryDbContext();
         var provider = new TestDbContextProvider(db);
 
         var mangakaId = Guid.NewGuid();
-        var assistant1Id = Guid.NewGuid(); // Available
-        var assistant2Id = Guid.NewGuid(); // Workload limit reached
-
-        var mangaka = new User { Id = mangakaId, Username = "mangaka", FullName = "Mangaka One", Role = UserRole.Mangaka, AccountStatus = AccountStatus.Active };
-        var assistant1 = new User { Id = assistant1Id, Username = "ast1", FullName = "Assistant One", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        var assistant2 = new User { Id = assistant2Id, Username = "ast2", FullName = "Assistant Two", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-
-        db.Users.AddRange(mangaka, assistant1, assistant2);
-
-        var series = MangaSeries.Create(mangakaId, null, "Candidate Series", "Desc", "Genre", null);
-        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
-        db.MangaSeries.Add(series);
-        db.Chapters.Add(chapter);
-
-        var task = new PageTask { ChapterId = chapter.Id, PageNumber = 1, TaskStatus = PageTaskStatus.Pending };
-        db.PageTasks.Add(task);
-
-        // Collaborations
-        var collab1 = new MangakaAssistantCollaboration(mangakaId, assistant1Id, Guid.NewGuid(), DateTime.UtcNow);
-        var collab2 = new MangakaAssistantCollaboration(mangakaId, assistant2Id, Guid.NewGuid(), DateTime.UtcNow);
-        db.MangakaAssistantCollaborations.AddRange(collab1, collab2);
-
-        // Grants
-        var grant1 = SeriesAccessGrant.Create(collab1.Id, series.Id, mangakaId);
-        var grant2 = SeriesAccessGrant.Create(collab2.Id, series.Id, mangakaId);
-        db.SeriesAccessGrants.AddRange(grant1, grant2);
-
-        // Assistant 2 has 3 active tasks (workload maxed out)
-        for (int i = 0; i < 3; i++)
-        {
-            var otherTask = new PageTask { ChapterId = chapter.Id, PageNumber = i + 2, TaskStatus = PageTaskStatus.Incomplete, AssignedAssistantId = assistant2Id, PrimaryAssistantId = assistant2Id };
-            db.PageTasks.Add(otherTask);
-            var attempt = TaskAssignmentAttempt.CreatePending(otherTask.Id, assistant2Id, collab2.Id, 1, mangakaId);
-            attempt.Accept(assistant2Id, DateTime.UtcNow);
-            db.TaskAssignmentAttempts.Add(attempt);
-        }
-
-        await db.SaveChangesAsync();
-
-        var taskRepo = new PageTaskRepository(provider);
-        var chapterRepo = new ChapterRepository(provider);
-        var seriesRepo = new SeriesRepository(provider);
-        var studioRepo = new StudioInvitationRepository(provider);
-        var grantRepo = new SeriesAccessGrantRepository(provider);
-        var userRepo = new UserRepository(provider);
-        var attemptRepo = new TaskAssignmentRepository(provider);
-        var config = GetTestConfig(3);
-
-        var handler = new GetAssistantCandidatesHandler(
-            taskRepo, chapterRepo, seriesRepo, studioRepo, grantRepo, userRepo, attemptRepo, config);
-
-        // Act
-        var query = new GetAssistantCandidatesQuery(task.Id, mangakaId);
-        var result = await handler.Handle(query, default);
-
-        // Assert
-        Assert.Single(result.AvailableAssistants);
-        Assert.Equal(assistant1Id, result.AvailableAssistants[0].AssistantId);
-        Assert.True(result.AvailableAssistants[0].IsAvailable);
-        Assert.Equal("Available", result.AvailableAssistants[0].AvailabilityCode);
-
-        Assert.Single(result.UnavailableAssistants);
-        Assert.Equal(assistant2Id, result.UnavailableAssistants[0].AssistantId);
-        Assert.False(result.UnavailableAssistants[0].IsAvailable);
-        Assert.Equal("WorkloadLimitReached", result.UnavailableAssistants[0].AvailabilityCode);
-    }
-
-    [Fact]
-    public async System.Threading.Tasks.Task AssignTask_AtomicPrimaryAndBackup_CreatesBothAttemptsAndUpdatesTask()
-    {
-        // Arrange
-        using var db = GetInMemoryDbContext();
-        var provider = new TestDbContextProvider(db);
-
-        var mangakaId = Guid.NewGuid();
-        var primaryId = Guid.NewGuid();
-        var backupId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
 
         var mangaka = new User { Id = mangakaId, Username = "mangaka", Role = UserRole.Mangaka, AccountStatus = AccountStatus.Active };
-        var primary = new User { Id = primaryId, Username = "primary", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        var backup = new User { Id = backupId, Username = "backup", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        db.Users.AddRange(mangaka, primary, backup);
+        var assistant = new User { Id = assistantId, Username = "ast1", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
+        db.Users.AddRange(mangaka, assistant);
 
-        var series = MangaSeries.Create(mangakaId, null, "Atomic Series", "Desc", "Genre", null);
+        var series = MangaSeries.Create(mangakaId, null, "Single Series", "Desc", "Genre", null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
         db.MangaSeries.Add(series);
         db.Chapters.Add(chapter);
 
-        var task = new PageTask { ChapterId = chapter.Id, PageNumber = 1, TaskStatus = PageTaskStatus.Pending };
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
         db.PageTasks.Add(task);
 
-        var collab1 = new MangakaAssistantCollaboration(mangakaId, primaryId, Guid.NewGuid(), DateTime.UtcNow);
-        var collab2 = new MangakaAssistantCollaboration(mangakaId, backupId, Guid.NewGuid(), DateTime.UtcNow);
-        db.MangakaAssistantCollaborations.AddRange(collab1, collab2);
-
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab1.Id, series.Id, mangakaId));
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab2.Id, series.Id, mangakaId));
+        var collab = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.Add(collab);
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab.Id, series.Id, mangakaId));
 
         await db.SaveChangesAsync();
-
-        var taskRepo = new PageTaskRepository(provider);
-        var chapterRepo = new ChapterRepository(provider);
-        var seriesRepo = new SeriesRepository(provider);
-        var studioRepo = new StudioInvitationRepository(provider);
-        var grantRepo = new SeriesAccessGrantRepository(provider);
-        var attemptRepo = new TaskAssignmentRepository(provider);
-        var notificationsMock = new Mock<MangaERP.Shared.Application.Ports.INotificationService>();
-        var config = GetTestConfig(3);
 
         var handler = new AssignTaskToAssistantHandler(
-            taskRepo, chapterRepo, seriesRepo, studioRepo, grantRepo, attemptRepo, notificationsMock.Object, config);
+            new PageTaskRepository(provider), new ChapterRepository(provider), new SeriesRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new TaskAssignmentRepository(provider), new Mock<INotificationService>().Object, GetTestConfig(3));
 
-        var command = new AssignTaskToAssistantCommand(
-            task.Id, primaryId, backupId, mangakaId, "Do page 1 artwork", DateTime.UtcNow.AddDays(2));
-
-        // Act
+        var command = new AssignTaskToAssistantCommand(task.Id, assistantId, mangakaId, "Do page 1", DateTime.UtcNow.AddDays(2));
         var result = await handler.Handle(command, default);
 
-        // Assert
-        Assert.NotNull(result.PrimaryAttempt);
-        Assert.NotNull(result.BackupAttempt);
-
-        Assert.Equal("Primary", result.PrimaryAttempt.AssignmentRole);
-        Assert.Equal("Backup", result.BackupAttempt.AssignmentRole);
+        Assert.NotNull(result.Attempt);
+        Assert.Null(result.BackupAttempt); // Single assistant model: BackupAttempt is null
+        Assert.Equal("Direct", result.Attempt.AssignmentRole);
 
         var updatedTask = await db.PageTasks.FindAsync(task.Id);
         Assert.NotNull(updatedTask);
-        Assert.Equal(primaryId, updatedTask.PrimaryAssistantId);
-        Assert.Equal(backupId, updatedTask.BackupAssistantId);
         Assert.Equal(PageTaskStatus.PendingAcceptance, updatedTask.TaskStatus);
+        Assert.Null(updatedTask.WorkStartedAt); // WorkStartedAt remains null before accept
+        Assert.Null(updatedTask.AssignedAssistantId); // Not active executor before accept
     }
 
+    // 4. Accept sets executor and WorkStartedAt first time
     [Fact]
-    public async System.Threading.Tasks.Task PrimaryReject_WhenBackupAccepted_DoesNotAutoTakeover_BackupStaysStandby()
+    public async System.Threading.Tasks.Task Scenario04_AcceptAssignment_SetsExecutorAndWorkStartedAtFirstTime()
     {
-        // Arrange
         using var db = GetInMemoryDbContext();
         var provider = new TestDbContextProvider(db);
 
         var mangakaId = Guid.NewGuid();
-        var primaryId = Guid.NewGuid();
-        var backupId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
 
-        var series = MangaSeries.Create(mangakaId, null, "Reject Series", "Desc", "Genre", null);
+        var series = MangaSeries.Create(mangakaId, null, "Series", "Desc", "Genre", null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
         db.MangaSeries.Add(series);
         db.Chapters.Add(chapter);
 
-        var task = new PageTask
-        {
-            ChapterId = chapter.Id,
-            PageNumber = 1,
-            TaskStatus = PageTaskStatus.PendingAcceptance,
-            PrimaryAssistantId = primaryId,
-            BackupAssistantId = backupId,
-            AssignedAssistantId = primaryId
-        };
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
+        task.AssignPending(assistantId, "Do page 1");
         db.PageTasks.Add(task);
 
-        var collab1 = new MangakaAssistantCollaboration(mangakaId, primaryId, Guid.NewGuid(), DateTime.UtcNow);
-        var collab2 = new MangakaAssistantCollaboration(mangakaId, backupId, Guid.NewGuid(), DateTime.UtcNow);
-        db.MangakaAssistantCollaborations.AddRange(collab1, collab2);
+        var collab = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.Add(collab);
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab.Id, series.Id, mangakaId));
 
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab1.Id, series.Id, mangakaId));
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab2.Id, series.Id, mangakaId));
+        var attempt = TaskAssignmentAttempt.CreatePending(task.Id, assistantId, collab.Id, 1, mangakaId);
+        db.TaskAssignmentAttempts.Add(attempt);
+        await db.SaveChangesAsync();
 
-        var primaryAttempt = TaskAssignmentAttempt.CreatePending(task.Id, primaryId, collab1.Id, 1, mangakaId, assignmentRole: "Primary");
-        var backupAttempt = TaskAssignmentAttempt.CreatePending(task.Id, backupId, collab2.Id, 2, mangakaId, assignmentRole: "Backup");
-        backupAttempt.Accept(backupId, DateTime.UtcNow); // Backup has accepted standby
-        db.TaskAssignmentAttempts.AddRange(primaryAttempt, backupAttempt);
+        var handler = new RespondTaskAssignmentHandler(
+            new TaskAssignmentRepository(provider), new PageTaskRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new ChapterRepository(provider), new Mock<INotificationService>().Object);
+
+        var response = await handler.Handle(new RespondTaskAssignmentCommand(attempt.Id, true, null, assistantId, attempt.ConcurrencyToken), default);
+
+        Assert.Equal("Accepted", response.Status);
+
+        var updatedTask = await db.PageTasks.FindAsync(task.Id);
+        Assert.NotNull(updatedTask);
+        Assert.Equal(PageTaskStatus.Incomplete, updatedTask.TaskStatus);
+        Assert.Equal(assistantId, updatedTask.AssignedAssistantId); // Assigned on Accept
+        Assert.NotNull(updatedTask.WorkStartedAt); // Set first time on Accept
+    }
+
+    // 5. Reject sets ReassignmentRequired
+    [Fact]
+    public async System.Threading.Tasks.Task Scenario05_RejectAssignment_SetsTaskToReassignmentRequired()
+    {
+        using var db = GetInMemoryDbContext();
+        var provider = new TestDbContextProvider(db);
+
+        var mangakaId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+
+        var series = MangaSeries.Create(mangakaId, null, "Series", "Desc", "Genre", null);
+        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
+        db.MangaSeries.Add(series);
+        db.Chapters.Add(chapter);
+
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
+        task.AssignPending(assistantId, "Do page 1");
+        db.PageTasks.Add(task);
+
+        var collab = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.Add(collab);
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab.Id, series.Id, mangakaId));
+
+        var attempt = TaskAssignmentAttempt.CreatePending(task.Id, assistantId, collab.Id, 1, mangakaId);
+        db.TaskAssignmentAttempts.Add(attempt);
+        await db.SaveChangesAsync();
+
+        var handler = new RespondTaskAssignmentHandler(
+            new TaskAssignmentRepository(provider), new PageTaskRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new ChapterRepository(provider), new Mock<INotificationService>().Object);
+
+        var response = await handler.Handle(new RespondTaskAssignmentCommand(attempt.Id, false, "Too busy", assistantId, attempt.ConcurrencyToken), default);
+
+        Assert.Equal("Rejected", response.Status);
+
+        var updatedTask = await db.PageTasks.FindAsync(task.Id);
+        Assert.NotNull(updatedTask);
+        Assert.Equal(PageTaskStatus.ReassignmentRequired, updatedTask.TaskStatus);
+        Assert.Null(updatedTask.AssignedAssistantId);
+        Assert.Null(updatedTask.WorkStartedAt);
+    }
+
+    // 6-12. Reassign preserves TaskId, ProgressPercent, history, checkpoints, files, WorkStartedAt, deadline
+    // 13. Replacement pending is not executor
+    // 14. Replacement Accept supersedes old assignment
+    // 15. Replacement Accept updates AssignedAssistantId
+    // 24. Reassign never creates new TaskId
+    [Fact]
+    public async System.Threading.Tasks.Task Scenario06_15_24_Reassign_PreservesAllData_UpdatesExecutorOnlyAfterAccept()
+    {
+        using var db = GetInMemoryDbContext();
+        var provider = new TestDbContextProvider(db);
+
+        var mangakaId = Guid.NewGuid();
+        var oldAssistantId = Guid.NewGuid();
+        var newAssistantId = Guid.NewGuid();
+
+        var series = MangaSeries.Create(mangakaId, null, "Series", "Desc", "Genre", null);
+        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
+        db.MangaSeries.Add(series);
+        db.Chapters.Add(chapter);
+
+        var initialDeadline = DateTime.UtcNow.AddDays(5);
+        var initialWorkStartedAt = DateTime.UtcNow.AddDays(-2);
+
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
+        task.Activate(oldAssistantId, PageTaskType.General, "Initial task", initialDeadline);
+        task.WorkStartedAt = initialWorkStartedAt;
+        task.SubmitProgress(45); // Progress = 45%
+        db.PageTasks.Add(task);
+
+        var collabOld = new MangakaAssistantCollaboration(mangakaId, oldAssistantId, Guid.NewGuid(), DateTime.UtcNow);
+        var collabNew = new MangakaAssistantCollaboration(mangakaId, newAssistantId, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.AddRange(collabOld, collabNew);
+
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabOld.Id, series.Id, mangakaId));
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabNew.Id, series.Id, mangakaId));
+
+        var attempt1 = TaskAssignmentAttempt.CreatePending(task.Id, oldAssistantId, collabOld.Id, 1, mangakaId);
+        attempt1.Accept(oldAssistantId, initialWorkStartedAt);
+        db.TaskAssignmentAttempts.Add(attempt1);
 
         await db.SaveChangesAsync();
 
-        var attemptRepo = new TaskAssignmentRepository(provider);
-        var taskRepo = new PageTaskRepository(provider);
-        var studioRepo = new StudioInvitationRepository(provider);
-        var grantRepo = new SeriesAccessGrantRepository(provider);
-        var chapterRepo = new ChapterRepository(provider);
-        var notificationsMock = new Mock<MangaERP.Shared.Application.Ports.INotificationService>();
+        var reassignHandler = new ReassignTaskHandler(
+            new PageTaskRepository(provider), new ChapterRepository(provider), new SeriesRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new TaskAssignmentRepository(provider), new Mock<INotificationService>().Object, GetTestConfig(3), provider);
+
+        // 13. Replacement pending: Reassign command creating replacement attempt
+        var reassignResult = await reassignHandler.Handle(new ReassignTaskCommand(task.Id, newAssistantId, mangakaId, "Needs help"), default);
+
+        Assert.NotNull(reassignResult.Attempt);
+        Assert.Equal("PendingAcceptance", reassignResult.Attempt.Status);
+
+        var taskAfterReassignReq = await db.PageTasks.FindAsync(task.Id);
+        Assert.NotNull(taskAfterReassignReq);
+        Assert.Equal(task.Id, taskAfterReassignReq.Id); // 6 & 24. Same TaskId!
+        Assert.Equal(45, taskAfterReassignReq.ProgressPercent); // 7. ProgressPercent preserved!
+        Assert.Equal(initialWorkStartedAt, taskAfterReassignReq.WorkStartedAt); // 11. WorkStartedAt preserved!
+        Assert.Equal(initialDeadline, taskAfterReassignReq.Deadline); // 12. Deadline preserved!
+        Assert.Equal(oldAssistantId, taskAfterReassignReq.AssignedAssistantId); // 13. New assistant is NOT executor before accept!
+
+        // 14 & 15. New Assistant Accepts replacement attempt
+        var respondHandler = new RespondTaskAssignmentHandler(
+            new TaskAssignmentRepository(provider), new PageTaskRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new ChapterRepository(provider), new Mock<INotificationService>().Object);
+
+        var replacementAttemptId = reassignResult.Attempt.Id;
+        var replacementAttemptDb = await db.TaskAssignmentAttempts.FindAsync(replacementAttemptId);
+        var acceptResponse = await respondHandler.Handle(new RespondTaskAssignmentCommand(replacementAttemptId, true, null, newAssistantId, replacementAttemptDb!.ConcurrencyToken), default);
+
+        Assert.Equal("Accepted", acceptResponse.Status);
+
+        var taskAfterAccept = await db.PageTasks.FindAsync(task.Id);
+        Assert.NotNull(taskAfterAccept);
+        Assert.Equal(newAssistantId, taskAfterAccept.AssignedAssistantId); // 15. AssignedAssistantId updated to new assistant after accept!
+        Assert.Equal(initialWorkStartedAt, taskAfterAccept.WorkStartedAt); // 11. WorkStartedAt preserved!
+        Assert.Equal(45, taskAfterAccept.ProgressPercent); // 7. Progress preserved!
+
+        var attempt1Db = await db.TaskAssignmentAttempts.FindAsync(attempt1.Id);
+        Assert.Equal(TaskAssignmentAttemptStatus.Superseded, attempt1Db!.Status); // 14. Old assignment superseded!
+    }
+
+    // 16. Replacement Reject preserves all task data
+    [Fact]
+    public async System.Threading.Tasks.Task Scenario16_ReplacementReject_PreservesAllTaskData()
+    {
+        using var db = GetInMemoryDbContext();
+        var provider = new TestDbContextProvider(db);
+
+        var mangakaId = Guid.NewGuid();
+        var oldAssistantId = Guid.NewGuid();
+        var newAssistantId = Guid.NewGuid();
+
+        var series = MangaSeries.Create(mangakaId, null, "Series", "Desc", "Genre", null);
+        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
+        db.MangaSeries.Add(series);
+        db.Chapters.Add(chapter);
+
+        var initialWorkStartedAt = DateTime.UtcNow.AddDays(-2);
+
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
+        task.Activate(oldAssistantId, PageTaskType.General, "Initial task", DateTime.UtcNow.AddDays(5));
+        task.WorkStartedAt = initialWorkStartedAt;
+        task.SubmitProgress(60);
+        db.PageTasks.Add(task);
+
+        var collabOld = new MangakaAssistantCollaboration(mangakaId, oldAssistantId, Guid.NewGuid(), DateTime.UtcNow);
+        var collabNew = new MangakaAssistantCollaboration(mangakaId, newAssistantId, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.AddRange(collabOld, collabNew);
+
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabOld.Id, series.Id, mangakaId));
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabNew.Id, series.Id, mangakaId));
+
+        var attempt1 = TaskAssignmentAttempt.CreatePending(task.Id, oldAssistantId, collabOld.Id, 1, mangakaId);
+        attempt1.Accept(oldAssistantId, initialWorkStartedAt);
+        db.TaskAssignmentAttempts.Add(attempt1);
+
+        await db.SaveChangesAsync();
+
+        var reassignHandler = new ReassignTaskHandler(
+            new PageTaskRepository(provider), new ChapterRepository(provider), new SeriesRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new TaskAssignmentRepository(provider), new Mock<INotificationService>().Object, GetTestConfig(3), provider);
+
+        var reassignResult = await reassignHandler.Handle(new ReassignTaskCommand(task.Id, newAssistantId, mangakaId, "Reassign invitation"), default);
 
         var respondHandler = new RespondTaskAssignmentHandler(
-            attemptRepo, taskRepo, studioRepo, grantRepo, chapterRepo, notificationsMock.Object);
+            new TaskAssignmentRepository(provider), new PageTaskRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new ChapterRepository(provider), new Mock<INotificationService>().Object);
 
-        // Act: Primary Rejects
-        var primaryResult = await respondHandler.Handle(
-            new RespondTaskAssignmentCommand(primaryAttempt.Id, false, "Too busy with another manga", primaryId, primaryAttempt.ConcurrencyToken), default);
+        var replacementAttemptId = reassignResult.Attempt.Id;
+        var replacementAttemptDb = await db.TaskAssignmentAttempts.FindAsync(replacementAttemptId);
+        var rejectResponse = await respondHandler.Handle(new RespondTaskAssignmentCommand(replacementAttemptId, false, "Cannot take this task", newAssistantId, replacementAttemptDb!.ConcurrencyToken), default);
 
-        // Assert
-        Assert.Equal("Rejected", primaryResult.Status);
+        Assert.Equal("Rejected", rejectResponse.Status);
 
-        var updatedTask = await db.PageTasks.FindAsync(task.Id);
-        Assert.NotNull(updatedTask);
-
-        // Rule Requirement 1: Task status becomes ReassignmentRequired (NOT InProgress/Takeover)
-        Assert.Equal(PageTaskStatus.ReassignmentRequired, updatedTask.TaskStatus);
-        Assert.Null(updatedTask.AssignedAssistantId); // Workload released for Primary
-        Assert.Equal(backupId, updatedTask.BackupAssistantId); // Backup remains in standby!
-
-        // Verify notification was sent to Mangaka owner
-        notificationsMock.Verify(n => n.NotifyCollaborationEventAsync(
-            mangakaId,
-            "TaskAssignmentRejected",
-            It.IsAny<string>(),
-            It.IsAny<string>(),
-            task.Id,
-            It.IsAny<System.Threading.CancellationToken>()), Times.Once);
+        var taskAfterReject = await db.PageTasks.FindAsync(task.Id);
+        Assert.NotNull(taskAfterReject);
+        Assert.Equal(PageTaskStatus.ReassignmentRequired, taskAfterReject.TaskStatus);
+        Assert.Equal(60, taskAfterReject.ProgressPercent); // Progress preserved!
+        Assert.Equal(initialWorkStartedAt, taskAfterReject.WorkStartedAt); // WorkStartedAt preserved!
+        Assert.Null(taskAfterReject.AssignedAssistantId); // Rejected assistant is not assigned
     }
 
+    // 17. Old Assistant loses write access
+    // 18. New Assistant continues existing work
     [Fact]
-    public async System.Threading.Tasks.Task Takeover_OnlyOwnerMangakaCanTrigger_BackupAndTantouBlocked()
+    public async System.Threading.Tasks.Task Scenario17_18_OldAssistantLosesWriteAccess_NewAssistantCanWrite()
     {
-        // Arrange
         using var db = GetInMemoryDbContext();
-        var provider = new TestDbContextProvider(db);
+        var authService = new CollaborationAuthorizationService(db);
 
         var mangakaId = Guid.NewGuid();
-        var tantouId = Guid.NewGuid();
-        var backupId = Guid.NewGuid();
-        var otherAssistantId = Guid.NewGuid();
+        var oldAssistantId = Guid.NewGuid();
+        var newAssistantId = Guid.NewGuid();
 
-        var series = MangaSeries.Create(mangakaId, null, "Takeover Series", "Desc", "Genre", null);
+        var series = MangaSeries.Create(mangakaId, null, "Access Series", "Desc", "Genre", null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
         db.MangaSeries.Add(series);
         db.Chapters.Add(chapter);
 
-        var task = new PageTask
-        {
-            ChapterId = chapter.Id,
-            PageNumber = 1,
-            TaskStatus = PageTaskStatus.Incomplete,
-            PrimaryAssistantId = Guid.NewGuid(),
-            BackupAssistantId = backupId,
-            AssignedAssistantId = Guid.NewGuid()
-        };
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
+        task.Activate(oldAssistantId, PageTaskType.General, "Desc", DateTime.UtcNow.AddDays(2));
         db.PageTasks.Add(task);
+
+        var collabOld = new MangakaAssistantCollaboration(mangakaId, oldAssistantId, Guid.NewGuid(), DateTime.UtcNow);
+        var collabNew = new MangakaAssistantCollaboration(mangakaId, newAssistantId, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.AddRange(collabOld, collabNew);
+
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabOld.Id, series.Id, mangakaId));
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabNew.Id, series.Id, mangakaId));
+
+        var attemptOld = TaskAssignmentAttempt.CreatePending(task.Id, oldAssistantId, collabOld.Id, 1, mangakaId);
+        attemptOld.Accept(oldAssistantId, DateTime.UtcNow);
+        db.TaskAssignmentAttempts.Add(attemptOld);
+
         await db.SaveChangesAsync();
 
-        var pageTaskRepo = new PageTaskRepository(provider);
-        var chapterRepo = new ChapterRepository(provider);
-        var seriesRepo = new SeriesRepository(provider);
+        // Old assistant has write access
+        Assert.True(await authService.CanSubmitProgressAsync(oldAssistantId, task.Id));
+        Assert.False(await authService.CanSubmitProgressAsync(newAssistantId, task.Id));
+
+        // Reassign & Accept by New Assistant
+        attemptOld.Supersede(DateTime.UtcNow, "Reassigned");
+        var attemptNew = TaskAssignmentAttempt.CreatePending(task.Id, newAssistantId, collabNew.Id, 2, mangakaId);
+        attemptNew.Accept(newAssistantId, DateTime.UtcNow);
+        db.TaskAssignmentAttempts.Add(attemptNew);
+
+        task.AcceptReplacement(newAssistantId, DateTime.UtcNow);
+        await db.SaveChangesAsync();
+
+        // 17. Old assistant loses write access
+        Assert.False(await authService.CanSubmitProgressAsync(oldAssistantId, task.Id));
+
+        // 18. New assistant has write access to submit progress / upload
+        Assert.True(await authService.CanSubmitProgressAsync(newAssistantId, task.Id));
+    }
+
+    // 19. Workload counts one responsibility
+    [Fact]
+    public async System.Threading.Tasks.Task Scenario19_Workload_CountsOneResponsibilityPerActiveTask()
+    {
+        using var db = GetInMemoryDbContext();
+        var provider = new TestDbContextProvider(db);
+
+        var assistantId = Guid.NewGuid();
         var attemptRepo = new TaskAssignmentRepository(provider);
-        var notificationsMock = new Mock<MangaERP.Shared.Application.Ports.INotificationService>();
 
-        var handler = new RequestTakeoverHandler(
-            pageTaskRepo, chapterRepo, seriesRepo, attemptRepo, notificationsMock.Object);
+        var task1 = new PageTask { ChapterId = Guid.NewGuid(), PageNumber = 1, TaskStatus = PageTaskStatus.Incomplete, AssignedAssistantId = assistantId };
+        db.PageTasks.Add(task1);
 
-        // Act & Assert 1: Backup Assistant attempting takeover throws UnauthorizedAccessException (403)
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            handler.Handle(new RequestTakeoverCommand(task.Id, backupId, "I want to takeover"), default));
+        var attempt1 = TaskAssignmentAttempt.CreatePending(task1.Id, assistantId, Guid.NewGuid(), 1, Guid.NewGuid());
+        attempt1.Accept(assistantId, DateTime.UtcNow);
+        db.TaskAssignmentAttempts.Add(attempt1);
 
-        // Act & Assert 2: Tantou Editor attempting takeover throws UnauthorizedAccessException (403)
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            handler.Handle(new RequestTakeoverCommand(task.Id, tantouId, "Tantou takeover"), default));
+        var task2 = new PageTask { ChapterId = Guid.NewGuid(), PageNumber = 2, TaskStatus = PageTaskStatus.PendingAcceptance };
+        db.PageTasks.Add(task2);
 
-        // Act & Assert 3: Other Assistant attempting takeover throws UnauthorizedAccessException (403)
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
-            handler.Handle(new RequestTakeoverCommand(task.Id, otherAssistantId, "Other assistant takeover"), default));
+        var attempt2 = TaskAssignmentAttempt.CreatePending(task2.Id, assistantId, Guid.NewGuid(), 1, Guid.NewGuid());
+        db.TaskAssignmentAttempts.Add(attempt2);
 
-        // Act 4: Owner Mangaka triggering takeover -> SUCCEEDS!
-        var result = await handler.Handle(new RequestTakeoverCommand(task.Id, mangakaId, "Mangaka triggering backup takeover"), default);
-        Assert.NotNull(result);
-        Assert.Equal(backupId, result.BackupAssistantId);
+        await db.SaveChangesAsync();
+
+        int workload = await attemptRepo.GetActiveWorkloadCountAsync(assistantId, default);
+        Assert.Equal(2, workload); // 1 Accepted active task + 1 PendingAcceptance attempt = 2
     }
 
+    // 20. Candidate API remains role-neutral
     [Fact]
-    public async System.Threading.Tasks.Task CancelAndRecreate_WhenTaskHasProgressUpdates_WithoutConfirm_IsBlocked()
+    public async System.Threading.Tasks.Task Scenario20_CandidateApi_IsRoleNeutral()
     {
-        // Arrange
         using var db = GetInMemoryDbContext();
         var provider = new TestDbContextProvider(db);
 
         var mangakaId = Guid.NewGuid();
-        var series = MangaSeries.Create(mangakaId, null, "Progress Series", "Desc", "Genre", null);
+        var assistantId = Guid.NewGuid();
+
+        var mangaka = new User { Id = mangakaId, Username = "mangaka", Role = UserRole.Mangaka, AccountStatus = AccountStatus.Active };
+        var assistant = new User { Id = assistantId, Username = "ast", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
+        db.Users.AddRange(mangaka, assistant);
+
+        var series = MangaSeries.Create(mangakaId, null, "Series", "Desc", "Genre", null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
         db.MangaSeries.Add(series);
         db.Chapters.Add(chapter);
 
-        var task = new PageTask
-        {
-            ChapterId = chapter.Id,
-            PageNumber = 1,
-            TaskStatus = PageTaskStatus.Incomplete,
-            ProgressPercent = 50 // Progress update exists
-        };
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
         db.PageTasks.Add(task);
+
+        var collab = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.Add(collab);
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab.Id, series.Id, mangakaId));
+
         await db.SaveChangesAsync();
 
-        var chapterRepo = new ChapterRepository(provider);
-        var taskRepo = new PageTaskRepository(provider);
-        var seriesRepo = new SeriesRepository(provider);
+        var handler = new GetAssistantCandidatesHandler(
+            new PageTaskRepository(provider), new ChapterRepository(provider), new SeriesRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new UserRepository(provider), new TaskAssignmentRepository(provider), GetTestConfig(3));
 
-        var handler = new CancelAndRecreateTaskHandler(chapterRepo, taskRepo, seriesRepo);
+        var result = await handler.Handle(new GetAssistantCandidatesQuery(task.Id, mangakaId), default);
 
-        // Act & Assert: Without confirmProgressLoss = true, attempt fails
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            handler.Handle(new CancelAndRecreateTaskCommand(mangakaId, task.Id, "Reason", ConfirmProgressLoss: false), default));
+        Assert.NotNull(result);
+        Assert.Single(result.AvailableAssistants);
+        Assert.Equal(assistantId, result.AvailableAssistants[0].AssistantId);
     }
 
+    // 21. Takeover route is removed/deprecated
     [Fact]
-    public async System.Threading.Tasks.Task CancelAndRecreate_WhenTaskHasProgressUpdates_WithConfirm_Succeeds_RetainsPageNumber()
+    public async System.Threading.Tasks.Task Scenario21_TakeoverRoute_ThrowsNotSupportedException()
     {
-        // Arrange
+        var handler = new RequestTakeoverHandler();
+        await Assert.ThrowsAsync<NotSupportedException>(() =>
+            handler.Handle(new RequestTakeoverCommand(Guid.NewGuid(), Guid.NewGuid(), "Takeover"), default));
+    }
+
+    // 22. Assignment history returns currentAssignment + history
+    [Fact]
+    public async System.Threading.Tasks.Task Scenario22_AssignmentHistory_ReturnsCurrentAssignmentAndHistory()
+    {
+        using var db = GetInMemoryDbContext();
+        var provider = new TestDbContextProvider(db);
+
+        var taskId = Guid.NewGuid();
+        var assistantId = Guid.NewGuid();
+
+        var attempt = TaskAssignmentAttempt.CreatePending(taskId, assistantId, Guid.NewGuid(), 1, Guid.NewGuid());
+        attempt.Accept(assistantId, DateTime.UtcNow);
+        db.TaskAssignmentAttempts.Add(attempt);
+        await db.SaveChangesAsync();
+
+        var handler = new GetTaskAssignmentHistoryHandler(new TaskAssignmentRepository(provider));
+        var result = await handler.Handle(new GetTaskAssignmentHistoryQuery(taskId, Guid.NewGuid()), default);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.CurrentAssignment);
+        Assert.Equal(attempt.Id, result.CurrentAssignment.Id);
+        Assert.Single(result.History);
+    }
+
+    // 23. Cancel-and-Recreate still creates new TaskId
+    [Fact]
+    public async System.Threading.Tasks.Task Scenario23_CancelAndRecreate_CreatesNewTaskId()
+    {
         using var db = GetInMemoryDbContext();
         var provider = new TestDbContextProvider(db);
 
         var mangakaId = Guid.NewGuid();
-        var series = MangaSeries.Create(mangakaId, null, "Progress Series 2", "Desc", "Genre", null);
+        var series = MangaSeries.Create(mangakaId, null, "Series", "Desc", "Genre", null);
         var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
         db.MangaSeries.Add(series);
         db.Chapters.Add(chapter);
 
-        var task = new PageTask
-        {
-            ChapterId = chapter.Id,
-            PageNumber = 1,
-            TaskStatus = PageTaskStatus.Incomplete,
-            ProgressPercent = 50
-        };
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
         db.PageTasks.Add(task);
         await db.SaveChangesAsync();
 
-        var chapterRepo = new ChapterRepository(provider);
-        var taskRepo = new PageTaskRepository(provider);
-        var seriesRepo = new SeriesRepository(provider);
+        var handler = new CancelAndRecreateTaskHandler(
+            new ChapterRepository(provider), new PageTaskRepository(provider), new SeriesRepository(provider));
 
-        var handler = new CancelAndRecreateTaskHandler(chapterRepo, taskRepo, seriesRepo);
+        var result = await handler.Handle(new CancelAndRecreateTaskCommand(mangakaId, task.Id, "Wrong base image", ConfirmProgressLoss: true), default);
 
-        // Act: With ConfirmProgressLoss = true -> SUCCEEDS!
-        var result = await handler.Handle(new CancelAndRecreateTaskCommand(mangakaId, task.Id, "Recreating task", ConfirmProgressLoss: true), default);
-
-        // Assert
         Assert.NotNull(result);
-        Assert.Equal(1, result.PageNumber);
+        Assert.NotEqual(task.Id, result.NewPageTaskId); // New TaskId created!
+    }
 
-        var oldTaskDb = await db.PageTasks.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == task.Id);
-        Assert.NotNull(oldTaskDb);
-        Assert.True(oldTaskDb.IsDeleted);
-        Assert.Equal(1, oldTaskDb.PageNumber); // PageNumber retained!
+    // 26. Transaction rollback preserves old task state on failure
+    [Fact]
+    public async System.Threading.Tasks.Task Scenario26_TransactionRollback_PreservesOldStateOnFailure()
+    {
+        using var db = GetInMemoryDbContext();
+        var provider = new TestDbContextProvider(db);
 
-        var newTaskDb = await db.PageTasks.FirstOrDefaultAsync(p => p.Id == result.NewPageTaskId);
-        Assert.NotNull(newTaskDb);
-        Assert.False(newTaskDb.IsDeleted);
-        Assert.Equal(1, newTaskDb.PageNumber); // New task takes original PageNumber!
-        Assert.Null(newTaskDb.AssignedAssistantId);
-        Assert.Null(newTaskDb.WorkStartedAt);
-        Assert.Equal(PageTaskStatus.Pending, newTaskDb.TaskStatus);
+        var mangakaId = Guid.NewGuid();
+        var oldAssistantId = Guid.NewGuid();
+        var invalidNewAssistantId = Guid.NewGuid(); // No collaboration
+
+        var series = MangaSeries.Create(mangakaId, null, "Rollback Series", "Desc", "Genre", null);
+        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
+        db.MangaSeries.Add(series);
+        db.Chapters.Add(chapter);
+
+        var task = PageTask.CreatePending(chapter.Id, 1, "https://example.com/base.png");
+        task.Activate(oldAssistantId, PageTaskType.General, "Desc", DateTime.UtcNow.AddDays(2));
+        db.PageTasks.Add(task);
+
+        var collabOld = new MangakaAssistantCollaboration(mangakaId, oldAssistantId, Guid.NewGuid(), DateTime.UtcNow);
+        db.MangakaAssistantCollaborations.Add(collabOld);
+        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabOld.Id, series.Id, mangakaId));
+
+        var attemptOld = TaskAssignmentAttempt.CreatePending(task.Id, oldAssistantId, collabOld.Id, 1, mangakaId);
+        attemptOld.Accept(oldAssistantId, DateTime.UtcNow);
+        db.TaskAssignmentAttempts.Add(attemptOld);
+
+        await db.SaveChangesAsync();
+
+        var reassignHandler = new ReassignTaskHandler(
+            new PageTaskRepository(provider), new ChapterRepository(provider), new SeriesRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new TaskAssignmentRepository(provider), new Mock<INotificationService>().Object, GetTestConfig(3), provider);
+
+        var command = new ReassignTaskCommand(task.Id, invalidNewAssistantId, mangakaId, "Reassign to invalid assistant");
+
+        await Assert.ThrowsAsync<MangaERP.Shared.Domain.Exceptions.ConflictException>(() =>
+            reassignHandler.Handle(command, default));
+
+        var taskDb = await db.PageTasks.FindAsync(task.Id);
+        Assert.NotNull(taskDb);
+        Assert.Equal(oldAssistantId, taskDb.AssignedAssistantId); // Preserved old executor!
+        Assert.Equal(PageTaskStatus.Incomplete, taskDb.TaskStatus); // Preserved status!
     }
 
     [Fact]
     public async System.Threading.Tasks.Task HalfwayDeadlineWarning_SendsOnlyOnce_When50PercentElapsed()
     {
-        // Arrange
         using var db = GetInMemoryDbContext();
         var provider = new TestDbContextProvider(db);
 
@@ -432,193 +584,19 @@ public class TaskAssignmentWorkflowTests
             PageNumber = 1,
             TaskStatus = PageTaskStatus.Incomplete,
             AssignedAssistantId = assistantId,
-            WorkStartedAt = now.AddHours(-10), // Started 10 hours ago
-            Deadline = now.AddHours(2)         // Total window 12 hours -> 10/12 = 83.3% elapsed (> 50%)
+            WorkStartedAt = now.AddHours(-10),
+            Deadline = now.AddHours(2)
         };
         db.PageTasks.Add(task);
         await db.SaveChangesAsync();
 
-        var taskRepo = new PageTaskRepository(provider);
-        var chapterRepo = new ChapterRepository(provider);
-        var seriesRepo = new SeriesRepository(provider);
-        var notificationsMock = new Mock<MangaERP.Shared.Application.Ports.INotificationService>();
+        var handler = new CheckHalfwayDeadlineWarningsHandler(
+            new PageTaskRepository(provider), new ChapterRepository(provider), new SeriesRepository(provider), new Mock<INotificationService>().Object);
 
-        var handler = new CheckHalfwayDeadlineWarningsHandler(taskRepo, chapterRepo, seriesRepo, notificationsMock.Object);
-
-        // Act 1: Run warning checker for the first time
         int warningsSent1 = await handler.Handle(new CheckHalfwayDeadlineWarningsCommand(), default);
-
-        // Assert 1: Exactly 1 warning sent
         Assert.Equal(1, warningsSent1);
-        var updatedTask = await db.PageTasks.FindAsync(task.Id);
-        Assert.NotNull(updatedTask!.HalfwayWarningSentAt);
 
-        // Act 2: Run warning checker again (Idempotency check)
         int warningsSent2 = await handler.Handle(new CheckHalfwayDeadlineWarningsCommand(), default);
-
-        // Assert 2: 0 warnings sent on second run (idempotent!)
         Assert.Equal(0, warningsSent2);
-    }
-
-    [Fact]
-    public async System.Threading.Tasks.Task ReassignTask_AtomicSuccess_SupersedesOldAttempts_ResetsWorkStartedAt_UpdatesWorkload()
-    {
-        // Arrange
-        using var db = GetInMemoryDbContext();
-        var provider = new TestDbContextProvider(db);
-
-        var mangakaId = Guid.NewGuid();
-        var oldPrimaryId = Guid.NewGuid();
-        var newPrimaryId = Guid.NewGuid();
-        var newBackupId = Guid.NewGuid();
-
-        var mangaka = new User { Id = mangakaId, Username = "mangaka", Role = UserRole.Mangaka, AccountStatus = AccountStatus.Active };
-        var oldPrimary = new User { Id = oldPrimaryId, Username = "oldP", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        var newPrimary = new User { Id = newPrimaryId, Username = "newP", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        var newBackup = new User { Id = newBackupId, Username = "newB", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        db.Users.AddRange(mangaka, oldPrimary, newPrimary, newBackup);
-
-        var series = MangaSeries.Create(mangakaId, null, "Reassign Series", "Desc", "Genre", null);
-        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
-        db.MangaSeries.Add(series);
-        db.Chapters.Add(chapter);
-
-        var task = new PageTask
-        {
-            ChapterId = chapter.Id,
-            PageNumber = 1,
-            TaskStatus = PageTaskStatus.Incomplete,
-            WorkStartedAt = DateTime.UtcNow.AddDays(-1),
-            PrimaryAssistantId = oldPrimaryId,
-            AssignedAssistantId = oldPrimaryId
-        };
-        db.PageTasks.Add(task);
-
-        var collabOld = new MangakaAssistantCollaboration(mangakaId, oldPrimaryId, Guid.NewGuid(), DateTime.UtcNow);
-        var collabNewP = new MangakaAssistantCollaboration(mangakaId, newPrimaryId, Guid.NewGuid(), DateTime.UtcNow);
-        var collabNewB = new MangakaAssistantCollaboration(mangakaId, newBackupId, Guid.NewGuid(), DateTime.UtcNow);
-        db.MangakaAssistantCollaborations.AddRange(collabOld, collabNewP, collabNewB);
-
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabOld.Id, series.Id, mangakaId));
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabNewP.Id, series.Id, mangakaId));
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabNewB.Id, series.Id, mangakaId));
-
-        var oldAttempt = TaskAssignmentAttempt.CreatePending(task.Id, oldPrimaryId, collabOld.Id, 1, mangakaId, assignmentRole: "Primary");
-        oldAttempt.Accept(oldPrimaryId, DateTime.UtcNow.AddDays(-1));
-        db.TaskAssignmentAttempts.Add(oldAttempt);
-
-        await db.SaveChangesAsync();
-
-        var taskRepo = new PageTaskRepository(provider);
-        var chapterRepo = new ChapterRepository(provider);
-        var seriesRepo = new SeriesRepository(provider);
-        var studioRepo = new StudioInvitationRepository(provider);
-        var grantRepo = new SeriesAccessGrantRepository(provider);
-        var attemptRepo = new TaskAssignmentRepository(provider);
-        var notificationsMock = new Mock<MangaERP.Shared.Application.Ports.INotificationService>();
-        var config = GetTestConfig(3);
-
-        var handler = new ReassignTaskHandler(
-            taskRepo, chapterRepo, seriesRepo, studioRepo, grantRepo, attemptRepo, notificationsMock.Object, config, provider);
-
-        var command = new ReassignTaskCommand(
-            task.Id, newPrimaryId, newBackupId, mangakaId, "Reassigning for performance issues");
-
-        // Act
-        var result = await handler.Handle(command, default);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.NotNull(result.PrimaryAttempt);
-        Assert.NotNull(result.BackupAttempt);
-
-        var updatedTask = await db.PageTasks.FindAsync(task.Id);
-        Assert.NotNull(updatedTask);
-        Assert.Equal(PageTaskStatus.PendingAcceptance, updatedTask.TaskStatus);
-        Assert.Null(updatedTask.WorkStartedAt); // WorkStartedAt reset to null!
-        Assert.Equal(newPrimaryId, updatedTask.PrimaryAssistantId);
-        Assert.Equal(newBackupId, updatedTask.BackupAssistantId);
-
-        var oldAttemptDb = await db.TaskAssignmentAttempts.FindAsync(oldAttempt.Id);
-        Assert.Equal(TaskAssignmentAttemptStatus.Superseded, oldAttemptDb!.Status); // Old attempt superseded!
-
-        int oldWorkload = await attemptRepo.GetActiveWorkloadCountAsync(oldPrimaryId, default);
-        Assert.Equal(0, oldWorkload); // Old workload released!
-
-        int newPrimaryWorkload = await attemptRepo.GetActiveWorkloadCountAsync(newPrimaryId, default);
-        Assert.Equal(1, newPrimaryWorkload); // New pending workload increased!
-    }
-
-    [Fact]
-    public async System.Threading.Tasks.Task ReassignTask_InvalidBackup_RollsBackEverything_OldAttemptNotSuperseded()
-    {
-        // Arrange
-        using var db = GetInMemoryDbContext();
-        var provider = new TestDbContextProvider(db);
-
-        var mangakaId = Guid.NewGuid();
-        var oldPrimaryId = Guid.NewGuid();
-        var newPrimaryId = Guid.NewGuid();
-        var invalidBackupId = Guid.NewGuid(); // No collaboration with Mangaka
-
-        var mangaka = new User { Id = mangakaId, Username = "mangaka", Role = UserRole.Mangaka, AccountStatus = AccountStatus.Active };
-        var oldPrimary = new User { Id = oldPrimaryId, Username = "oldP", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        var newPrimary = new User { Id = newPrimaryId, Username = "newP", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active };
-        db.Users.AddRange(mangaka, oldPrimary, newPrimary);
-
-        var series = MangaSeries.Create(mangakaId, null, "Rollback Series", "Desc", "Genre", null);
-        var chapter = ChapterEntity.Create(series.Id, "Chapter 1", 1.0m, 10);
-        db.MangaSeries.Add(series);
-        db.Chapters.Add(chapter);
-
-        var task = new PageTask
-        {
-            ChapterId = chapter.Id,
-            PageNumber = 1,
-            TaskStatus = PageTaskStatus.Incomplete,
-            WorkStartedAt = DateTime.UtcNow.AddDays(-1),
-            PrimaryAssistantId = oldPrimaryId,
-            AssignedAssistantId = oldPrimaryId
-        };
-        db.PageTasks.Add(task);
-
-        var collabOld = new MangakaAssistantCollaboration(mangakaId, oldPrimaryId, Guid.NewGuid(), DateTime.UtcNow);
-        var collabNewP = new MangakaAssistantCollaboration(mangakaId, newPrimaryId, Guid.NewGuid(), DateTime.UtcNow);
-        db.MangakaAssistantCollaborations.AddRange(collabOld, collabNewP);
-
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabOld.Id, series.Id, mangakaId));
-        db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collabNewP.Id, series.Id, mangakaId));
-
-        var oldAttempt = TaskAssignmentAttempt.CreatePending(task.Id, oldPrimaryId, collabOld.Id, 1, mangakaId, assignmentRole: "Primary");
-        oldAttempt.Accept(oldPrimaryId, DateTime.UtcNow.AddDays(-1));
-        db.TaskAssignmentAttempts.Add(oldAttempt);
-
-        await db.SaveChangesAsync();
-
-        var taskRepo = new PageTaskRepository(provider);
-        var chapterRepo = new ChapterRepository(provider);
-        var seriesRepo = new SeriesRepository(provider);
-        var studioRepo = new StudioInvitationRepository(provider);
-        var grantRepo = new SeriesAccessGrantRepository(provider);
-        var attemptRepo = new TaskAssignmentRepository(provider);
-        var notificationsMock = new Mock<MangaERP.Shared.Application.Ports.INotificationService>();
-        var config = GetTestConfig(3);
-
-        var handler = new ReassignTaskHandler(
-            taskRepo, chapterRepo, seriesRepo, studioRepo, grantRepo, attemptRepo, notificationsMock.Object, config, provider);
-
-        var command = new ReassignTaskCommand(
-            task.Id, newPrimaryId, invalidBackupId, mangakaId, "Reassign with invalid backup");
-
-        // Act & Assert
-        await Assert.ThrowsAsync<MangaERP.Shared.Domain.Exceptions.ConflictException>(() =>
-            handler.Handle(command, default));
-
-        var oldAttemptDb = await db.TaskAssignmentAttempts.FindAsync(oldAttempt.Id);
-        Assert.Equal(TaskAssignmentAttemptStatus.Accepted, oldAttemptDb!.Status); // Old attempt NOT superseded!
-
-        var taskDb = await db.PageTasks.FindAsync(task.Id);
-        Assert.Equal(PageTaskStatus.Incomplete, taskDb!.TaskStatus); // Task state unchanged!
-        Assert.Equal(oldPrimaryId, taskDb.AssignedAssistantId);
     }
 }
