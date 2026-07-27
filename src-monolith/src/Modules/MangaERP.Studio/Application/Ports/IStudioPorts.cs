@@ -21,8 +21,41 @@ public interface IStudioInvitationRepository
     System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetNonEndedCollaborationByAssistantAsync(Guid assistantId, CancellationToken ct = default);
     System.Threading.Tasks.Task<MangakaAssistantCollaboration> AcceptInvitationAsync(Guid invitationId, Guid assistantId, Guid actorId, DateTime now, string? correlationId, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<MangakaAssistantCollaboration>> GetNonEndedCollaborationsByMangakaAsync(Guid mangakaId, CancellationToken ct = default);
+    System.Threading.Tasks.Task AddCollaborationAsync(MangakaAssistantCollaboration collaboration, CancellationToken ct = default);
     System.Threading.Tasks.Task AddCollaborationEventAsync(CollaborationEvent collaborationEvent, CancellationToken ct = default);
+    System.Threading.Tasks.Task<Dictionary<Guid, AssistantWorkloadMetricsInfo>> GetAssistantWorkloadMetricsBatchAsync(IEnumerable<Guid> assistantIds, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<AssistantActiveTaskInfo>> GetAssistantActiveTasksAsync(Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<AssistantPendingExtensionInfo>> GetAssistantPendingExtensionRequestsAsync(Guid assistantId, CancellationToken ct = default);
 }
+
+public record AssistantWorkloadMetricsInfo(
+    int ActiveTaskCount,
+    int OverdueTaskCount,
+    int NearDeadlineTaskCount
+);
+
+public record AssistantActiveTaskInfo(
+    Guid TaskId,
+    Guid SeriesId,
+    Guid ChapterId,
+    int PageNumber,
+    string TaskType,
+    string TaskStatus,
+    int ProgressPercent,
+    DateTime? WorkStartedAt,
+    DateTime? Deadline,
+    bool IsOverdue,
+    bool IsNearDeadline
+);
+
+public record AssistantPendingExtensionInfo(
+    Guid RequestId,
+    Guid TaskId,
+    DateTime RequestedDeadline,
+    string Reason,
+    string Status,
+    DateTime CreatedAt
+);
 
 public interface ICollaborationAuthorizationService
 {

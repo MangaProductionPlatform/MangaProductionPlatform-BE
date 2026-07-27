@@ -5,6 +5,7 @@ using MangaERP.Shared.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using MangaERP.Shared.Domain.Exceptions;
 using MangaERP.Identity.Domain.Enums;
+using MangaERP.Chapter.Domain.Entities;
 using Npgsql;
 
 namespace MangaERP.Shared.Infrastructure.Repositories;
@@ -85,7 +86,10 @@ public class StudioInvitationRepository : IStudioInvitationRepository
         => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.Id == id, ct);
 
     public async System.Threading.Tasks.Task<IEnumerable<MangakaAssistantCollaboration>> GetNonEndedCollaborationsByMangakaAsync(Guid mangakaId, CancellationToken ct = default)
-        => await _db.MangakaAssistantCollaborations.Where(c => c.MangakaId == mangakaId && c.Status != CollaborationStatus.Ended).ToListAsync(ct);
+        => await _db.MangakaAssistantCollaborations.Where(c => c.MangakaId == mangakaId &&
+            c.Status != CollaborationStatus.Ended &&
+            c.Status != CollaborationStatus.Rejected &&
+            c.Status != CollaborationStatus.Cancelled).ToListAsync(ct);
 
     public System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetNonEndedCollaborationByAssistantAsync(Guid assistantId, CancellationToken ct = default)
         => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct);
@@ -170,6 +174,81 @@ public class StudioInvitationRepository : IStudioInvitationRepository
         return null;
     }
 
+    public System.Threading.Tasks.Task AddCollaborationAsync(MangakaAssistantCollaboration collaboration, CancellationToken ct = default)
+        => _db.MangakaAssistantCollaborations.AddAsync(collaboration, ct).AsTask();
+
     public System.Threading.Tasks.Task AddCollaborationEventAsync(CollaborationEvent collaborationEvent, CancellationToken ct = default)
         => _db.CollaborationEvents.AddAsync(collaborationEvent, ct).AsTask();
+
+    public async System.Threading.Tasks.Task<Dictionary<Guid, AssistantWorkloadMetricsInfo>> GetAssistantWorkloadMetricsBatchAsync(IEnumerable<Guid> assistantIds, CancellationToken ct = default)
+    {
+        var idsList = assistantIds.Distinct().ToList();
+        if (!idsList.Any()) return new Dictionary<Guid, AssistantWorkloadMetricsInfo>();
+
+        DateTime now = DateTime.UtcNow;
+        DateTime nearDeadlineThreshold = now.AddHours(24);
+
+        var activeTasks = await _db.PageTasks.AsNoTracking()
+            .Where(t => t.AssignedAssistantId != null &&
+                        idsList.Contains(t.AssignedAssistantId.Value) &&
+                        (t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
+            .Select(t => new {
+                AssistantId = t.AssignedAssistantId!.Value,
+                t.Deadline
+            })
+            .ToListAsync(ct);
+
+        return activeTasks
+            .GroupBy(t => t.AssistantId)
+            .ToDictionary(
+                g => g.Key,
+                g => new AssistantWorkloadMetricsInfo(
+                    g.Count(),
+                    g.Count(t => t.Deadline.HasValue && t.Deadline.Value < now),
+                    g.Count(t => t.Deadline.HasValue && t.Deadline.Value >= now && t.Deadline.Value <= nearDeadlineThreshold)
+                )
+            );
+    }
+
+    public async System.Threading.Tasks.Task<IEnumerable<AssistantActiveTaskInfo>> GetAssistantActiveTasksAsync(Guid assistantId, CancellationToken ct = default)
+    {
+        DateTime now = DateTime.UtcNow;
+        DateTime nearDeadlineThreshold = now.AddHours(24);
+
+        var tasks = await _db.PageTasks.AsNoTracking()
+            .Include(t => t.Chapter)
+            .Where(t => t.AssignedAssistantId == assistantId &&
+                        (t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
+            .ToListAsync(ct);
+
+        return tasks.Select(t => new AssistantActiveTaskInfo(
+            t.Id,
+            t.Chapter != null ? t.Chapter.SeriesId : Guid.Empty,
+            t.ChapterId,
+            t.PageNumber,
+            t.TaskType.ToString(),
+            t.TaskStatus.ToString(),
+            t.ProgressPercent,
+            t.WorkStartedAt,
+            t.Deadline,
+            t.Deadline.HasValue && t.Deadline.Value < now,
+            t.Deadline.HasValue && t.Deadline.Value >= now && t.Deadline.Value <= nearDeadlineThreshold
+        ));
+    }
+
+    public async System.Threading.Tasks.Task<IEnumerable<AssistantPendingExtensionInfo>> GetAssistantPendingExtensionRequestsAsync(Guid assistantId, CancellationToken ct = default)
+    {
+        var requests = await _db.DeadlineExtensionRequests.AsNoTracking()
+            .Where(r => r.AssistantId == assistantId && r.Status == "Pending")
+            .ToListAsync(ct);
+
+        return requests.Select(r => new AssistantPendingExtensionInfo(
+            r.Id,
+            r.PageTaskId,
+            r.RequestedDeadline,
+            r.Reason,
+            r.Status,
+            r.CreatedAt
+        ));
+    }
 }

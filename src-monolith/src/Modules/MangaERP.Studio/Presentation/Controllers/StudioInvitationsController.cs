@@ -4,6 +4,7 @@ using MangaERP.Studio.Application.Commands.RespondInvitation;
 using MangaERP.Studio.Application.Commands.CancelInvitation;
 using MangaERP.Studio.Application.Commands.RetryRegistrationDelivery;
 using MangaERP.Studio.Application.Queries;
+using MangaERP.Studio.Application.Queries.GetMyAssistants;
 using MangaERP.Studio.Application.Commands.ManageCollaboration;
 using MangaERP.Studio.Domain.Entities;
 using MangaERP.Shared.Domain.Exceptions;
@@ -29,6 +30,45 @@ public class StudioInvitationsController : ControllerBase
     }
 
     // ── MANGAKA APIs ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// [Mangaka] Lấy danh sách Assistant thuộc phạm vi quản lý hợp lệ của Mangaka hiện tại.
+    /// Route Canonical: GET /api/v1/mangakas/me/assistants
+    /// Route Alias: GET /api/v1/studios/my-assistants
+    /// </summary>
+    [HttpGet("/api/v1/mangakas/me/assistants")]
+    [HttpGet("my-assistants")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(MyAssistantsResponseDto), 200)]
+    public async Task<IActionResult> GetMyAssistants(CancellationToken ct)
+    {
+        var query = new GetMyAssistantsQuery(GetUserId());
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [Mangaka] Xem thông tin chi tiết của một Assistant thuộc phạm vi quản lý.
+    /// Route Canonical: GET /api/v1/mangakas/me/assistants/{assistantId}
+    /// Route Alias: GET /api/v1/studios/my-assistants/{assistantId}
+    /// </summary>
+    [HttpGet("/api/v1/mangakas/me/assistants/{assistantId:guid}")]
+    [HttpGet("my-assistants/{assistantId:guid}")]
+    [Authorize(Roles = "Mangaka")]
+    [ProducesResponseType(typeof(MangaERP.Studio.Application.Queries.GetAssistantDetail.AssistantDetailResponseDto), 200)]
+    [ProducesResponseType(403)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetAssistantDetail(Guid assistantId, CancellationToken ct)
+    {
+        try
+        {
+            var query = new MangaERP.Studio.Application.Queries.GetAssistantDetail.GetAssistantDetailQuery(GetUserId(), assistantId);
+            var result = await _mediator.Send(query, ct);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+    }
 
     /// <summary>
     /// [Mangaka] Mời Assistant vào studio của một Series.
@@ -232,6 +272,32 @@ public class StudioInvitationsController : ControllerBase
         catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
         catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
     }
+
+    [HttpPost("collaborations/{collaborationId:guid}/request-ending")]
+    [Authorize(Roles = "Mangaka,Admin")]
+    public async Task<IActionResult> RequestEndingCollaboration(Guid collaborationId, [FromBody] RequestEndingCollaborationRequest request, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new RequestEndingCollaborationCommand(collaborationId, GetUserId(), User.IsInRole("Admin"), request.ExpectedConcurrencyToken), ct);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
+    }
+
+    [HttpPost("collaborations/{collaborationId:guid}/end")]
+    [Authorize(Roles = "Mangaka,Admin")]
+    public async Task<IActionResult> EndCollaboration(Guid collaborationId, [FromBody] EndCollaborationRequest request, CancellationToken ct)
+    {
+        try
+        {
+            await _mediator.Send(new EndCollaborationCommand(collaborationId, GetUserId(), User.IsInRole("Admin"), request.Reason, request.ExpectedConcurrencyToken), ct);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex) { return StatusCode(403, new { message = ex.Message }); }
+        catch (ConflictException ex) { return Conflict(new { message = ex.Message }); }
+    }
 }
 
 // ── Request Models ────────────────────────────────────────────────────────────
@@ -247,3 +313,5 @@ public record CollaborationStateRequest(
     Guid ExpectedConcurrencyToken);
 
 public record ReactivateCollaborationRequest(Guid ExpectedConcurrencyToken);
+public record RequestEndingCollaborationRequest(Guid ExpectedConcurrencyToken);
+public record EndCollaborationRequest(string Reason, Guid ExpectedConcurrencyToken);

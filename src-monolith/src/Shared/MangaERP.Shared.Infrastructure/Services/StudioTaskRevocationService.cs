@@ -26,16 +26,31 @@ public class StudioTaskRevocationService : IStudioTaskRevocationService
         Guid assistantId,
         CancellationToken ct = default)
     {
-        var tasksToRevoke = await _db.PageTasks
-            .Include(t => t.Chapter)
-            .Where(t => t.AssignedAssistantId == assistantId &&
-                        t.TaskStatus != PageTaskStatus.Approved &&
-                        t.Chapter.SeriesId == seriesId)
+        var chapterIds = await _db.Chapters
+            .Where(c => c.SeriesId == seriesId)
+            .Select(c => c.Id)
             .ToListAsync(ct);
 
+        var tasksToRevoke = await _db.PageTasks
+            .Where(t => t.AssignedAssistantId == assistantId &&
+                        t.TaskStatus != PageTaskStatus.Approved &&
+                        chapterIds.Contains(t.ChapterId))
+            .ToListAsync(ct);
+
+        DateTime now = DateTime.UtcNow;
         foreach (var task in tasksToRevoke)
         {
-            task.MarkReassignmentRequired();
+            task.MarkReassignmentRequired("Series access revoked by Mangaka.");
+
+            var activeAttempts = await _db.TaskAssignmentAttempts
+                .Where(a => a.TaskId == task.Id && a.AssistantId == assistantId &&
+                            (a.Status == TaskAssignmentAttemptStatus.PendingAcceptance || a.Status == TaskAssignmentAttemptStatus.Accepted))
+                .ToListAsync(ct);
+
+            foreach (var attempt in activeAttempts)
+            {
+                attempt.Cancel(now, "Series access revoked by Mangaka.");
+            }
         }
         await _db.SaveChangesAsync(ct);
     }

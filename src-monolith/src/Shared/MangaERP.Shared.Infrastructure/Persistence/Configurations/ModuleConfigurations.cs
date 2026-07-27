@@ -335,10 +335,10 @@ public class MangakaAssistantCollaborationConfiguration : IEntityTypeConfigurati
         b.Property(e => e.ConcurrencyToken).IsConcurrencyToken().ValueGeneratedNever();
         b.HasIndex(e => e.AssistantId)
             .IsUnique()
-            .HasFilter("\"Status\" IN ('Active', 'Suspended', 'EndingRequested')");
+            .HasFilter("\"Status\" IN ('Accepted', 'Pending', 'Suspended', 'EndingRequested')");
         b.HasIndex(e => new { e.MangakaId, e.AssistantId })
             .IsUnique()
-            .HasFilter("\"Status\" IN ('Active', 'Suspended', 'EndingRequested')");
+            .HasFilter("\"Status\" IN ('Accepted', 'Pending', 'Suspended', 'EndingRequested')");
         b.HasIndex(e => e.InvitationId).IsUnique();
         b.HasOne<User>().WithMany().HasForeignKey(e => e.MangakaId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(e => e.AssistantId).OnDelete(DeleteBehavior.Restrict);

@@ -147,7 +147,7 @@ public sealed class AssignTaskToAssistantHandler : IRequestHandler<AssignTaskToA
         if (collab.MangakaId != request.ActorUserId)
             throw new ConflictException("Assistant collaboration is with a different Mangaka.");
 
-        if (collab.Status != CollaborationStatus.Active)
+        if (collab.Status != CollaborationStatus.Accepted)
             throw new ConflictException($"Cannot assign task to assistant in collaboration status '{collab.Status}'.");
 
         var grant = await _grantRepo.GetActiveGrantAsync(collab.Id, series.Id, ct);

@@ -50,6 +50,7 @@ public static class SharedInfrastructureExtensions
 
         // Studio module infrastructure
         services.AddScoped<IStudioInvitationRepository, StudioInvitationRepository>();
+        services.AddScoped<IAssistantCollaborationProvisionPort, AssistantCollaborationProvisionService>();
         services.AddScoped<ISeriesAccessGrantRepository, SeriesAccessGrantRepository>();
         services.AddScoped<ICollaborationAuthorizationService, CollaborationAuthorizationService>();
         services.AddScoped<IStudioIdentityService, StudioIdentityService>();

@@ -49,7 +49,7 @@ public sealed class GrantSeriesAccessHandler : IRequestHandler<GrantSeriesAccess
         if (collaboration.MangakaId != request.ActorUserId)
             throw new UnauthorizedAccessException("Only the Mangaka who owns the collaboration can grant series access.");
 
-        if (collaboration.Status != CollaborationStatus.Active)
+        if (collaboration.Status != CollaborationStatus.Accepted)
             throw new ConflictException($"Cannot grant series access to a collaboration in status '{collaboration.Status}'.");
 
         var series = await _seriesRepo.GetByIdAsync(request.SeriesId, ct)
@@ -93,17 +93,20 @@ public sealed class RevokeSeriesAccessHandler : IRequestHandler<RevokeSeriesAcce
     private readonly ISeriesAccessGrantRepository _grantRepo;
     private readonly ISeriesRepository _seriesRepo;
     private readonly INotificationService _notifications;
+    private readonly IStudioTaskRevocationService _taskRevocationService;
 
     public RevokeSeriesAccessHandler(
         IStudioInvitationRepository collabRepo,
         ISeriesAccessGrantRepository grantRepo,
         ISeriesRepository seriesRepo,
-        INotificationService notifications)
+        INotificationService notifications,
+        IStudioTaskRevocationService taskRevocationService)
     {
         _collabRepo = collabRepo;
         _grantRepo = grantRepo;
         _seriesRepo = seriesRepo;
         _notifications = notifications;
+        _taskRevocationService = taskRevocationService;
     }
 
     public async Task<Unit> Handle(RevokeSeriesAccessCommand request, CancellationToken ct)
@@ -123,6 +126,9 @@ public sealed class RevokeSeriesAccessHandler : IRequestHandler<RevokeSeriesAcce
         var grant = await _grantRepo.GetActiveGrantAsync(request.CollaborationId, request.SeriesId, ct)
             ?? throw new ConflictException("No active series access grant exists to revoke.");
 
+        // Cascade task revocation for active tasks in this series before/during revoking grant
+        await _taskRevocationService.RevokeActiveTasksForRemovedMemberAsync(request.SeriesId, collaboration.AssistantId, ct);
+
         grant.Revoke(request.ActorUserId, request.Reason);
         await _grantRepo.UpdateAsync(grant, ct);
         await _grantRepo.SaveChangesAsync(ct);
@@ -132,6 +138,14 @@ public sealed class RevokeSeriesAccessHandler : IRequestHandler<RevokeSeriesAcce
             "SeriesAccessRevoked",
             "Series Access Revoked",
             $"Your access to series '{series.Title}' has been revoked.",
+            series.Id,
+            ct);
+
+        await _notifications.NotifyCollaborationEventAsync(
+            collaboration.MangakaId,
+            "SeriesAccessRevoked",
+            "Series Access Revoked",
+            $"Series access for assistant on '{series.Title}' has been revoked.",
             series.Id,
             ct);
 

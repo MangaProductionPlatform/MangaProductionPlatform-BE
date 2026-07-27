@@ -16,6 +16,7 @@ public class SeriesAccessGrantTests
     private readonly Mock<ISeriesAccessGrantRepository> _grantRepo = new();
     private readonly Mock<ISeriesRepository> _seriesRepo = new();
     private readonly Mock<INotificationService> _notifications = new();
+    private readonly Mock<IStudioTaskRevocationService> _taskRevocationService = new();
 
     private readonly GrantSeriesAccessHandler _grantHandler;
     private readonly RevokeSeriesAccessHandler _revokeHandler;
@@ -25,7 +26,7 @@ public class SeriesAccessGrantTests
         _grantHandler = new GrantSeriesAccessHandler(
             _collabRepo.Object, _grantRepo.Object, _seriesRepo.Object, _notifications.Object);
         _revokeHandler = new RevokeSeriesAccessHandler(
-            _collabRepo.Object, _grantRepo.Object, _seriesRepo.Object, _notifications.Object);
+            _collabRepo.Object, _grantRepo.Object, _seriesRepo.Object, _notifications.Object, _taskRevocationService.Object);
     }
 
     [Fact]

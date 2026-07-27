@@ -8,6 +8,7 @@ namespace MangaERP.Studio.Presentation.Controllers;
 
 [ApiController]
 [Route("api/studio/collaborations/{collaborationId:guid}/series-grants")]
+[Route("api/v1/studios/collaborations/{collaborationId:guid}/series-grants")]
 [Authorize]
 public class SeriesAccessController : ControllerBase
 {
@@ -37,6 +38,7 @@ public class SeriesAccessController : ControllerBase
     }
 
     [HttpDelete("{seriesId:guid}")]
+    [HttpPost("{seriesId:guid}/revoke")]
     public async Task<IActionResult> RevokeSeriesAccess(
         [FromRoute] Guid collaborationId,
         [FromRoute] Guid seriesId,

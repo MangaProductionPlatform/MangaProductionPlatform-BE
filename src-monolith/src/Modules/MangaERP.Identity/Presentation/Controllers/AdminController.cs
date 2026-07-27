@@ -51,7 +51,8 @@ public class AdminController : ControllerBase
                 request.PersonalEmail,
                 request.Role,
                 request.PhoneNumber,
-                request.ManagingTantouId);
+                request.ManagingTantouId,
+                request.ManagingMangakaId);
             var result = await _mediator.Send(command, ct);
             return CreatedAtAction(nameof(ProvisionAccount), new { result.UserId }, result);
         }
@@ -242,7 +243,8 @@ public record ProvisionAccountRequest(
     string PersonalEmail,
     UserRole Role,
     string? PhoneNumber = null,
-    Guid? ManagingTantouId = null
+    Guid? ManagingTantouId = null,
+    Guid? ManagingMangakaId = null
 );
 
 public record UpdateRoleRequest(UserRole Role);

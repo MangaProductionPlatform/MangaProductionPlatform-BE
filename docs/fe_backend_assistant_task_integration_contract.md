@@ -31,8 +31,9 @@
 Hệ thống quản lý công việc Assistant (Assistant Collaboration, PageTask, Assignment) được thiết kế theo các nguyên tắc cốt lõi sau:
 
 1. **Collaboration & Series Access:**
-   - Để một Assistant có thể nhận task trong một Series, Assistant đó phải có **MangakaAssistantCollaboration** ở trạng thái `Active` VÀ phải được cấp **SeriesAccessGrant** cho Series cụ thể đó.
+   - Để một Assistant có thể nhận task trong một Series, Assistant đó phải có **MangakaAssistantCollaboration** ở trạng thái `Accepted` VÀ phải được cấp **SeriesAccessGrant** cho Series cụ thể đó.
    - Nếu chưa được cấp SeriesAccess, Assistant vẫn có thể xuất hiện trong danh sách candidate nhưng ở danh sách `UnavailableAssistants` với mã lý do `SeriesAccessMissing`.
+   - **Lưu ý về `collaborationStatus`:** Enum value trả về trên JSON API là `"Accepted"` (đại diện cho trạng thái hợp tác chính thức). Frontend nhận string `"Accepted"` từ Backend và hiển thị Display Label là *"Active"* hoặc *"Đang hợp tác"*.
 
 2. **Assignment Lifecycle & Dual-Role (Primary & Backup):**
    - Một lượt giao task tạo ra `TaskAssignmentAttempt` ở trạng thái `PendingAcceptance`.
@@ -57,6 +58,8 @@ Hệ thống quản lý công việc Assistant (Assistant Collaboration, PageTas
 
 | Module | Method | Exact Route (Canonical) | Controller Action | Request DTO | Response DTO | Allowed Roles | Ownership / Scope Rule | FE Classification |
 |---|---|---|---|---|---|---|---|---|
+| **Studio** | `GET` | `/api/v1/mangakas/me/assistants` | `StudioInvitationsController.GetMyAssistants` | *None* | `MyAssistantsResponseDto` | `Mangaka` | Trả danh sách Assistant thuộc Mangaka hiện tại | `[FE-MustAdd]` |
+| **Identity** | `POST` | `/api/v1/admin/users/provision` | `AdminController.ProvisionAccount` | `ProvisionAccountRequest (gồm managingMangakaId)` | `ProvisionAccountResult` | `Admin` | Cấp account + gán Mangaka cho Assistant | `[FE-Likely]` |
 | **Studio** | `POST` | `/api/v1/studios/{seriesId}/invitations/preview` | `StudioInvitationPreviewController.Preview` | `PreviewRequest` | `object { found, personalEmail, name, maskedInternalEmail }` | `Mangaka` | Phải là tác giả Series | `[FE-MustAdd]` |
 | **Studio** | `POST` | `/api/v1/studios/{seriesId}/invitations` | `StudioInvitationsController.InviteAssistant` | `InviteAssistantRequest` | `InviteAssistantResult` | `Mangaka` | Owner Series | `[FE-Likely]` |
 | **Studio** | `GET` | `/api/v1/studios/{seriesId}/invitations` | `StudioInvitationsController.GetSeriesInvitations` | *None* | `IEnumerable<StudioInvitationDto>` | `Mangaka` | Owner Series | `[FE-Likely]` |
