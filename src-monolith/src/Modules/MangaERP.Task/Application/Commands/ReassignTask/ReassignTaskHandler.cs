@@ -107,7 +107,7 @@ public class ReassignTaskHandler : IRequestHandler<ReassignTaskCommand, AssignTa
             if (newCollab.MangakaId != request.ActorUserId)
                 throw new ConflictException("New assistant collaboration is with a different Mangaka.");
 
-            if (newCollab.Status != CollaborationStatus.Active)
+            if (newCollab.Status != CollaborationStatus.Accepted)
                 throw new ConflictException($"Cannot assign task to assistant in collaboration status '{newCollab.Status}'.");
 
             var grant = await _grantRepo.GetActiveGrantAsync(newCollab.Id, series.Id, ct);

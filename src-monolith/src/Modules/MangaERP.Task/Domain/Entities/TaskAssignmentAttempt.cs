@@ -151,7 +151,7 @@ public class TaskAssignmentAttempt : AggregateRoot
 
     public void Cancel(DateTime now, string? reason = null)
     {
-        if (Status != TaskAssignmentAttemptStatus.PendingAcceptance)
+        if (Status != TaskAssignmentAttemptStatus.PendingAcceptance && Status != TaskAssignmentAttemptStatus.Accepted)
             return;
 
         Status = TaskAssignmentAttemptStatus.Cancelled;

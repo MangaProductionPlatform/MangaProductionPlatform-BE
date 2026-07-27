@@ -2,10 +2,13 @@ namespace MangaERP.Studio.Domain.Entities;
 
 public enum CollaborationStatus
 {
-    Active,
+    Pending,
+    Accepted,
     Suspended,
     EndingRequested,
-    Ended
+    Ended,
+    Rejected,
+    Cancelled
 }
 
 public enum CollaborationSuspensionMode
@@ -31,7 +34,7 @@ public sealed class MangakaAssistantCollaboration
     public Guid MangakaId { get; private set; }
     public Guid AssistantId { get; private set; }
     public Guid InvitationId { get; private set; }
-    public CollaborationStatus Status { get; private set; } = CollaborationStatus.Active;
+    public CollaborationStatus Status { get; private set; } = CollaborationStatus.Accepted;
     public CollaborationSuspensionMode? SuspensionMode { get; private set; }
     public DateTime StartedAt { get; private set; }
     public DateTime? SuspendedAt { get; private set; }
@@ -58,7 +61,7 @@ public sealed class MangakaAssistantCollaboration
     public void Suspend(CollaborationSuspensionMode mode, string reason, DateTime now)
     {
         if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("Suspension reason is required.");
-        if (Status != CollaborationStatus.Active) throw new InvalidOperationException("Only active collaborations can be suspended.");
+        if (Status != CollaborationStatus.Accepted) throw new InvalidOperationException("Only active collaborations can be suspended.");
         Status = CollaborationStatus.Suspended;
         SuspensionMode = mode;
         SuspendedAt = now;
@@ -80,7 +83,7 @@ public sealed class MangakaAssistantCollaboration
     public void Reactivate(DateTime now)
     {
         if (Status != CollaborationStatus.Suspended) throw new InvalidOperationException("Only suspended collaborations can be reactivated.");
-        Status = CollaborationStatus.Active;
+        Status = CollaborationStatus.Accepted;
         SuspensionMode = null;
         SuspendedAt = null;
         SuspensionReason = null;
@@ -89,7 +92,7 @@ public sealed class MangakaAssistantCollaboration
 
     public void RequestEnding(DateTime now)
     {
-        if (Status != CollaborationStatus.Active && Status != CollaborationStatus.Suspended)
+        if (Status != CollaborationStatus.Accepted && Status != CollaborationStatus.Suspended)
             throw new InvalidOperationException("Only active or suspended collaborations can request ending.");
         Status = CollaborationStatus.EndingRequested;
         Touch(now);
@@ -99,7 +102,7 @@ public sealed class MangakaAssistantCollaboration
     {
         if (string.IsNullOrWhiteSpace(reason) || actorId == Guid.Empty) throw new ArgumentException("End reason and actor are required.");
         if (Status == CollaborationStatus.Ended) throw new InvalidOperationException("Collaboration is already ended.");
-        if (Status != CollaborationStatus.EndingRequested && Status != CollaborationStatus.Active && Status != CollaborationStatus.Suspended)
+        if (Status != CollaborationStatus.EndingRequested && Status != CollaborationStatus.Accepted && Status != CollaborationStatus.Suspended)
             throw new InvalidOperationException("Collaboration cannot be ended from its current state.");
         Status = CollaborationStatus.Ended;
         EndedAt = now;

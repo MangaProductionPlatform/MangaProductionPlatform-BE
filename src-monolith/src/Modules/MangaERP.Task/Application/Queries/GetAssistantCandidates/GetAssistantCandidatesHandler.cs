@@ -75,7 +75,7 @@ public static class AssistantCandidateHelper
             if (assistant == null) continue;
 
             bool isAccountActive = assistant.AccountStatus == AccountStatus.Active && !assistant.IsDeleted;
-            bool isCollabActive = collab.Status == CollaborationStatus.Active;
+            bool isCollabActive = collab.Status == CollaborationStatus.Accepted;
 
             var grant = await grantRepo.GetActiveGrantAsync(collab.Id, seriesId, ct);
             bool hasSeriesAccess = grant != null;

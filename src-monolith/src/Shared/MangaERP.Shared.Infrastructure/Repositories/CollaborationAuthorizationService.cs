@@ -21,7 +21,7 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
     public Task<bool> HasActiveCollaborationAsync(Guid mangakaId, Guid assistantId, CancellationToken ct = default) =>
         _db.MangakaAssistantCollaborations.AsNoTracking().AnyAsync(
             c => c.MangakaId == mangakaId && c.AssistantId == assistantId &&
-                 c.Status == CollaborationStatus.Active, ct);
+                 c.Status == CollaborationStatus.Accepted, ct);
 
     public Task<bool> HasLegacySeriesScopeAsync(Guid mangakaId, Guid seriesId, Guid assistantId, CancellationToken ct = default) =>
         _db.StudioInvitations.AsNoTracking().AnyAsync(i =>
@@ -31,7 +31,7 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
     public async Task<bool> CanReceiveNewAssignmentsAsync(Guid mangakaId, Guid seriesId, Guid assistantId, CancellationToken ct = default)
     {
         var collaboration = await _db.MangakaAssistantCollaborations.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.MangakaId == mangakaId && c.AssistantId == assistantId && c.Status == CollaborationStatus.Active, ct);
+            .FirstOrDefaultAsync(c => c.MangakaId == mangakaId && c.AssistantId == assistantId && c.Status == CollaborationStatus.Accepted, ct);
 
         if (collaboration == null) return false;
 
@@ -43,7 +43,7 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
     {
         return await _db.SeriesAccessGrants.AsNoTracking()
             .AnyAsync(g => g.SeriesId == seriesId && g.RevokedAt == null &&
-                           _db.MangakaAssistantCollaborations.Any(c => c.Id == g.CollaborationId && c.AssistantId == assistantId && c.Status == CollaborationStatus.Active), ct);
+                           _db.MangakaAssistantCollaborations.Any(c => c.Id == g.CollaborationId && c.AssistantId == assistantId && c.Status == CollaborationStatus.Accepted), ct);
     }
 
     public async Task<bool> CanBrowseSeriesAsync(Guid assistantId, Guid seriesId, CancellationToken ct = default)
@@ -71,7 +71,7 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
 
         if (collab == null) return false;
 
-        if (collab.Status == CollaborationStatus.Active)
+        if (collab.Status == CollaborationStatus.Accepted)
         {
             return await _db.SeriesAccessGrants.AsNoTracking()
                 .AnyAsync(g => g.CollaborationId == collab.Id && g.SeriesId == chapter.SeriesId && g.RevokedAt == null, ct);
@@ -94,7 +94,7 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
     public async Task<bool> CanReceiveAssignmentAsync(Guid assistantId, Guid seriesId, CancellationToken ct = default)
     {
         var collab = await _db.MangakaAssistantCollaborations.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.AssistantId == assistantId && c.Status == CollaborationStatus.Active, ct);
+            .FirstOrDefaultAsync(c => c.AssistantId == assistantId && c.Status == CollaborationStatus.Accepted, ct);
 
         if (collab == null) return false;
 
@@ -111,7 +111,7 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
         var collab = await _db.MangakaAssistantCollaborations.AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == attempt.CollaborationId, ct);
 
-        return collab != null && collab.Status == CollaborationStatus.Active;
+        return collab != null && collab.Status == CollaborationStatus.Accepted;
     }
 
     public async Task<bool> CanSubmitProgressAsync(Guid assistantId, Guid taskId, CancellationToken ct = default)

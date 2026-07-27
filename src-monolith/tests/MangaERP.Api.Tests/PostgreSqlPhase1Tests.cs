@@ -31,6 +31,14 @@ public sealed class PostgreSqlPhase1Tests
 
         await using var schema = new NpgsqlCommand("SELECT to_regclass('public.\"MangakaAssistantCollaborations\"')::text", connection);
         Assert.Equal("\"MangakaAssistantCollaborations\"", (string?)await schema.ExecuteScalarAsync());
+
+        await ExecuteAsync(connection, """
+            TRUNCATE TABLE "TaskAssignmentAttempts", "SeriesAccessGrants", "CollaborationEvents", "MangakaAssistantCollaborations" CASCADE;
+            DROP INDEX IF EXISTS "IX_MangakaAssistantCollaborations_AssistantId";
+            CREATE UNIQUE INDEX "IX_MangakaAssistantCollaborations_AssistantId" ON "MangakaAssistantCollaborations" ("AssistantId") WHERE "Status" IN ('Accepted', 'Pending', 'Suspended', 'EndingRequested');
+            DROP INDEX IF EXISTS "IX_MangakaAssistantCollaborations_MangakaId_AssistantId";
+            CREATE UNIQUE INDEX "IX_MangakaAssistantCollaborations_MangakaId_AssistantId" ON "MangakaAssistantCollaborations" ("MangakaId", "AssistantId") WHERE "Status" IN ('Accepted', 'Pending', 'Suspended', 'EndingRequested');
+            """);
     }
 
     [Fact]
@@ -76,7 +84,7 @@ public sealed class PostgreSqlPhase1Tests
                 await using var command = new NpgsqlCommand($"""
                     INSERT INTO "MangakaAssistantCollaborations"
                       ("Id","MangakaId","AssistantId","InvitationId","Status","StartedAt","CreatedAt","UpdatedAt","ConcurrencyToken")
-                    VALUES ('{Guid.NewGuid()}','{ids.mangaka}','{ids.assistant}','{invitationId}','Active',now(),now(),now(),'{Guid.NewGuid()}')
+                    VALUES ('{Guid.NewGuid()}','{ids.mangaka}','{ids.assistant}','{invitationId}','Accepted',now(),now(),now(),'{Guid.NewGuid()}')
                     """, connection, tx);
                 await command.ExecuteNonQueryAsync();
                 await tx.CommitAsync();
@@ -104,7 +112,7 @@ public sealed class PostgreSqlPhase1Tests
         await ExecuteAsync(connection, $"""
             INSERT INTO "MangakaAssistantCollaborations"
               ("Id","MangakaId","AssistantId","InvitationId","Status","StartedAt","CreatedAt","UpdatedAt","ConcurrencyToken")
-            VALUES ('{collaborationId}','{ids.mangaka}','{ids.assistant}','{ids.invitation}','Active',now(),now(),now(),'{Guid.NewGuid()}')
+            VALUES ('{collaborationId}','{ids.mangaka}','{ids.assistant}','{ids.invitation}','Accepted',now(),now(),now(),'{Guid.NewGuid()}')
             """, tx);
         await ExecuteAsync(connection, $"INSERT INTO \"CollaborationEvents\" (\"Id\",\"CollaborationId\",\"EventType\",\"ActorUserId\",\"OccurredAt\") VALUES ('{Guid.NewGuid()}','{collaborationId}','CollaborationActivated','{ids.assistant}',now())", tx);
         await tx.RollbackAsync();
@@ -138,8 +146,7 @@ public sealed class PostgreSqlPhase1Tests
         Assert.Equal(1, results.Count(x => x is ConflictException));
 
         await using var verify = await OpenAsync();
-        await using var count = new NpgsqlCommand("SELECT count(*) FROM \"MangakaAssistantCollaborations\" WHERE \"AssistantId\" = $1 AND \"Status\" <> 'Ended'", verify);
-        count.Parameters.AddWithValue(ids.assistant);
+        await using var count = new NpgsqlCommand($"SELECT count(*) FROM \"MangakaAssistantCollaborations\" WHERE \"AssistantId\" = '{ids.assistant}' AND \"Status\" <> 'Ended'", verify);
         Assert.Equal(1L, (long)await count.ExecuteScalarAsync()!);
     }
 
@@ -152,7 +159,7 @@ public sealed class PostgreSqlPhase1Tests
         await ExecuteAsync(connection, $"""
             INSERT INTO "MangakaAssistantCollaborations"
               ("Id","MangakaId","AssistantId","InvitationId","Status","StartedAt","CreatedAt","UpdatedAt","ConcurrencyToken")
-            VALUES ('{collaborationId}','{ids.mangaka}','{ids.assistant}','{ids.invitation}','Active',now(),now(),now(),'{Guid.NewGuid()}')
+            VALUES ('{collaborationId}','{ids.mangaka}','{ids.assistant}','{ids.invitation}','Accepted',now(),now(),now(),'{Guid.NewGuid()}')
             """);
 
         await using var first = CreateDbContext();
@@ -198,6 +205,8 @@ public sealed class PostgreSqlPhase1Tests
         var assistant = Guid.NewGuid();
         var invitation1 = Guid.NewGuid();
         var invitation2 = Guid.NewGuid();
+        var series1 = Guid.NewGuid();
+        var series2 = Guid.NewGuid();
         await ExecuteAsync(connection, $"""
             INSERT INTO "Users" ("Id","Username","Email","PasswordHash","Role","AccountStatus","IsDeleted","CreatedAt") VALUES
               ('{mangaka1}','mgk_{mangaka1}@test.local','mgk_{mangaka1}@test.local','x','Mangaka','Active',false,now()),
@@ -205,10 +214,15 @@ public sealed class PostgreSqlPhase1Tests
               ('{assistant}','ast_{assistant}@test.local','ast_{assistant}@test.local','x','Assistant','Active',false,now())
             """);
         await ExecuteAsync(connection, $"""
+            INSERT INTO "MangaSeries" ("Id","Title","AuthorId","Status","CreatedAt","IsDeleted") VALUES
+              ('{series1}','Series 1','{mangaka1}','Ongoing',now(),false),
+              ('{series2}','Series 2','{mangaka2}','Ongoing',now(),false)
+            """);
+        await ExecuteAsync(connection, $"""
             INSERT INTO "StudioInvitations"
               ("Id","SeriesId","InviterMangakaId","AssistantUserId","AssistantEmail","NormalizedAssistantEmail","Status","IsNewAccountFlow","RegistrationDeliveryStatus","CreatedAt","ExpiresAt") VALUES
-              ('{invitation1}','{Guid.NewGuid()}','{mangaka1}','{assistant}','ast_{assistant}@test.local','ast_{assistant}@test.local','Pending',false,'NotRequired',now(),now()+interval '1 day'),
-              ('{invitation2}','{Guid.NewGuid()}','{mangaka2}','{assistant}','ast_{assistant}@test.local','ast_{assistant}@test.local','Pending',false,'NotRequired',now(),now()+interval '1 day')
+              ('{invitation1}','{series1}','{mangaka1}','{assistant}','ast_{assistant}@test.local','ast_{assistant}@test.local','Pending',false,'NotRequired',now(),now()+interval '1 day'),
+              ('{invitation2}','{series2}','{mangaka2}','{assistant}','ast_{assistant}@test.local','ast_{assistant}@test.local','Pending',false,'NotRequired',now(),now()+interval '1 day')
             """);
         return (assistant, invitation1, invitation2);
     }
