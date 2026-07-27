@@ -78,6 +78,44 @@ public class TaskAssignmentAttempt : AggregateRoot
         };
     }
 
+    public static TaskAssignmentAttempt CreateAccepted(
+        Guid taskId,
+        Guid assistantId,
+        Guid collaborationId,
+        int attemptNumber,
+        Guid assignedByUserId,
+        DateTime? assignedAt = null,
+        string assignmentRole = "Direct",
+        DateTime? workDeadline = null,
+        Guid? previousAttemptId = null)
+    {
+        if (taskId == Guid.Empty) throw new ArgumentException("TaskId is required.", nameof(taskId));
+        if (assistantId == Guid.Empty) throw new ArgumentException("AssistantId is required.", nameof(assistantId));
+        if (collaborationId == Guid.Empty) throw new ArgumentException("CollaborationId is required.", nameof(collaborationId));
+        if (attemptNumber <= 0) throw new ArgumentException("AttemptNumber must be > 0.", nameof(attemptNumber));
+        if (assignedByUserId == Guid.Empty) throw new ArgumentException("AssignedByUserId is required.", nameof(assignedByUserId));
+
+        var now = assignedAt ?? DateTime.UtcNow;
+        return new TaskAssignmentAttempt
+        {
+            Id = Guid.NewGuid(),
+            TaskId = taskId,
+            AssistantId = assistantId,
+            CollaborationId = collaborationId,
+            AttemptNumber = attemptNumber,
+            Status = TaskAssignmentAttemptStatus.Accepted,
+            AssignedAt = now,
+            AcceptedAt = now,
+            AssignedByUserId = assignedByUserId,
+            AssignmentRole = string.IsNullOrWhiteSpace(assignmentRole) ? "Direct" : assignmentRole,
+            WorkDeadline = workDeadline,
+            PreviousAttemptId = previousAttemptId,
+            CreatedAt = now,
+            UpdatedAt = now,
+            ConcurrencyToken = Guid.NewGuid()
+        };
+    }
+
     public void Accept(Guid actorId, DateTime now)
     {
         if (Status != TaskAssignmentAttemptStatus.PendingAcceptance)

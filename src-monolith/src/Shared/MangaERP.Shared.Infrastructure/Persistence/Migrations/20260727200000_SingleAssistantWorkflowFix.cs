@@ -20,16 +20,16 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
                 table: "TaskAssignmentAttempts");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TaskAssignmentAttempts_TaskId_PendingAcceptance",
-                table: "TaskAssignmentAttempts",
-                column: "TaskId",
-                unique: true,
-                filter: "\"Status\" = 'PendingAcceptance'");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_TaskAssignmentAttempts_TaskId_Accepted",
                 table: "TaskAssignmentAttempts",
                 column: "TaskId",
+                unique: true,
+                filter: "\"Status\" = 'Accepted'");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TaskAssignmentAttempts_TaskId_AssistantId_Active",
+                table: "TaskAssignmentAttempts",
+                columns: new[] { "TaskId", "AssistantId" },
                 unique: true,
                 filter: "\"Status\" = 'Accepted'");
         }
@@ -38,11 +38,11 @@ namespace MangaERP.Shared.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
-                name: "IX_TaskAssignmentAttempts_TaskId_PendingAcceptance",
+                name: "IX_TaskAssignmentAttempts_TaskId_Accepted",
                 table: "TaskAssignmentAttempts");
 
             migrationBuilder.DropIndex(
-                name: "IX_TaskAssignmentAttempts_TaskId_Accepted",
+                name: "IX_TaskAssignmentAttempts_TaskId_AssistantId_Active",
                 table: "TaskAssignmentAttempts");
 
             migrationBuilder.CreateIndex(

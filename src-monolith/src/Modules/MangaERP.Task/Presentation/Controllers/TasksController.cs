@@ -9,6 +9,7 @@ using MangaERP.Chapter.Application.Queries.GetTaskDetail;
 using MangaERP.Chapter.Application.Commands.UpdateTaskDeadline;
 using MangaERP.Chapter.Application.Commands.UpdateTaskDetails;
 using MangaERP.Chapter.Application.Commands.CancelAndRecreateTask;
+using MangaERP.Chapter.Domain.Entities;
 using MangaERP.Chapter.Application.Queries.GetBasePageVersions;
 using MangaERP.Task.Application.Queries.GetLayerVersions;
 using MangaERP.Task.Application.Commands.RollbackLayer;
@@ -421,6 +422,7 @@ public class TasksController : ControllerBase
             var command = new CancelAndRecreateTaskCommand(
                 GetUserId(),
                 pageTaskId,
+                request?.CancellationCategory ?? TaskCancellationCategory.OtherTaskIssue,
                 request?.Reason,
                 request?.ConfirmProgressLoss ?? false,
                 request?.CopyTaskDetails ?? true);
@@ -435,7 +437,8 @@ public class TasksController : ControllerBase
 }
 
 public record CancelAndRecreateTaskRequest(
-    string? Reason,
+    TaskCancellationCategory CancellationCategory = TaskCancellationCategory.OtherTaskIssue,
+    string? Reason = null,
     bool ConfirmProgressLoss = false,
     bool CopyTaskDetails = true
 );

@@ -145,6 +145,9 @@ public class PageTaskConfiguration : IEntityTypeConfiguration<PageTask>
         b.Property(e => e.RegionMask).HasColumnType("text").IsRequired(false);
         b.Property(e => e.TakeoverStatus).HasMaxLength(50).HasDefaultValue("None");
         b.Property(e => e.ReassignmentReason).HasMaxLength(2000);
+        b.Property(e => e.CancellationCategory).HasConversion(v => v.HasValue ? v.Value.ToString() : null,
+            v => !string.IsNullOrEmpty(v) ? Enum.Parse<TaskCancellationCategory>(v) : null).HasMaxLength(50);
+        b.Property(e => e.CancellationReason).HasMaxLength(2000);
         b.HasOne(pt => pt.PreviewPage).WithOne(pp => pp.PageTask)
             .HasForeignKey<PreviewPage>(pp => pp.PageTaskId).OnDelete(DeleteBehavior.Cascade);
         b.HasMany(pt => pt.BasePageVersions).WithOne()
@@ -432,17 +435,13 @@ public class TaskAssignmentAttemptConfiguration : IEntityTypeConfiguration<TaskA
 
         b.HasIndex(e => new { e.TaskId, e.AttemptNumber }).IsUnique();
 
-        b.HasIndex(e => new { e.TaskId }, "IX_TaskAssignmentAttempts_TaskId_PendingAcceptance")
-            .IsUnique()
-            .HasFilter("\"Status\" = 'PendingAcceptance'");
-
         b.HasIndex(e => new { e.TaskId }, "IX_TaskAssignmentAttempts_TaskId_Accepted")
             .IsUnique()
             .HasFilter("\"Status\" = 'Accepted'");
 
         b.HasIndex(e => new { e.TaskId, e.AssistantId }, "IX_TaskAssignmentAttempts_TaskId_AssistantId_Active")
             .IsUnique()
-            .HasFilter("\"Status\" IN ('PendingAcceptance', 'Accepted')");
+            .HasFilter("\"Status\" = 'Accepted'");
 
         b.HasIndex(e => new { e.AssistantId, e.Status });
         b.HasIndex(e => new { e.TaskId, e.Status });

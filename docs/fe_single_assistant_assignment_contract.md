@@ -1,99 +1,58 @@
-# Frontend Integration Contract: Single Assistant Assignment & Reassignment Workflow
+# Frontend Integration Contract: Direct Immediate Assistant Task Assignment & Reassignment Workflow
 
-> **Phase**: Monolith Refactor - Single Active Assistant Model  
+> **Phase**: Monolith Refactor - Direct Immediate Assignment Model  
 > **Status**: APPROVED & IMPLEMENTED  
 > **Target FE Audience**: MangaStudioPlatform FE Developers
 
 ---
 
-## 1. Executive Summary & Required FE Changes
+## 1. Executive Summary & Core Business Rule
 
-The Backend workflow has been refactored to enforce **exactly ONE active Assistant per task**. All Primary/Backup/Takeover dual-assignment and backup standby logic has been retired.
-
-### Deprecated Endpoints & Fields to Remove from FE
-- **Remove API Endpoint**: `POST /api/v1/tasks/{taskId}/takeover` (returns `410 Gone`).
-- **Remove Request Fields**:
-  - `PrimaryAssistantId` (use `assistantId` or `newAssistantId` instead).
-  - `BackupAssistantId` (removed from runtime contracts).
-  - `AssignmentRole` ("Primary", "Backup", "BackupTakeover" -> replaced with single assignment attempt model).
-- **Remove Response Fields**:
-  - `currentPrimary` / `currentBackup` in assignment history (replaced with `currentAssignment`).
+Under the **Direct Immediate Assignment Model**:
+1. **Assistant accepts invitation ONCE** when joining the Studio/Series/Collaboration.
+2. Once an Assistant is a valid member of a Series (Active Collaboration + Active `SeriesAccessGrant`), **task assignment and reassignment take effect IMMEDIATELY upon Mangaka action**.
+3. **No task-level Accept/Reject step**: Task invitations, task rejection, response deadlines, and `PendingAcceptance` badges are completely eliminated.
+4. **Immediate Write Access Transfer**: On Reassign, the old Assistant loses write access immediately and the new Assistant gains write access immediately.
+5. **Data Preservation**: Reassign preserves `TaskId`, original `WorkStartedAt`, progress %, checkpoints, artwork layers, files, comments, and submission history.
 
 ---
 
-## 2. Canonical API Endpoints
+## 2. Deprecated Endpoints & Removed Parameters
 
-| Operation | HTTP Method | Route | Authorization Role |
-| :--- | :--- | :--- | :--- |
-| **Get Candidates** | `GET` | `/api/v1/tasks/{taskId}/assistant-candidates` | `Mangaka` |
-| **Assign Task** | `POST` | `/api/v1/tasks/{taskId}/assignments` | `Mangaka` |
-| **Respond Assignment** | `POST` | `/api/v1/tasks/assignments/{attemptId}/respond` | `Assistant` |
-| **Cancel Assignment** | `POST` | `/api/v1/tasks/assignments/{attemptId}/cancel` | `Mangaka` |
-| **Reassign Task** | `POST` | `/api/v1/tasks/{taskId}/reassign` | `Mangaka` |
-| **Get Assignment History** | `GET` | `/api/v1/tasks/{taskId}/assignment-history` | `Mangaka`, `Assistant`, `TantouEditor` |
-| **Get Assistant Workload** | `GET` | `/api/v1/assistants/{assistantId}/workload` | `Mangaka`, `Assistant`, `TantouEditor` |
+- **Retired API Endpoints**:
+  - `POST /api/v1/tasks/assignments/{attemptId}/respond` (returns `410 Gone`).
+  - `POST /api/v1/tasks/{taskId}/takeover` (returns `410 Gone`).
+- **Removed Request Parameters**:
+  - `responseDeadline` (removed from Assign/Reassign requests).
+  - `PrimaryAssistantId` / `BackupAssistantId` (retired; use `assistantId` or `newAssistantId`).
 
 ---
 
-## 3. Detailed API Contracts
+## 3. Canonical API Endpoints
 
-### 3.1 Get Assistant Candidates
-**`GET /api/v1/tasks/{taskId}/assistant-candidates`**
-
-**Response Body (`200 OK`)**:
-```json
-{
-  "taskId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "seriesId": "4a285f64-5717-4562-b3fc-2c963f66afa7",
-  "maxWorkload": 3,
-  "availableAssistants": [
-    {
-      "assistantId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-      "displayName": "Alex Tanaka",
-      "email": "alex@studio.com",
-      "activeTaskCount": 1,
-      "pendingAssignmentCount": 0,
-      "totalWorkload": 1,
-      "maxWorkload": 3,
-      "remainingCapacity": 2,
-      "hasSeriesAccess": true,
-      "isAvailable": true,
-      "availabilityCode": "Available",
-      "availabilityReason": null
-    }
-  ],
-  "unavailableAssistants": [
-    {
-      "assistantId": "8d9e6679-7425-40de-944b-e07fc1f90ae8",
-      "displayName": "Ken Sato",
-      "email": "ken@studio.com",
-      "activeTaskCount": 3,
-      "pendingAssignmentCount": 0,
-      "totalWorkload": 3,
-      "maxWorkload": 3,
-      "remainingCapacity": 0,
-      "hasSeriesAccess": true,
-      "isAvailable": false,
-      "availabilityCode": "WorkloadLimitReached",
-      "availabilityReason": "Assistant has reached the maximum workload limit (3)."
-    }
-  ]
-}
-```
+| Operation | HTTP Method | Route | Authorization Role | Immediate Effect |
+| :--- | :--- | :--- | :--- | :--- |
+| **Get Candidates** | `GET` | `/api/v1/tasks/{taskId}/assistant-candidates` | `Mangaka` | Returns eligible active series members |
+| **Assign Task** | `POST` | `/api/v1/tasks/{taskId}/assignments` | `Mangaka` | `AssignedAssistantId` set, task `Incomplete`, `WorkStartedAt` set |
+| **Reassign Task** | `POST` | `/api/v1/tasks/{taskId}/reassign` | `Mangaka` | `AssignedAssistantId` updated, old superseded, new active |
+| **Cancel & Recreate** | `POST` | `/api/v1/tasks/{taskId}/cancel-and-recreate` | `Mangaka` | Soft-deletes old task, creates new unassigned task |
+| **Get Assignment History** | `GET` | `/api/v1/tasks/{taskId}/assignment-history` | `Mangaka`, `Assistant`, `TantouEditor` | Returns current assignment + history |
+| **Get Assistant Workload** | `GET` | `/api/v1/assistants/{assistantId}/workload` | `Mangaka`, `Assistant`, `TantouEditor` | Returns count of active task responsibilities |
 
 ---
 
-### 3.2 Initial Assignment
+## 4. API Request & Response Contracts
+
+### 4.1 Assign Task
 **`POST /api/v1/tasks/{taskId}/assignments`**
 
 **Request Body**:
 ```json
 {
   "assistantId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  "description": "Clean up line art and draw background trees",
+  "description": "Clean line art and draw background",
   "deadline": "2026-08-01T12:00:00Z",
-  "durationHours": 48,
-  "responseDeadline": "2026-07-29T12:00:00Z"
+  "durationHours": 48
 }
 ```
 
@@ -107,10 +66,10 @@ The Backend workflow has been refactored to enforce **exactly ONE active Assista
     "assistantId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
     "collaborationId": "1c1e6679-7425-40de-944b-e07fc1f90ae0",
     "attemptNumber": 1,
-    "status": "PendingAcceptance",
+    "status": "Accepted",
     "assignmentRole": "Direct",
     "assignedAt": "2026-07-27T14:30:00Z",
-    "expiresAt": "2026-07-29T12:00:00Z",
+    "acceptedAt": "2026-07-27T14:30:00Z",
     "assignedByUserId": "5a1e6679-7425-40de-944b-e07fc1f90ae1",
     "concurrencyToken": "2b1e6679-7425-40de-944b-e07fc1f90ae2"
   }
@@ -119,14 +78,14 @@ The Backend workflow has been refactored to enforce **exactly ONE active Assista
 
 ---
 
-### 3.3 Reassign Task
+### 4.2 Reassign Task
 **`POST /api/v1/tasks/{taskId}/reassign`**
 
 **Request Body**:
 ```json
 {
   "newAssistantId": "8d9e6679-7425-40de-944b-e07fc1f90ae8",
-  "reason": "Previous assistant fell ill and requested replacement",
+  "reason": "Previous assistant fell ill",
   "deadline": "2026-08-03T12:00:00Z",
   "description": "Continue background shading from 45% progress"
 }
@@ -142,9 +101,10 @@ The Backend workflow has been refactored to enforce **exactly ONE active Assista
     "assistantId": "8d9e6679-7425-40de-944b-e07fc1f90ae8",
     "collaborationId": "3c1e6679-7425-40de-944b-e07fc1f90ae4",
     "attemptNumber": 2,
-    "status": "PendingAcceptance",
+    "status": "Accepted",
     "assignmentRole": "Direct",
     "assignedAt": "2026-07-27T14:35:00Z",
+    "acceptedAt": "2026-07-27T14:35:00Z",
     "assignedByUserId": "5a1e6679-7425-40de-944b-e07fc1f90ae1",
     "concurrencyToken": "4b1e6679-7425-40de-944b-e07fc1f90ae5"
   }
@@ -153,112 +113,56 @@ The Backend workflow has been refactored to enforce **exactly ONE active Assista
 
 ---
 
-### 3.4 Respond Assignment
-**`POST /api/v1/tasks/assignments/{attemptId}/respond`**
+### 4.3 Cancel and Recreate Task
+**`POST /api/v1/tasks/{taskId}/cancel-and-recreate`**
 
 **Request Body**:
 ```json
 {
-  "accept": true,
-  "rejectionReason": null,
-  "expectedConcurrencyToken": "4b1e6679-7425-40de-944b-e07fc1f90ae5"
+  "cancellationCategory": "AssistantAbandonedTask",
+  "reason": "Assistant stopped responding after 3 days",
+  "confirmProgressLoss": true,
+  "copyTaskDetails": true
 }
 ```
 
 **Response Body (`200 OK`)**:
 ```json
 {
-  "id": "0c1e6679-7425-40de-944b-e07fc1f90ae3",
-  "taskId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-  "assistantId": "8d9e6679-7425-40de-944b-e07fc1f90ae8",
-  "status": "Accepted",
-  "assignmentRole": "Direct",
-  "acceptedAt": "2026-07-27T14:36:00Z"
+  "cancelledTaskId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "newPageTaskId": "4da85f64-5717-4562-b3fc-2c963f66afa7",
+  "status": "Pending",
+  "pageNumber": 1,
+  "baseImageUrl": "https://example.com/base.png"
 }
 ```
 
 ---
 
-### 3.5 Assignment History
-**`GET /api/v1/tasks/{taskId}/assignment-history`**
+## 5. UI/UX Changes Required for FE
 
-**Response Body (`200 OK`)**:
-```json
-{
-  "currentAssignment": {
-    "id": "0c1e6679-7425-40de-944b-e07fc1f90ae3",
-    "taskId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-    "assistantId": "8d9e6679-7425-40de-944b-e07fc1f90ae8",
-    "attemptNumber": 2,
-    "status": "Accepted",
-    "assignmentRole": "Direct",
-    "assignedAt": "2026-07-27T14:35:00Z",
-    "acceptedAt": "2026-07-27T14:36:00Z"
-  },
-  "history": [
-    {
-      "id": "9b1e6679-7425-40de-944b-e07fc1f90ae9",
-      "taskId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "assistantId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-      "attemptNumber": 1,
-      "status": "Superseded",
-      "assignmentRole": "Direct",
-      "assignedAt": "2026-07-27T14:30:00Z",
-      "acceptedAt": "2026-07-27T14:31:00Z",
-      "rejectionReason": "Superseded by replacement assignment (Attempt #2)."
-    },
-    {
-      "id": "0c1e6679-7425-40de-944b-e07fc1f90ae3",
-      "taskId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-      "assistantId": "8d9e6679-7425-40de-944b-e07fc1f90ae8",
-      "attemptNumber": 2,
-      "status": "Accepted",
-      "assignmentRole": "Direct",
-      "assignedAt": "2026-07-27T14:35:00Z",
-      "acceptedAt": "2026-07-27T14:36:00Z"
-    }
-  ]
-}
-```
+1. **Remove Accept/Reject Screens**: Remove all task-level invitation popups, dialogs, or Accept/Reject buttons from Assistant UI.
+2. **Remove PendingBadges**: Remove `PendingAcceptance` status badges from Task Management tables.
+3. **Remove ResponseDeadline Inputs**: Remove `ResponseDeadline` date pickers from Task Assign forms.
+4. **My Tasks Dashboard**: Tasks appear directly in the Assistant's "My Active Tasks" list as soon as Mangaka assigns them.
+5. **Immediate UI Refresh**: Upon calling Assign or Reassign, refresh task view immediately. The task displays `Incomplete`/`InProgress` status with the assigned Assistant's avatar.
+6. **Informational Notifications**: Notifications (`TaskAssigned`, `TaskReassigned`) are purely informational alerts. Clicking a notification opens the active task view.
 
 ---
 
-## 4. Status Definitions
+## 6. Cancel-and-Recreate Candidate Exclusion Rule (UI & Backend Contract)
 
-### Assignment Attempt Statuses
-- `PendingAcceptance`: Invitation sent by Mangaka; awaiting response.
-- `Accepted`: Accepted by Assistant; candidate is active executor.
-- `Rejected`: Rejected by Assistant; task transitions to `ReassignmentRequired`.
-- `Expired`: Response deadline passed without response.
-- `Cancelled`: Cancelled by Mangaka before acceptance.
-- `Superseded`: Reassigned; replaced by a new accepted attempt.
-
-### PageTask Statuses
-- `Pending`: Task created, no active assignment invitation.
-- `PendingAcceptance`: Assignment invitation sent, awaiting response.
-- `Incomplete`: Active task in progress by accepted assistant.
-- `ReassignmentRequired`: Previous invitation rejected/expired; awaiting Mangaka reassignment.
-- `Reviewing`: Task completed by assistant, submitted for review.
-- `RevisionAlert`: Mangaka requested revisions.
-- `Approved`: Task approved by Mangaka.
-- `Cancelled`: Task soft-deleted via Cancel-and-Recreate.
-
----
-
-## 5. Work Continuation Rules for FE
-
-1. **AssignedAssistantId Update**: `AssignedAssistantId` remains unchanged (pointing to old executor or null) while a replacement invitation is `PendingAcceptance`. It updates to the new assistant ONLY after the new assistant calls Accept (`POST .../respond`).
-2. **WorkStartedAt Preservation**: `Task.WorkStartedAt` is set when accepted for the first time and is NEVER reset during reassignment.
-3. **Data Preservation**: Reassign retains `TaskId`, `ChapterId`, `PageNumber`, `TaskType`, `BaseImageUrl`, `ProgressPercent`, progress history, checkpoints, layers, versions, comments, and files.
-4. **Write Access**: Only the current accepted executor (`task.AssignedAssistantId == assistantId`) can submit progress, upload files, or complete the task.
-
----
-
-## 6. Error Code Matrix
-
-| HTTP Status | Error Type / Exception | Cause | FE Handling Recommendation |
-| :--- | :--- | :--- | :--- |
-| `400 Bad Request` | `ArgumentException` | Missing required field (`assistantId`, `reason`, `rejectionReason`). | Display inline field validation error. |
-| `403 Forbidden` | `UnauthorizedAccessException` | Non-owner calling assign/reassign or non-assigned user writing task. | Redirect or show access denied warning. |
-| `409 Conflict` | `ConflictException` | Task already has active attempt or assistant reached max workload (3). | Prompt user with conflict message or refresh candidate list. |
-| `410 Gone` | Deprecated Route | Calling retired `POST /api/v1/tasks/{taskId}/takeover`. | Remove takeover button from UI and redirect to Reassign dialog. |
+1. **Assistant Exclusion Rule**:
+   - When a task is Cancel-and-Recreated due to an **assistant-related category** (`AssistantAbandonedTask`, `AssistantUnavailable`, `AssistantFailedToStart`, `AssistantRemovedForPerformance`), the previous assistant assigned to that task is excluded from being assigned/reassigned to the newly recreated task.
+   - When recreated due to a **task-related category** (`InvalidTaskDefinition`, `WrongBaseImage`, `WrongLayout`, `WrongTaskType`, `WrongPageNumber`, `OtherTaskIssue`), the previous assistant remains eligible.
+2. **Candidate API Behavior (`GET /api/v1/tasks/{taskId}/assistant-candidates`)**:
+   - Excluded assistant will appear under `unavailableAssistants` list with:
+     - `isAvailable`: `false`
+     - `availabilityCode`: `"PreviousTaskAssigneeExcluded"`
+     - `availabilityReason`: `"This assistant was removed from the previous version of this task."`
+3. **FE UI Requirements**:
+   - Render the excluded assistant as disabled in the candidate selector dropdown/modal.
+   - Display the clear reason tooltip/text: *"This assistant was removed from the previous version of this task."*
+   - Do NOT try to infer exclusion logic client-side; always rely on `availabilityCode` from the Candidate API.
+4. **Backend Security Enforcement**:
+   - Direct Assign (`POST /api/v1/tasks/{taskId}/assignments`) and Direct Reassign (`POST /api/v1/tasks/{taskId}/reassign`) endpoints independently enforce this rule and return `409 Conflict` with message `PREVIOUS_TASK_ASSIGNEE_EXCLUDED: ...` if a manual request is attempted.

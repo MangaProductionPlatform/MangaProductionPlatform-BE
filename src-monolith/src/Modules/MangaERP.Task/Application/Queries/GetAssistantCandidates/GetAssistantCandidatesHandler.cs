@@ -101,17 +101,17 @@ public class GetAssistantCandidatesHandler : IRequestHandler<GetAssistantCandida
             var grant = await _grantRepo.GetActiveGrantAsync(collab.Id, series.Id, ct);
             bool hasSeriesAccess = grant != null;
 
-            var assistantAttempts = await _attemptRepo.GetPendingByCollaborationIdAsync(collab.Id, ct);
-            int pendingCount = assistantAttempts.Count(a => a.Status == TaskAssignmentAttemptStatus.PendingAcceptance);
-
+            int pendingCount = 0;
             int totalWorkload = await _attemptRepo.GetActiveWorkloadCountAsync(assistant.Id, ct);
-            int activeTaskCount = Math.Max(0, totalWorkload - pendingCount);
+            int activeTaskCount = totalWorkload;
             int remainingCapacity = Math.Max(0, maxWorkload - totalWorkload);
 
-            bool isAssignedToThisTask = existingAttemptsOnTask.Any(a => a.AssistantId == assistant.Id && (a.Status == TaskAssignmentAttemptStatus.PendingAcceptance || a.Status == TaskAssignmentAttemptStatus.Accepted));
+            bool isAssignedToThisTask = task.AssignedAssistantId == assistant.Id || existingAttemptsOnTask.Any(a => a.AssistantId == assistant.Id && a.Status == TaskAssignmentAttemptStatus.Accepted);
 
             AssistantAvailabilityCode code;
             string? reason;
+
+            bool isExcludedPreviousAssistant = task.ShouldExcludePreviousAssistant(assistant.Id);
 
             if (!isAccountActive)
             {
@@ -127,6 +127,11 @@ public class GetAssistantCandidatesHandler : IRequestHandler<GetAssistantCandida
             {
                 code = AssistantAvailabilityCode.SeriesAccessMissing;
                 reason = "Assistant has not been granted access to this series.";
+            }
+            else if (isExcludedPreviousAssistant)
+            {
+                code = AssistantAvailabilityCode.PreviousTaskAssigneeExcluded;
+                reason = "This assistant was removed from the previous version of this task.";
             }
             else if (totalWorkload >= maxWorkload)
             {
@@ -171,16 +176,12 @@ public class GetAssistantCandidatesHandler : IRequestHandler<GetAssistantCandida
         }
 
         availableList = availableList
-            .OrderBy(a => a.TotalWorkload)
-            .ThenBy(a => a.PendingAssignmentCount)
-            .ThenBy(a => a.ActiveTaskCount)
+            .OrderBy(a => a.ActiveTaskCount)
             .ThenBy(a => a.DisplayName)
             .ToList();
 
         unavailableList = unavailableList
-            .OrderBy(a => a.TotalWorkload)
-            .ThenBy(a => a.PendingAssignmentCount)
-            .ThenBy(a => a.ActiveTaskCount)
+            .OrderBy(a => a.ActiveTaskCount)
             .ThenBy(a => a.DisplayName)
             .ToList();
 

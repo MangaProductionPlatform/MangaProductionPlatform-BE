@@ -26,7 +26,7 @@ public class PrimaryBackupTakeoverAndSecurityTests
     }
 
     [Fact]
-    public void PageTask_AssignPending_SetsCorrectFields()
+    public void PageTask_AssignDirect_SetsCorrectFields()
     {
         // Arrange
         var task = new PageTask
@@ -38,41 +38,18 @@ public class PrimaryBackupTakeoverAndSecurityTests
         var assistantId = Guid.NewGuid();
 
         // Act
-        task.AssignPending(assistantId, "Background drawing", DateTime.UtcNow.AddDays(2));
+        task.AssignDirect(assistantId, "Background drawing", DateTime.UtcNow.AddDays(2));
 
         // Assert
-        Assert.Equal(PageTaskStatus.PendingAcceptance, task.TaskStatus);
+        Assert.Equal(PageTaskStatus.Incomplete, task.TaskStatus);
         Assert.Equal("Background drawing", task.Description);
         Assert.Equal("None", task.TakeoverStatus);
-        Assert.Null(task.AssignedAssistantId); // Not set before Accept
+        Assert.Equal(assistantId, task.AssignedAssistantId); // Set immediately
+        Assert.NotNull(task.WorkStartedAt); // Set immediately
     }
 
     [Fact]
-    public void PageTask_AcceptAssignment_SetsExecutorAndWorkStartedAt()
-    {
-        // Arrange
-        var task = new PageTask
-        {
-            ChapterId = Guid.NewGuid(),
-            PageNumber = 1,
-            TaskStatus = PageTaskStatus.Pending
-        };
-        var assistantId = Guid.NewGuid();
-        task.AssignPending(assistantId, "Lineart", DateTime.UtcNow.AddDays(2));
-
-        // Act
-        var now = DateTime.UtcNow;
-        task.AcceptAssignment(now);
-        task.AssignedAssistantId = assistantId;
-
-        // Assert
-        Assert.Equal(assistantId, task.AssignedAssistantId);
-        Assert.Equal(PageTaskStatus.Incomplete, task.TaskStatus);
-        Assert.Equal(now, task.WorkStartedAt);
-    }
-
-    [Fact]
-    public async System.Threading.Tasks.Task AuthorizationService_RevokesOldAssistantAccess_AfterReassignAccept()
+    public async System.Threading.Tasks.Task AuthorizationService_RevokesOldAssistantAccess_AfterReassignDirect()
     {
         // Arrange
         using var db = GetInMemoryDbContext();
@@ -94,7 +71,7 @@ public class PrimaryBackupTakeoverAndSecurityTests
         db.Chapters.Add(chapter);
 
         var task = new PageTask { ChapterId = chapter.Id, PageNumber = 1, TaskStatus = PageTaskStatus.Pending };
-        task.AssignPending(assistant1Id, "Coloring", DateTime.UtcNow.AddDays(2));
+        task.AssignDirect(assistant1Id, "Coloring", DateTime.UtcNow.AddDays(2));
         db.PageTasks.Add(task);
 
         var collab1 = new MangakaAssistantCollaboration(mangakaId, assistant1Id, Guid.NewGuid(), DateTime.UtcNow);
@@ -104,11 +81,8 @@ public class PrimaryBackupTakeoverAndSecurityTests
         db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab1.Id, series.Id, mangakaId));
         db.SeriesAccessGrants.Add(SeriesAccessGrant.Create(collab2.Id, series.Id, mangakaId));
 
-        var attempt1 = TaskAssignmentAttempt.CreatePending(task.Id, assistant1Id, collab1.Id, 1, mangakaId);
-        attempt1.Accept(assistant1Id, DateTime.UtcNow);
+        var attempt1 = TaskAssignmentAttempt.CreateAccepted(task.Id, assistant1Id, collab1.Id, 1, mangakaId);
         db.TaskAssignmentAttempts.Add(attempt1);
-        task.AcceptAssignment(DateTime.UtcNow);
-        task.AssignedAssistantId = assistant1Id;
         await db.SaveChangesAsync();
 
         // 1. Author has access
@@ -117,22 +91,21 @@ public class PrimaryBackupTakeoverAndSecurityTests
         // 2. Assistant 1 has submit progress access initially
         Assert.True(await authService.CanSubmitProgressAsync(assistant1Id, task.Id));
 
-        // 3. Assistant 2 does NOT have submit progress access before Accept
+        // 3. Assistant 2 does NOT have submit progress access before reassign
         Assert.False(await authService.CanSubmitProgressAsync(assistant2Id, task.Id));
 
-        // 4. Reassign to Assistant 2 and Assistant 2 Accepts
+        // 4. Reassign to Assistant 2 directly
         attempt1.Supersede(DateTime.UtcNow, "Reassigned to Assistant 2");
-        var attempt2 = TaskAssignmentAttempt.CreatePending(task.Id, assistant2Id, collab2.Id, 2, mangakaId);
-        attempt2.Accept(assistant2Id, DateTime.UtcNow);
+        var attempt2 = TaskAssignmentAttempt.CreateAccepted(task.Id, assistant2Id, collab2.Id, 2, mangakaId);
         db.TaskAssignmentAttempts.Add(attempt2);
 
-        task.AcceptReplacement(assistant2Id, DateTime.UtcNow);
+        task.ReassignDirect(assistant2Id, "New assignment");
         await db.SaveChangesAsync();
 
         // 5. Post Reassign: Assistant 2 HAS submit progress access
         Assert.True(await authService.CanSubmitProgressAsync(assistant2Id, task.Id));
 
-        // 6. Post Reassign: Assistant 1 submit progress access is REVOKED
+        // 6. Post Reassign: Assistant 1 submit progress access is REVOKED immediately
         Assert.False(await authService.CanSubmitProgressAsync(assistant1Id, task.Id));
     }
 

@@ -13,6 +13,38 @@ public enum PageTaskStatus { Pending, PendingAcceptance, Incomplete, Reviewing, 
 /// <summary>Type of artwork work assigned to the assistant for this page region.</summary>
 public enum PageTaskType { General, Background, Shading, Inking, Effect, Coloring }
 
+public enum TaskCancellationCategory
+{
+    // Assistant-related categories (triggers candidate exclusion)
+    AssistantAbandonedTask = 1,
+    AssistantUnavailable = 2,
+    AssistantFailedToStart = 3,
+    AssistantRemovedForPerformance = 4,
+
+    // Task-related categories (does NOT exclude assistant)
+    InvalidTaskDefinition = 10,
+    WrongBaseImage = 11,
+    WrongLayout = 12,
+    WrongTaskType = 13,
+    WrongPageNumber = 14,
+    OtherTaskIssue = 15
+}
+
+public static class TaskCancellationCategoryExtensions
+{
+    public static bool IsAssistantRelated(this TaskCancellationCategory category)
+    {
+        return category switch
+        {
+            TaskCancellationCategory.AssistantAbandonedTask => true,
+            TaskCancellationCategory.AssistantUnavailable => true,
+            TaskCancellationCategory.AssistantFailedToStart => true,
+            TaskCancellationCategory.AssistantRemovedForPerformance => true,
+            _ => false
+        };
+    }
+}
+
 public class Chapter : AggregateRoot, ISoftDeletable
 {
     public Guid SeriesId { get; private set; }
@@ -200,9 +232,26 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public string? ReassignmentReason { get; set; }
     public DateTime? ReassignmentRequiredAt { get; set; }
     public DateTime? HalfwayWarningSentAt { get; set; }
+    public Guid? RecreatedFromTaskId { get; set; }
+    public Guid? PreviousAssignedAssistantId { get; set; }
+    public TaskCancellationCategory? CancellationCategory { get; set; }
+    public string? CancellationReason { get; set; }
+    public DateTime? RecreatedAt { get; set; }
+    public Guid? RecreatedByUserId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public virtual Chapter Chapter { get; set; } = null!;
+
+    public bool ShouldExcludePreviousAssistant(Guid assistantId)
+    {
+        if (PreviousAssignedAssistantId == null || PreviousAssignedAssistantId.Value != assistantId)
+            return false;
+
+        if (CancellationCategory.HasValue && CancellationCategory.Value.IsAssistantRelated())
+            return true;
+
+        return false;
+    }
 
     public void SetDeadline(DateTime? deadline)
     {
@@ -224,18 +273,35 @@ public class PageTask : AggregateRoot, ISoftDeletable
         BasePageVersions.Add(BasePageVersion.Create(Id, nextVersion, BaseImageUrl, updatedByUserId));
     }
 
-    public void AssignPending(Guid assistantId, string? description = null, DateTime? deadline = null)
+    public void AssignDirect(Guid assistantId, string? description = null, DateTime? deadline = null, DateTime? assignedAt = null)
     {
-        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.ReassignmentRequired && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.PendingAcceptance)
-            throw new InvalidOperationException($"Cannot assign task in status '{TaskStatus}'.");
-
+        var now = assignedAt ?? DateTime.UtcNow;
+        AssignedAssistantId = assistantId;
         Description = description ?? Description;
         Deadline = deadline ?? Deadline;
-        TaskStatus = PageTaskStatus.PendingAcceptance;
+        TaskStatus = PageTaskStatus.Incomplete;
+        WorkStartedAt ??= now;
         TakeoverStatus = "None";
         ReassignmentReason = null;
         ReassignmentRequiredAt = null;
-        UpdatedAt = DateTime.UtcNow;
+        UpdatedAt = now;
+    }
+
+    public void ReassignDirect(Guid newAssistantId, string? reason = null, DateTime? deadline = null, string? description = null, DateTime? reassignedAt = null)
+    {
+        var now = reassignedAt ?? DateTime.UtcNow;
+        AssignedAssistantId = newAssistantId;
+        if (description != null) Description = description;
+        if (deadline.HasValue) Deadline = deadline.Value;
+        ReassignmentReason = reason ?? ReassignmentReason;
+        TaskStatus = PageTaskStatus.Incomplete;
+        WorkStartedAt ??= now;
+        UpdatedAt = now;
+    }
+
+    public void AssignPending(Guid assistantId, string? description = null, DateTime? deadline = null)
+    {
+        AssignDirect(assistantId, description, deadline);
     }
 
     [Obsolete("Use AssignPending instead.")]
