@@ -80,7 +80,9 @@ public class StudioInvitationRepository : IStudioInvitationRepository
 
     public System.Threading.Tasks.Task<bool> HasNonEndedCollaborationAsync(Guid assistantId, CancellationToken ct = default)
         => _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId &&
-            c.Status != CollaborationStatus.Ended, ct);
+            c.Status != CollaborationStatus.Ended &&
+            c.Status != CollaborationStatus.Rejected &&
+            c.Status != CollaborationStatus.Cancelled, ct);
 
     public System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetCollaborationAsync(Guid id, CancellationToken ct = default)
         => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -92,7 +94,10 @@ public class StudioInvitationRepository : IStudioInvitationRepository
             c.Status != CollaborationStatus.Cancelled).ToListAsync(ct);
 
     public System.Threading.Tasks.Task<MangakaAssistantCollaboration?> GetNonEndedCollaborationByAssistantAsync(Guid assistantId, CancellationToken ct = default)
-        => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct);
+        => _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.AssistantId == assistantId &&
+            c.Status != CollaborationStatus.Ended &&
+            c.Status != CollaborationStatus.Rejected &&
+            c.Status != CollaborationStatus.Cancelled, ct);
 
     public async System.Threading.Tasks.Task<MangakaAssistantCollaboration> AcceptInvitationAsync(
         Guid invitationId, Guid assistantId, Guid actorId, DateTime now, string? correlationId, CancellationToken ct = default)
@@ -125,7 +130,10 @@ public class StudioInvitationRepository : IStudioInvitationRepository
                 throw new ConflictException("This invitation has expired.");
             }
 
-            if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+            if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId &&
+                c.Status != CollaborationStatus.Ended &&
+                c.Status != CollaborationStatus.Rejected &&
+                c.Status != CollaborationStatus.Cancelled, ct))
                 throw new ConflictException("The Assistant already has a non-ended Mangaka collaboration.");
 
             var collaboration = new MangakaAssistantCollaboration(invitation.InviterMangakaId, assistantId, invitation.Id, now);
@@ -260,7 +268,9 @@ public class StudioInvitationRepository : IStudioInvitationRepository
     public async System.Threading.Tasks.Task<IEnumerable<UnassignedAssistantInfo>> GetUnassignedAssistantsAsync(Guid mangakaId, CancellationToken ct = default)
     {
         var nonEndedAssistantIds = _db.MangakaAssistantCollaborations.AsNoTracking()
-            .Where(c => c.Status != CollaborationStatus.Ended)
+            .Where(c => c.Status != CollaborationStatus.Ended &&
+                        c.Status != CollaborationStatus.Rejected &&
+                        c.Status != CollaborationStatus.Cancelled)
             .Select(c => c.AssistantId);
 
         var pendingInvitedAssistantIds = _db.StudioInvitations.AsNoTracking()
@@ -289,7 +299,9 @@ public class StudioInvitationRepository : IStudioInvitationRepository
     public async System.Threading.Tasks.Task<IEnumerable<AdminUnassignedAssistantInfo>> GetAdminUnassignedAssistantsAsync(CancellationToken ct = default)
     {
         var nonEndedAssistantIds = _db.MangakaAssistantCollaborations.AsNoTracking()
-            .Where(c => c.Status != CollaborationStatus.Ended)
+            .Where(c => c.Status != CollaborationStatus.Ended &&
+                        c.Status != CollaborationStatus.Rejected &&
+                        c.Status != CollaborationStatus.Cancelled)
             .Select(c => c.AssistantId);
 
         var unassignedUsers = await _db.Users.AsNoTracking()
@@ -349,7 +361,10 @@ public class StudioInvitationRepository : IStudioInvitationRepository
         }
 
         return !await _db.MangakaAssistantCollaborations.AsNoTracking()
-            .AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct);
+            .AnyAsync(c => c.AssistantId == assistantId &&
+                c.Status != CollaborationStatus.Ended &&
+                c.Status != CollaborationStatus.Rejected &&
+                c.Status != CollaborationStatus.Cancelled, ct);
     }
 
     public async System.Threading.Tasks.Task<MangakaAssistantCollaboration> AdminAssignAssistantToMangakaAsync(
@@ -371,7 +386,10 @@ public class StudioInvitationRepository : IStudioInvitationRepository
                 throw new AdminAssignException("ASSISTANT_NOT_ACTIVE", "Assistant account is not active.", 400);
             }
 
-            if (await _db.MangakaAssistantCollaborations.AsNoTracking().AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+            if (await _db.MangakaAssistantCollaborations.AsNoTracking().AnyAsync(c => c.AssistantId == assistantId &&
+                c.Status != CollaborationStatus.Ended &&
+                c.Status != CollaborationStatus.Rejected &&
+                c.Status != CollaborationStatus.Cancelled, ct))
             {
                 throw new AdminAssignException("ASSISTANT_NOT_UNASSIGNED", "Assistant is not unassigned and currently has an active collaboration.", 409);
             }
@@ -398,7 +416,10 @@ public class StudioInvitationRepository : IStudioInvitationRepository
 
             try
             {
-                if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+                if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId &&
+                    c.Status != CollaborationStatus.Ended &&
+                    c.Status != CollaborationStatus.Rejected &&
+                    c.Status != CollaborationStatus.Cancelled, ct))
                 {
                     throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assistant has already been assigned concurrently.", 409);
                 }
