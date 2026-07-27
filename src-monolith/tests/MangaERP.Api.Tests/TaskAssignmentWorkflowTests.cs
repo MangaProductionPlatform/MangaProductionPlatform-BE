@@ -400,4 +400,166 @@ public class TaskAssignmentWorkflowTests
         Assert.Single(res2.AvailableAssistants);
         Assert.Equal(oldAssistantId, res2.AvailableAssistants[0].AssistantId);
     }
+
+    [Fact]
+    public async System.Threading.Tasks.Task CandidateApi_EnforcesDataIsolation_ScopeBoundaries_AndClassification()
+    {
+        using var db = GetInMemoryDbContext();
+        var provider = new TestDbContextProvider(db);
+
+        var mangakaAId = Guid.NewGuid();
+        var mangakaBId = Guid.NewGuid();
+
+        var ast1_ActiveAndAvailable = Guid.NewGuid();
+        var ast2_MangakaBAssistant = Guid.NewGuid();
+        var ast3_NoCollab = Guid.NewGuid();
+        var ast4_EndedCollab = Guid.NewGuid();
+        var ast5_SuspendedCollab = Guid.NewGuid();
+        var ast6_NoSeriesGrant = Guid.NewGuid();
+        var ast7_MaxWorkload = Guid.NewGuid();
+        var ast8_AccountInactive = Guid.NewGuid();
+        var ast9_PreviousExcluded = Guid.NewGuid();
+
+        db.Users.AddRange(
+            new User { Id = mangakaAId, Username = "mangakaA", Role = UserRole.Mangaka, AccountStatus = AccountStatus.Active },
+            new User { Id = mangakaBId, Username = "mangakaB", Role = UserRole.Mangaka, AccountStatus = AccountStatus.Active },
+            new User { Id = ast1_ActiveAndAvailable, Username = "ast1", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active },
+            new User { Id = ast2_MangakaBAssistant, Username = "ast2", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active },
+            new User { Id = ast3_NoCollab, Username = "ast3", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active },
+            new User { Id = ast4_EndedCollab, Username = "ast4", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active },
+            new User { Id = ast5_SuspendedCollab, Username = "ast5", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active },
+            new User { Id = ast6_NoSeriesGrant, Username = "ast6", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active },
+            new User { Id = ast7_MaxWorkload, Username = "ast7", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active },
+            new User { Id = ast8_AccountInactive, Username = "ast8", Role = UserRole.Assistant, AccountStatus = AccountStatus.Suspended },
+            new User { Id = ast9_PreviousExcluded, Username = "ast9", Role = UserRole.Assistant, AccountStatus = AccountStatus.Active }
+        );
+
+        var seriesA = MangaSeries.Create(mangakaAId, null, "Series A", "Desc", "Genre", null);
+        var seriesB = MangaSeries.Create(mangakaBId, null, "Series B", "Desc", "Genre", null);
+        var chapterA = ChapterEntity.Create(seriesA.Id, "Chapter A1", 1.0m, 10);
+        db.MangaSeries.AddRange(seriesA, seriesB);
+        db.Chapters.Add(chapterA);
+
+        // Collabs
+        var collab1 = new MangakaAssistantCollaboration(mangakaAId, ast1_ActiveAndAvailable, Guid.NewGuid(), DateTime.UtcNow);
+        var collab2 = new MangakaAssistantCollaboration(mangakaBId, ast2_MangakaBAssistant, Guid.NewGuid(), DateTime.UtcNow);
+        var collab4 = new MangakaAssistantCollaboration(mangakaAId, ast4_EndedCollab, Guid.NewGuid(), DateTime.UtcNow);
+        collab4.End("ended test", mangakaAId, DateTime.UtcNow);
+        var collab5 = new MangakaAssistantCollaboration(mangakaAId, ast5_SuspendedCollab, Guid.NewGuid(), DateTime.UtcNow);
+        collab5.Suspend(CollaborationSuspensionMode.SuspendAllAccess, "suspended test", DateTime.UtcNow);
+        var collab6 = new MangakaAssistantCollaboration(mangakaAId, ast6_NoSeriesGrant, Guid.NewGuid(), DateTime.UtcNow);
+        var collab7 = new MangakaAssistantCollaboration(mangakaAId, ast7_MaxWorkload, Guid.NewGuid(), DateTime.UtcNow);
+        var collab8 = new MangakaAssistantCollaboration(mangakaAId, ast8_AccountInactive, Guid.NewGuid(), DateTime.UtcNow);
+        var collab9 = new MangakaAssistantCollaboration(mangakaAId, ast9_PreviousExcluded, Guid.NewGuid(), DateTime.UtcNow);
+
+        db.MangakaAssistantCollaborations.AddRange(collab1, collab2, collab4, collab5, collab6, collab7, collab8, collab9);
+
+        // Grants
+        db.SeriesAccessGrants.AddRange(
+            SeriesAccessGrant.Create(collab1.Id, seriesA.Id, mangakaAId),
+            SeriesAccessGrant.Create(collab5.Id, seriesA.Id, mangakaAId),
+            SeriesAccessGrant.Create(collab7.Id, seriesA.Id, mangakaAId),
+            SeriesAccessGrant.Create(collab8.Id, seriesA.Id, mangakaAId),
+            SeriesAccessGrant.Create(collab9.Id, seriesA.Id, mangakaAId)
+        );
+
+        // Max Workload setup for ast7 (3 active tasks)
+        for (int i = 1; i <= 3; i++)
+        {
+            var dummyTask = PageTask.CreatePending(chapterA.Id, i + 10, $"https://example.com/{i}.png");
+            dummyTask.AssignDirect(ast7_MaxWorkload, "Work", DateTime.UtcNow.AddDays(1), DateTime.UtcNow);
+            db.PageTasks.Add(dummyTask);
+            db.TaskAssignmentAttempts.Add(TaskAssignmentAttempt.CreateAccepted(dummyTask.Id, ast7_MaxWorkload, collab7.Id, 1, mangakaAId, DateTime.UtcNow, "Direct", DateTime.UtcNow.AddDays(1)));
+        }
+
+        // Excluded task setup for ast9
+        var task = PageTask.CreatePending(chapterA.Id, 1, "https://example.com/base.png");
+        task.RecreatedFromTaskId = Guid.NewGuid();
+        task.PreviousAssignedAssistantId = ast9_PreviousExcluded;
+        task.CancellationCategory = TaskCancellationCategory.AssistantAbandonedTask;
+        db.PageTasks.Add(task);
+
+        await db.SaveChangesAsync();
+
+        var candidateHandler = new GetAssistantCandidatesHandler(
+            new PageTaskRepository(provider), new ChapterRepository(provider), new SeriesRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new UserRepository(provider), new TaskAssignmentRepository(provider), GetTestConfig(3));
+
+        // Test 11: Non-owner calling query throws UnauthorizedAccessException (403)
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            candidateHandler.Handle(new GetAssistantCandidatesQuery(task.Id, mangakaBId), default));
+
+        var result = await candidateHandler.Handle(new GetAssistantCandidatesQuery(task.Id, mangakaAId), default);
+
+        // Test 1: Only A's assistants are considered
+        // Test 2: Mangaka B's assistant (ast2) is NOT present
+        Assert.DoesNotContain(result.AvailableAssistants, a => a.AssistantId == ast2_MangakaBAssistant);
+        Assert.DoesNotContain(result.UnavailableAssistants, a => a.AssistantId == ast2_MangakaBAssistant);
+
+        // Test 3: Uncollaborated assistant (ast3) is NOT present
+        Assert.DoesNotContain(result.AvailableAssistants, a => a.AssistantId == ast3_NoCollab);
+        Assert.DoesNotContain(result.UnavailableAssistants, a => a.AssistantId == ast3_NoCollab);
+
+        // Test 4: Ended collaboration (ast4) is NOT present
+        Assert.DoesNotContain(result.AvailableAssistants, a => a.AssistantId == ast4_EndedCollab);
+        Assert.DoesNotContain(result.UnavailableAssistants, a => a.AssistantId == ast4_EndedCollab);
+
+        // Test 6: ast1 is in availableAssistants
+        var ast1Res = Assert.Single(result.AvailableAssistants, a => a.AssistantId == ast1_ActiveAndAvailable);
+        Assert.True(ast1Res.IsAvailable);
+
+        // Test 5: Suspended collab (ast5) in unavailableAssistants with CollaborationInactive
+        var ast5Res = Assert.Single(result.UnavailableAssistants, a => a.AssistantId == ast5_SuspendedCollab);
+        Assert.False(ast5Res.IsAvailable);
+        Assert.Equal("CollaborationInactive", ast5Res.AvailabilityCode);
+
+        // Test 7: Missing SeriesAccessGrant (ast6) in unavailableAssistants with SeriesAccessMissing
+        var ast6Res = Assert.Single(result.UnavailableAssistants, a => a.AssistantId == ast6_NoSeriesGrant);
+        Assert.False(ast6Res.IsAvailable);
+        Assert.Equal("SeriesAccessMissing", ast6Res.AvailabilityCode);
+
+        // Test 8: Max workload (ast7) in unavailableAssistants with WorkloadLimitReached
+        var ast7Res = Assert.Single(result.UnavailableAssistants, a => a.AssistantId == ast7_MaxWorkload);
+        Assert.False(ast7Res.IsAvailable);
+        Assert.Equal("WorkloadLimitReached", ast7Res.AvailabilityCode);
+
+        // Test 9: Account inactive (ast8) in unavailableAssistants with AccountInactive
+        var ast8Res = Assert.Single(result.UnavailableAssistants, a => a.AssistantId == ast8_AccountInactive);
+        Assert.False(ast8Res.IsAvailable);
+        Assert.Equal("AccountInactive", ast8Res.AvailabilityCode);
+
+        // Test 10: PreviousTaskAssigneeExcluded (ast9) in unavailableAssistants for Task endpoint
+        var ast9Res = Assert.Single(result.UnavailableAssistants, a => a.AssistantId == ast9_PreviousExcluded);
+        Assert.False(ast9Res.IsAvailable);
+        Assert.Equal("PreviousTaskAssigneeExcluded", ast9Res.AvailabilityCode);
+
+        // --- CHAPTER PRE-CREATE CANDIDATE ENDPOINT TESTS ---
+        var chapterCandidateHandler = new GetChapterAssistantCandidatesHandler(
+            new ChapterRepository(provider), new SeriesRepository(provider),
+            new StudioInvitationRepository(provider), new SeriesAccessGrantRepository(provider),
+            new UserRepository(provider), new TaskAssignmentRepository(provider), GetTestConfig(3));
+
+        // Test 2: Non-owner calling chapter candidate API throws UnauthorizedAccessException (403)
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            chapterCandidateHandler.Handle(new GetChapterAssistantCandidatesQuery(chapterA.Id, mangakaBId), default));
+
+        // Test 3: Non-existent chapter returns 404 EntityNotFoundException
+        await Assert.ThrowsAsync<MangaERP.Shared.Domain.Exceptions.EntityNotFoundException>(() =>
+            chapterCandidateHandler.Handle(new GetChapterAssistantCandidatesQuery(Guid.NewGuid(), mangakaAId), default));
+
+        // Test 1: Owner Mangaka calling chapter candidate API succeeds
+        var chapterResult = await chapterCandidateHandler.Handle(new GetChapterAssistantCandidatesQuery(chapterA.Id, mangakaAId), default);
+
+        Assert.Equal(chapterA.Id, chapterResult.ChapterId);
+        Assert.Equal(seriesA.Id, chapterResult.SeriesId);
+
+        // Test 12: Chapter endpoint does NOT apply PreviousTaskAssigneeExcluded -> ast9 is in AvailableAssistants for pre-create!
+        var ast9ChapterRes = Assert.Single(chapterResult.AvailableAssistants, a => a.AssistantId == ast9_PreviousExcluded);
+        Assert.True(ast9ChapterRes.IsAvailable);
+
+        // Test 4 & 5: Scoping holds (no B assistants, no uncollaborated, no ended)
+        Assert.DoesNotContain(chapterResult.AvailableAssistants, a => a.AssistantId == ast2_MangakaBAssistant || a.AssistantId == ast3_NoCollab || a.AssistantId == ast4_EndedCollab);
+        Assert.DoesNotContain(chapterResult.UnavailableAssistants, a => a.AssistantId == ast2_MangakaBAssistant || a.AssistantId == ast3_NoCollab || a.AssistantId == ast4_EndedCollab);
+    }
 }

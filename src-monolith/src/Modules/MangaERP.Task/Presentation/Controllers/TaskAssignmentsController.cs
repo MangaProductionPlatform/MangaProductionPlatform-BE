@@ -49,6 +49,22 @@ public class TaskAssignmentsController : ControllerBase
     }
 
     /// <summary>
+    /// [Mangaka] Lấy danh sách Assistant candidate cho Chapter trước khi tạo Task (kèm mã lý do không khả dụng và workload).
+    /// Route Canonical: GET /api/v1/chapters/{chapterId}/assistant-candidates
+    /// </summary>
+    [HttpGet("api/v1/chapters/{chapterId:guid}/assistant-candidates")]
+    [HttpGet("api/chapters/{chapterId:guid}/assistant-candidates")]
+    [Authorize(Roles = "Mangaka")]
+    public async Task<IActionResult> GetChapterAssistantCandidates(
+        [FromRoute] Guid chapterId,
+        CancellationToken ct)
+    {
+        var query = new GetChapterAssistantCandidatesQuery(chapterId, GetCurrentUserId());
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// [Mangaka] Gửi lời mời giao task cho Assistant (Single Assistant Model).
     /// Route Canonical: POST /api/v1/tasks/{taskId}/assignments
     /// </summary>

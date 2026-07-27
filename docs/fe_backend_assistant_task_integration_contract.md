@@ -77,6 +77,7 @@ Hệ thống quản lý công việc Assistant (Assistant Collaboration, PageTas
 | **Chapter** | `POST` | `/api/v1/chapters/{chapterId}/pages/activate` | `ChaptersController.ActivatePageTask` | `ActivatePageTaskRequest` | `ActivatePageTaskResult` | `Mangaka` | Owner Series | `[FE-Likely]` |
 | **Chapter** | `POST` | `/api/v1/chapters/{chapterId}/pages/bulk-activate` | `ChaptersController.BulkActivatePageTasks` | `BulkActivatePageTasksRequest` | `BulkActivatePageTasksResult` | `Mangaka` | Owner Series | `[FE-Likely]` |
 | **Chapter** | `GET` | `/api/v1/chapters/{chapterId}/recommend-assistants` | `ChaptersController.RecommendAssistants` | *None* | `IEnumerable<RecommendedAssistantDto>` | `Mangaka` | Owner Series | `[FE-StopUsing]` |
+| **Chapter** | `GET` | `/api/v1/chapters/{chapterId}/assistant-candidates` | `ChaptersController.GetChapterAssistantCandidates` | *None* | `ChapterAssistantCandidatesResultDto` | `Mangaka` | Owner Series | `[FE-MustAdd]` |
 | **Chapter** | `PUT` | `/api/v1/chapters/{chapterId}/pages/{pageNumber}/reassign` | `ChaptersController.ReassignPageTask` | `ReassignPageTaskRequest` | `ReassignPageTaskResult` | `Mangaka` | Owner Series | `[FE-StopUsing]` |
 | **Task** | `GET` | `/api/v1/tasks/{taskId}/assistant-candidates` | `TaskAssignmentsController.GetAssistantCandidates` | *None* | `TaskAssistantCandidatesResultDto` | `Mangaka` | Owner Series | `[FE-MustAdd]` |
 | **Task** | `POST` | `/api/v1/tasks/{taskId}/assignments` | `TaskAssignmentsController.AssignTask` | `AssignTaskRequest` | `AssignTaskResultDto` | `Mangaka` | Owner Series | `[FE-MustAdd]` |
@@ -160,7 +161,9 @@ Hệ thống quản lý công việc Assistant (Assistant Collaboration, PageTas
   ]
 }
 ```
-- **FE Integration Note:** FE **bắt buộc** render hai tab/danh sách. Phía danh sách `unavailableAssistants`, disable nút chọn và hiển thị Tooltip/Badge với nội dung `availabilityReason`. Không tự tính toán workload ở client.
+- **FE Integration Note:** 
+  - `pendingAssignmentCount` is deprecated and always returns `0` under the Direct Assignment model. Frontend must not use this field.
+  - FE **bắt buộc** render hai tab/danh sách. Phía danh sách `unavailableAssistants`, disable nút chọn và hiển thị Tooltip/Badge với nội dung `availabilityReason`. Không tự tính toán workload ở client.
 
 ---
 
