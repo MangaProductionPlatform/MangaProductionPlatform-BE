@@ -26,7 +26,31 @@ public interface IStudioInvitationRepository
     System.Threading.Tasks.Task<Dictionary<Guid, AssistantWorkloadMetricsInfo>> GetAssistantWorkloadMetricsBatchAsync(IEnumerable<Guid> assistantIds, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<AssistantActiveTaskInfo>> GetAssistantActiveTasksAsync(Guid assistantId, CancellationToken ct = default);
     System.Threading.Tasks.Task<IEnumerable<AssistantPendingExtensionInfo>> GetAssistantPendingExtensionRequestsAsync(Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<UnassignedAssistantInfo>> GetUnassignedAssistantsAsync(Guid mangakaId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<IEnumerable<AdminUnassignedAssistantInfo>> GetAdminUnassignedAssistantsAsync(CancellationToken ct = default);
+    System.Threading.Tasks.Task<bool> IsAssistantUnassignedAsync(Guid assistantId, CancellationToken ct = default);
+    System.Threading.Tasks.Task<MangakaAssistantCollaboration> AdminAssignAssistantToMangakaAsync(Guid assistantId, Guid mangakaId, Guid adminUserId, string? reason, DateTime now, CancellationToken ct = default);
 }
+
+public record AdminUnassignedAssistantInfo(
+    Guid AssistantId,
+    string DisplayName,
+    string Email,
+    string AccountStatus,
+    DateTime? LastCollaborationEndedAt,
+    Guid? PreviousMangakaId,
+    string? PreviousMangakaName,
+    bool IsAssignable
+);
+
+public record UnassignedAssistantInfo(
+    Guid UserId,
+    string Username,
+    string FullName,
+    string PersonalEmail,
+    string? PhoneNumber,
+    DateTime CreatedAt
+);
 
 public record AssistantWorkloadMetricsInfo(
     int ActiveTaskCount,

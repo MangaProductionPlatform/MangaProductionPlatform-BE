@@ -101,6 +101,19 @@ public class StudioTaskRevocationService : IStudioTaskRevocationService
             }
         }
 
+        // 3. If Ended: revoke all active SeriesAccessGrants for this collaboration
+        if (newStatus == CollaborationStatus.Ended)
+        {
+            var activeGrants = await _db.SeriesAccessGrants
+                .Where(g => g.CollaborationId == collaborationId && g.RevokedAt == null)
+                .ToListAsync(ct);
+
+            foreach (var grant in activeGrants)
+            {
+                grant.Revoke(actorUserId, $"Revoked due to collaboration state change: {newStatus}");
+            }
+        }
+
         // Audit the state change cascade
         _db.AuditEvents.Add(new AuditEvent(
             $"CollaborationTaskCascade_{newStatus}",

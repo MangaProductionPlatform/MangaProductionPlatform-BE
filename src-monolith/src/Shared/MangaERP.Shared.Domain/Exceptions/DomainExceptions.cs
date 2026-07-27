@@ -34,3 +34,16 @@ public class ConflictException : DomainException
     public ConflictException(string message) : base(message) { }
 }
 
+public class AdminAssignException : DomainException
+{
+    public string ErrorCode { get; }
+    public int StatusCode { get; }
+
+    public AdminAssignException(string errorCode, string message, int statusCode)
+        : base(message)
+    {
+        ErrorCode = errorCode;
+        StatusCode = statusCode;
+    }
+}
+
