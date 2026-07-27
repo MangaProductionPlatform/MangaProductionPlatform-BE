@@ -114,54 +114,63 @@ public class ReassignTaskHandler : IRequestHandler<ReassignTaskCommand, AssignTa
             if (grant == null)
                 throw new ConflictException("New assistant does not have active series access for this series.");
 
+            if (task.ShouldExcludePreviousAssistant(request.NewAssistantId))
+                throw new ConflictException("PREVIOUS_TASK_ASSIGNEE_EXCLUDED: This assistant was removed from the previous version of this task and cannot be reassigned.");
+
             int newWorkload = await _attemptRepo.GetActiveWorkloadCountAsync(request.NewAssistantId, ct, excludeTaskId: task.Id);
             if (newWorkload >= maxWorkload)
                 throw new ConflictException($"New assistant has reached maximum active task capacity ({maxWorkload}).");
 
-            // Check if there is already a pending replacement attempt on this task
-            var existingAttempts = await _attemptRepo.GetByTaskIdAsync(task.Id, ct);
-            if (existingAttempts.Any(a => a.Status == TaskAssignmentAttemptStatus.PendingAcceptance))
-                throw new ConflictException("Task already has a pending replacement assignment attempt.");
+            if (task.AssignedAssistantId == request.NewAssistantId)
+                throw new ConflictException("Task is already assigned to this assistant.");
 
             DateTime now = DateTime.UtcNow;
-            int maxAttemptNumber = await _attemptRepo.GetMaxAttemptNumberAsync(task.Id, ct);
+            var existingAttempts = (await _attemptRepo.GetByTaskIdAsync(task.Id, ct)).ToList();
 
-            // Create replacement attempt (PendingAcceptance)
+            // 4. Supersede current accepted attempt immediately
+            var currentAcceptedAttempt = existingAttempts.FirstOrDefault(a => a.Status == TaskAssignmentAttemptStatus.Accepted);
+            if (currentAcceptedAttempt != null)
+            {
+                currentAcceptedAttempt.Supersede(now, $"Reassigned to new assistant by Mangaka. Reason: {request.Reason}");
+                await _attemptRepo.UpdateAsync(currentAcceptedAttempt, ct);
+
+                await _notifications.NotifyCollaborationEventAsync(
+                    currentAcceptedAttempt.AssistantId,
+                    "TaskReassigned",
+                    "Task Assignment Transferred",
+                    $"Your assignment for task #{task.PageNumber} in chapter '{chapter.Title}' has been reassigned to another assistant.",
+                    task.Id,
+                    ct);
+            }
+
+            int maxAttemptNumber = await _attemptRepo.GetMaxAttemptNumberAsync(task.Id, ct);
             int attemptNumber = maxAttemptNumber + 1;
-            var replacementAttempt = TaskAssignmentAttempt.CreatePending(
+
+            // 5. Create new Accepted attempt immediately
+            var replacementAttempt = TaskAssignmentAttempt.CreateAccepted(
                 task.Id,
                 request.NewAssistantId,
                 newCollab.Id,
                 attemptNumber,
                 request.ActorUserId,
-                expiresAt: request.ResponseDeadline,
+                assignedAt: now,
                 assignmentRole: "Direct",
-                responseDeadline: request.ResponseDeadline,
                 workDeadline: request.Deadline);
 
             await _attemptRepo.AddAsync(replacementAttempt, ct);
 
-            // Preserve existing task data & WorkStartedAt.
-            // Do NOT update AssignedAssistantId to new assistant before Accept.
-            if (request.Deadline.HasValue)
-            {
-                task.Deadline = request.Deadline.Value;
-            }
-            if (!string.IsNullOrWhiteSpace(request.Description))
-            {
-                task.Description = request.Description;
-            }
-            task.ReassignmentReason = request.Reason;
-            task.ReassignmentRequiredAt = now;
+            // 6. Update PageTask domain state immediately (AssignedAssistantId updated to new assistant)
+            task.ReassignDirect(request.NewAssistantId, request.Reason, request.Deadline, request.Description, now);
+            task.CurrentAssignmentAttemptId = replacementAttempt.Id;
 
             await _taskRepo.UpdateAsync(task, ct);
 
-            // Notify candidate new assistant
+            // 7. Notify new assistant
             await _notifications.NotifyCollaborationEventAsync(
                 request.NewAssistantId,
-                "TaskReassignmentRequested",
-                "Task Reassignment Invitation",
-                $"You have been invited to take over task #{task.PageNumber} in chapter '{chapter.Title}'.",
+                "TaskReassigned",
+                "Task Reassigned to You",
+                $"Task #{task.PageNumber} in chapter '{chapter.Title}' has been reassigned to you.",
                 task.Id,
                 ct);
 

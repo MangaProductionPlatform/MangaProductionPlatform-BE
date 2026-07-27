@@ -12,13 +12,17 @@ namespace MangaERP.Chapter.Application.Commands.CancelAndRecreateTask;
 public record CancelAndRecreateTaskCommand(
     Guid MangakaId,
     Guid PageTaskId,
+    TaskCancellationCategory CancellationCategory = TaskCancellationCategory.OtherTaskIssue,
     string? Reason = null,
     bool ConfirmProgressLoss = false,
     bool CopyTaskDetails = true
 ) : IRequest<CancelAndRecreateTaskResult>
 {
     public CancelAndRecreateTaskCommand(Guid mangakaId, Guid pageTaskId)
-        : this(mangakaId, pageTaskId, null, false, true) { }
+        : this(mangakaId, pageTaskId, TaskCancellationCategory.OtherTaskIssue, null, false, true) { }
+
+    public CancelAndRecreateTaskCommand(Guid mangakaId, Guid pageTaskId, string? reason, bool confirmProgressLoss, bool copyTaskDetails)
+        : this(mangakaId, pageTaskId, TaskCancellationCategory.OtherTaskIssue, reason, confirmProgressLoss, copyTaskDetails) { }
 }
 
 public record CancelAndRecreateTaskResult(
@@ -80,16 +84,22 @@ public class CancelAndRecreateTaskHandler : IRequestHandler<CancelAndRecreateTas
         }
 
         int originalPageNumber = oldTask.PageNumber;
+        Guid? previousAssistantId = oldTask.AssignedAssistantId;
+        DateTime now = DateTime.UtcNow;
 
-        // 1. Soft-delete the old task (preserves original PageNumber and history; partial unique index filters IsDeleted = false)
+        // 1. Soft-delete the old task (preserves original PageNumber, assignment history and audit data)
         oldTask.TaskStatus = PageTaskStatus.Cancelled;
+        oldTask.CancellationCategory = cmd.CancellationCategory;
+        oldTask.CancellationReason = cmd.Reason;
+        oldTask.RecreatedAt = now;
+        oldTask.RecreatedByUserId = cmd.MangakaId;
         oldTask.IsDeleted = true;
-        oldTask.DeletedAt = DateTime.UtcNow;
-        oldTask.UpdatedAt = DateTime.UtcNow;
+        oldTask.DeletedAt = now;
+        oldTask.UpdatedAt = now;
 
         await _pageTaskRepo.UpdateAsync(oldTask, ct);
 
-        // 2. Create the new PageTask with the original PageNumber (unassigned Pending state)
+        // 2. Create the new PageTask with link back to old task and previous assistant info
         string baseImage = !string.IsNullOrWhiteSpace(oldTask.BaseImageUrl) ? oldTask.BaseImageUrl : "https://example.com/page-placeholder.png";
         var newTask = PageTask.CreatePending(oldTask.ChapterId, originalPageNumber, baseImage);
 
@@ -107,6 +117,14 @@ public class CancelAndRecreateTaskHandler : IRequestHandler<CancelAndRecreateTas
         newTask.WorkStartedAt = null;
         newTask.ProgressPercent = 0;
         newTask.HalfwayWarningSentAt = null;
+
+        // Structured Cancellation Link & Data
+        newTask.RecreatedFromTaskId = oldTask.Id;
+        newTask.PreviousAssignedAssistantId = previousAssistantId;
+        newTask.CancellationCategory = cmd.CancellationCategory;
+        newTask.CancellationReason = cmd.Reason;
+        newTask.RecreatedAt = now;
+        newTask.RecreatedByUserId = cmd.MangakaId;
 
         await _pageTaskRepo.AddAsync(newTask, ct);
 

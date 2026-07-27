@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MangaERP.Task.Application.Commands.TaskAssignment;
 using MangaERP.Task.Application.Commands.TaskProgress;
@@ -80,26 +81,17 @@ public class TaskAssignmentsController : ControllerBase
     }
 
     /// <summary>
-    /// [Assistant] Chấp nhận hoặc từ chối lời mời giao task.
+    /// [Deprecated] Task-level respond route has been retired under Direct Assignment model.
     /// Route Canonical: POST /api/v1/tasks/assignments/{attemptId}/respond
     /// </summary>
     [HttpPost("api/v1/tasks/assignments/{attemptId:guid}/respond")]
     [HttpPost("api/tasks/assignments/{attemptId:guid}/respond")]
     [Authorize(Roles = "Assistant")]
-    public async Task<IActionResult> RespondTaskAssignment(
+    public IActionResult RespondTaskAssignment(
         [FromRoute] Guid attemptId,
-        [FromBody] RespondTaskAssignmentRequest request,
-        CancellationToken ct)
+        [FromBody] RespondTaskAssignmentRequest request)
     {
-        var command = new RespondTaskAssignmentCommand(
-            attemptId,
-            request.Accept,
-            request.RejectionReason,
-            GetCurrentUserId(),
-            request.ExpectedConcurrencyToken ?? Guid.Empty);
-
-        var result = await _mediator.Send(command, ct);
-        return Ok(result);
+        return StatusCode(StatusCodes.Status410Gone, new { message = "Task-level respond route has been retired. Task assignments take effect immediately upon assignment." });
     }
 
     /// <summary>

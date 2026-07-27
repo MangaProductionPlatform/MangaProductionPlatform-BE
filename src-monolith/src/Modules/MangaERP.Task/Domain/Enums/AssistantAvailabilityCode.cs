@@ -9,5 +9,6 @@ public enum AssistantAvailabilityCode
     SeriesAccessMissing,
     WorkloadLimitReached,
     AlreadyAssignedToTask,
-    AssignmentConflict
+    AssignmentConflict,
+    PreviousTaskAssigneeExcluded
 }

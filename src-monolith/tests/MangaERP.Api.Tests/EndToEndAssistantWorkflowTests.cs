@@ -53,28 +53,22 @@ public class EndToEndAssistantWorkflowTests
         typeof(PageTaskEntity).GetProperty("Id")!.SetValue(task, taskId);
         await db.PageTasks.AddAsync(task);
 
-        // 4. Assign Task to Assistant
+        // 4. Direct Task Assignment to Assistant (Effective immediately)
+        DateTime assignedAt = DateTime.UtcNow;
         TimeSpan duration = TimeSpan.FromHours(24);
-        var attempt = TaskAssignmentAttempt.CreatePending(taskId, assistantId, collab.Id, 1, mangakaId);
-        task.AssignPending(assistantId);
-        await db.TaskAssignmentAttempts.AddAsync(attempt);
+        var attempt = TaskAssignmentAttempt.CreateAccepted(taskId, assistantId, collab.Id, 1, mangakaId, assignedAt);
+        task.AssignDirect(assistantId, "Inking page task", assignedAt.Add(duration), assignedAt);
 
+        await db.TaskAssignmentAttempts.AddAsync(attempt);
         await db.SaveChangesAsync();
 
-        // Verify authorization for pending assignment response
-        bool canRespond = await authService.CanRespondToAssignmentAsync(assistantId, attempt.Id);
-        Assert.True(canRespond);
-
-        // 5. Assistant Accepts Assignment (WorkStartedAt == AcceptedAt, DueAt calculated)
-        DateTime acceptedAt = DateTime.UtcNow;
-        attempt.Accept(assistantId, acceptedAt);
-        task.AcceptAssignment(acceptedAt, duration);
-
+        // Verify task state immediately on direct assignment
+        Assert.Equal(assistantId, task.AssignedAssistantId);
         Assert.Equal(PageTaskStatus.Incomplete, task.TaskStatus);
-        Assert.Equal(acceptedAt, task.WorkStartedAt);
-        Assert.Equal(acceptedAt.Add(duration), task.Deadline);
+        Assert.Equal(assignedAt, task.WorkStartedAt);
+        Assert.Equal(assignedAt.Add(duration), task.Deadline);
 
-        // 6. Progress Updates (Non-decreasing 0-100)
+        // 5. Progress Updates (Non-decreasing 0-100)
         task.SubmitProgress(25);
         Assert.Equal(25, task.ProgressPercent);
 
@@ -85,7 +79,7 @@ public class EndToEndAssistantWorkflowTests
         Action invalidProgressAction = () => task.SubmitProgress(50);
         Assert.Throws<InvalidOperationException>(invalidProgressAction);
 
-        // 7. Complete Task
+        // 6. Complete Task
         DateTime completedAt = DateTime.UtcNow;
         task.CompleteTask(completedAt);
 

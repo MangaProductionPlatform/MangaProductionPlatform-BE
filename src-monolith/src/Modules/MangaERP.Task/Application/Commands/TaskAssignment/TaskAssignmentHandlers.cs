@@ -154,6 +154,9 @@ public sealed class AssignTaskToAssistantHandler : IRequestHandler<AssignTaskToA
         if (grant == null)
             throw new ConflictException("Assistant does not have active series access for this series.");
 
+        if (task.ShouldExcludePreviousAssistant(request.AssistantId))
+            throw new ConflictException("PREVIOUS_TASK_ASSIGNEE_EXCLUDED: This assistant was removed from the previous version of this task and cannot be assigned.");
+
         int workload = await _attemptRepo.GetActiveWorkloadCountAsync(request.AssistantId, ct);
         if (workload >= maxWorkload)
             throw new ConflictException($"Assistant has reached maximum active task capacity ({maxWorkload}).");
@@ -165,29 +168,30 @@ public sealed class AssignTaskToAssistantHandler : IRequestHandler<AssignTaskToA
 
         int maxAttemptNumber = await _attemptRepo.GetMaxAttemptNumberAsync(task.Id, ct);
 
-        // 3. Create single Direct Attempt
+        DateTime now = DateTime.UtcNow;
+
+        // 3. Create single Direct Accepted Attempt
         int attemptNumber = maxAttemptNumber + 1;
-        var attempt = TaskAssignmentAttempt.CreatePending(
+        var attempt = TaskAssignmentAttempt.CreateAccepted(
             task.Id,
             request.AssistantId,
             collab.Id,
             attemptNumber,
             request.ActorUserId,
-            expiresAt: request.ResponseDeadline,
+            assignedAt: now,
             assignmentRole: "Direct",
-            responseDeadline: request.ResponseDeadline,
             workDeadline: request.Deadline);
 
         await _attemptRepo.AddAsync(attempt, ct);
 
-        // 4. Update Task state to PendingAcceptance (do NOT set AssignedAssistantId before Accept)
-        task.AssignPending(request.AssistantId, request.Description, request.Deadline);
+        // 4. Update Task state immediately to Incomplete with AssignedAssistantId
+        task.AssignDirect(request.AssistantId, request.Description, request.Deadline, now);
         task.CurrentAssignmentAttemptId = attempt.Id;
 
         await _taskRepo.UpdateAsync(task, ct);
         await _attemptRepo.SaveChangesAsync(ct);
 
-        // 5. Send Notification
+        // 5. Send Informational Notification
         await _notifications.NotifyCollaborationEventAsync(
             request.AssistantId,
             "TaskAssigned",
@@ -223,142 +227,11 @@ public sealed class AssignTaskToAssistantHandler : IRequestHandler<AssignTaskToA
 
 public sealed class RespondTaskAssignmentHandler : IRequestHandler<RespondTaskAssignmentCommand, TaskAssignmentAttemptDto>
 {
-    private readonly ITaskAssignmentAttemptRepository _attemptRepo;
-    private readonly IPageTaskRepository _taskRepo;
-    private readonly IStudioInvitationRepository _collabRepo;
-    private readonly ISeriesAccessGrantRepository _grantRepo;
-    private readonly IChapterRepository _chapterRepo;
-    private readonly INotificationService _notifications;
+    public RespondTaskAssignmentHandler() { }
 
-    public RespondTaskAssignmentHandler(
-        ITaskAssignmentAttemptRepository attemptRepo,
-        IPageTaskRepository taskRepo,
-        IStudioInvitationRepository collabRepo,
-        ISeriesAccessGrantRepository grantRepo,
-        IChapterRepository chapterRepo,
-        INotificationService notifications)
+    public Task<TaskAssignmentAttemptDto> Handle(RespondTaskAssignmentCommand request, CancellationToken ct)
     {
-        _attemptRepo = attemptRepo;
-        _taskRepo = taskRepo;
-        _collabRepo = collabRepo;
-        _grantRepo = grantRepo;
-        _chapterRepo = chapterRepo;
-        _notifications = notifications;
-    }
-
-    public async Task<TaskAssignmentAttemptDto> Handle(RespondTaskAssignmentCommand request, CancellationToken ct)
-    {
-        var attempt = await _attemptRepo.GetByIdAsync(request.AttemptId, ct)
-            ?? throw new EntityNotFoundException("TaskAssignmentAttempt", request.AttemptId);
-
-        if (request.ExpectedConcurrencyToken != Guid.Empty && attempt.ConcurrencyToken != request.ExpectedConcurrencyToken)
-            throw new ConflictException("The assignment attempt changed concurrently. Refresh and retry.");
-
-        if (attempt.AssistantId != request.ActorUserId)
-            throw new UnauthorizedAccessException("Only the assigned assistant can respond to this assignment attempt.");
-
-        if (attempt.Status != TaskAssignmentAttemptStatus.PendingAcceptance)
-            throw new ConflictException($"Assignment attempt is in status '{attempt.Status}' and cannot be responded to.");
-
-        var task = await _taskRepo.GetByIdAsync(attempt.TaskId, ct)
-            ?? throw new EntityNotFoundException("PageTask", attempt.TaskId);
-
-        var chapter = await _chapterRepo.GetByIdAsync(task.ChapterId, ct)
-            ?? throw new EntityNotFoundException("Chapter", task.ChapterId);
-
-        var collaboration = await _collabRepo.GetCollaborationAsync(attempt.CollaborationId, ct)
-            ?? throw new EntityNotFoundException("Collaboration", attempt.CollaborationId);
-
-        DateTime now = DateTime.UtcNow;
-
-        if (request.Accept)
-        {
-            if (collaboration.Status != CollaborationStatus.Active)
-                throw new ConflictException($"Cannot accept assignment when collaboration is in status '{collaboration.Status}'.");
-
-            var grant = await _grantRepo.GetActiveGrantAsync(collaboration.Id, chapter.SeriesId, ct);
-            if (grant == null)
-                throw new ConflictException("Cannot accept assignment because series access grant is no longer active.");
-
-            // Check if there is a previous accepted assignment on this task (Reassign scenario)
-            var allAttempts = await _attemptRepo.GetByTaskIdAsync(task.Id, ct);
-            var previousAccepted = allAttempts.FirstOrDefault(a => a.Id != attempt.Id && a.Status == TaskAssignmentAttemptStatus.Accepted);
-            if (previousAccepted != null)
-            {
-                previousAccepted.Supersede(now, $"Superseded by replacement assignment (Attempt #{attempt.AttemptNumber}).");
-                await _attemptRepo.UpdateAsync(previousAccepted, ct);
-
-                await _notifications.NotifyCollaborationEventAsync(
-                    previousAccepted.AssistantId,
-                    "AssignmentSuperseded",
-                    "Assignment Superseded",
-                    $"Your assignment for task #{task.PageNumber} in chapter '{chapter.Title}' has been superseded by a new assistant.",
-                    task.Id,
-                    ct);
-            }
-
-            attempt.Accept(request.ActorUserId, now);
-
-            if (task.WorkStartedAt != null || previousAccepted != null)
-            {
-                task.AcceptReplacement(attempt.AssistantId, now, attempt.WorkDeadline);
-            }
-            else
-            {
-                task.AcceptAssignment(now);
-                task.AssignedAssistantId = attempt.AssistantId;
-            }
-            task.CurrentAssignmentAttemptId = attempt.Id;
-
-            await _attemptRepo.UpdateAsync(attempt, ct);
-            await _taskRepo.UpdateAsync(task, ct);
-            await _attemptRepo.SaveChangesAsync(ct);
-
-            await _notifications.NotifyCollaborationEventAsync(
-                collaboration.MangakaId,
-                "TaskAssignmentAccepted",
-                "Task Assignment Accepted",
-                $"Assistant accepted task #{task.PageNumber} in chapter '{chapter.Title}'.",
-                task.Id,
-                ct);
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(request.RejectionReason))
-                throw new ArgumentException("Rejection reason is required when rejecting an assignment.");
-
-            attempt.Reject(request.ActorUserId, request.RejectionReason, now);
-            task.RejectAssignment();
-
-            await _attemptRepo.UpdateAsync(attempt, ct);
-            await _taskRepo.UpdateAsync(task, ct);
-            await _attemptRepo.SaveChangesAsync(ct);
-
-            await _notifications.NotifyCollaborationEventAsync(
-                collaboration.MangakaId,
-                "TaskAssignmentRejected",
-                "Task Assignment Rejected",
-                $"Assistant rejected task #{task.PageNumber} in chapter '{chapter.Title}'. Reason: {request.RejectionReason.Trim()}",
-                task.Id,
-                ct);
-        }
-
-        return new TaskAssignmentAttemptDto(
-            attempt.Id,
-            attempt.TaskId,
-            attempt.AssistantId,
-            attempt.CollaborationId,
-            attempt.AttemptNumber,
-            attempt.Status.ToString(),
-            attempt.AssignmentRole,
-            attempt.AssignedAt,
-            attempt.RespondedAt,
-            attempt.AcceptedAt,
-            attempt.RejectedAt,
-            attempt.RejectionReason,
-            attempt.ExpiresAt,
-            attempt.AssignedByUserId,
-            attempt.ConcurrencyToken);
+        throw new NotSupportedException("Task-level respond workflow has been retired. Task assignments take effect immediately upon assignment.");
     }
 }
 
