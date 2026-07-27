@@ -224,50 +224,36 @@ public class PageTask : AggregateRoot, ISoftDeletable
         BasePageVersions.Add(BasePageVersion.Create(Id, nextVersion, BaseImageUrl, updatedByUserId));
     }
 
-    public void AssignPrimaryAndBackup(Guid primaryAssistantId, Guid? backupAssistantId, string? description = null, DateTime? deadline = null)
+    public void AssignPending(Guid assistantId, string? description = null, DateTime? deadline = null)
     {
         if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.ReassignmentRequired && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.PendingAcceptance)
             throw new InvalidOperationException($"Cannot assign task in status '{TaskStatus}'.");
 
-        PrimaryAssistantId = primaryAssistantId;
-        BackupAssistantId = backupAssistantId;
-        AssignedAssistantId = primaryAssistantId;
         Description = description ?? Description;
         Deadline = deadline ?? Deadline;
         TaskStatus = PageTaskStatus.PendingAcceptance;
-        WorkStartedAt = null;
         TakeoverStatus = "None";
         ReassignmentReason = null;
         ReassignmentRequiredAt = null;
         UpdatedAt = DateTime.UtcNow;
     }
 
+    [Obsolete("Use AssignPending instead.")]
+    public void AssignPrimaryAndBackup(Guid primaryAssistantId, Guid? backupAssistantId, string? description = null, DateTime? deadline = null)
+    {
+        AssignPending(primaryAssistantId, description, deadline);
+    }
+
+    [Obsolete("Takeover workflow has been retired.")]
     public void RequestTakeover(string reason)
     {
-        if (BackupAssistantId is null)
-            throw new InvalidOperationException("No backup assistant assigned for this task.");
-
-        TakeoverStatus = "TakeoverRequested";
-        ReassignmentReason = reason;
-        UpdatedAt = DateTime.UtcNow;
+        throw new NotSupportedException("Takeover workflow has been retired. Use Reassign instead.");
     }
 
+    [Obsolete("Takeover workflow has been retired.")]
     public void AcceptTakeover(Guid backupAssistantId, DateTime acceptedAt, DateTime newDeadline)
     {
-        if (BackupAssistantId != backupAssistantId)
-            throw new UnauthorizedAccessException("Only the assigned backup assistant can take over this task.");
-
-        AssignedAssistantId = backupAssistantId;
-        TaskStatus = PageTaskStatus.Incomplete;
-        TakeoverStatus = "TakeoverAccepted";
-        WorkStartedAt = acceptedAt;
-        Deadline = newDeadline;
-        UpdatedAt = acceptedAt;
-    }
-
-    public void AssignPending(Guid assistantId, string? description = null, DateTime? deadline = null)
-    {
-        AssignPrimaryAndBackup(assistantId, null, description, deadline);
+        throw new NotSupportedException("Takeover workflow has been retired. Use Reassign instead.");
     }
 
     public void AcceptAssignment(DateTime acceptedAt, TimeSpan? duration = null)
@@ -276,7 +262,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
             throw new InvalidOperationException("Only PendingAcceptance tasks can be accepted.");
 
         TaskStatus = PageTaskStatus.Incomplete;
-        WorkStartedAt = acceptedAt;
+        WorkStartedAt ??= acceptedAt;
         if (duration.HasValue && duration.Value > TimeSpan.Zero)
         {
             Deadline = acceptedAt.Add(duration.Value);
@@ -284,12 +270,23 @@ public class PageTask : AggregateRoot, ISoftDeletable
         UpdatedAt = acceptedAt;
     }
 
+    public void AcceptReplacement(Guid newAssistantId, DateTime acceptedAt, DateTime? newDeadline = null)
+    {
+        AssignedAssistantId = newAssistantId;
+        TaskStatus = PageTaskStatus.Incomplete;
+        WorkStartedAt ??= acceptedAt;
+        if (newDeadline.HasValue)
+        {
+            Deadline = newDeadline.Value;
+        }
+        UpdatedAt = acceptedAt;
+    }
+
     public void RejectAssignment()
     {
         AssignedAssistantId = null;
-        WorkStartedAt = null;
         TaskStatus = PageTaskStatus.ReassignmentRequired;
-        ReassignmentReason = "Primary assistant rejected assignment.";
+        ReassignmentReason = "Assistant rejected assignment.";
         ReassignmentRequiredAt = DateTime.UtcNow;
         UpdatedAt = DateTime.UtcNow;
     }
@@ -299,8 +296,6 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public void MarkReassignmentRequired(string? reason = null)
     {
         AssignedAssistantId = null;
-        WorkStartedAt = null;
-        Deadline = null;
         TaskStatus = PageTaskStatus.ReassignmentRequired;
         ReassignmentReason = reason ?? "All candidate assistants rejected or timed out.";
         ReassignmentRequiredAt = DateTime.UtcNow;

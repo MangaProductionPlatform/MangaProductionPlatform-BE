@@ -29,7 +29,7 @@ public class TaskAssignmentAttempt : AggregateRoot
     public string? DeclineReason => RejectionReason;
     public DateTime? ExpiresAt { get; private set; }
     public Guid AssignedByUserId { get; private set; }
-    public string AssignmentRole { get; private set; } = "Primary"; // "Primary" | "BackupTakeover"
+    public string AssignmentRole { get; private set; } = "Direct"; // Historical: "Primary" | "Backup" | "BackupTakeover" | "Direct"
     public DateTime? ResponseDeadline { get; private set; }
     public DateTime? WorkDeadline { get; private set; }
     public Guid? PreviousAttemptId { get; private set; }
@@ -46,7 +46,7 @@ public class TaskAssignmentAttempt : AggregateRoot
         int attemptNumber,
         Guid assignedByUserId,
         DateTime? expiresAt = null,
-        string assignmentRole = "Primary",
+        string assignmentRole = "Direct",
         DateTime? responseDeadline = null,
         DateTime? workDeadline = null,
         Guid? previousAttemptId = null)
@@ -68,7 +68,7 @@ public class TaskAssignmentAttempt : AggregateRoot
             AssignedAt = DateTime.UtcNow,
             ExpiresAt = expiresAt ?? responseDeadline,
             AssignedByUserId = assignedByUserId,
-            AssignmentRole = string.IsNullOrWhiteSpace(assignmentRole) ? "Primary" : assignmentRole,
+            AssignmentRole = string.IsNullOrWhiteSpace(assignmentRole) ? "Direct" : assignmentRole,
             ResponseDeadline = responseDeadline ?? expiresAt,
             WorkDeadline = workDeadline,
             PreviousAttemptId = previousAttemptId,

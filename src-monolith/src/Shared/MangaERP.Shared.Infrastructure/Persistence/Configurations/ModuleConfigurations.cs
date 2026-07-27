@@ -426,17 +426,17 @@ public class TaskAssignmentAttemptConfiguration : IEntityTypeConfiguration<TaskA
         b.ToTable("TaskAssignmentAttempts");
         b.HasKey(e => e.Id);
         b.Property(e => e.Status).HasConversion<string>().HasMaxLength(30).IsRequired();
-        b.Property(e => e.AssignmentRole).HasMaxLength(30).HasDefaultValue("Primary");
+        b.Property(e => e.AssignmentRole).HasMaxLength(30).HasDefaultValue("Direct");
         b.Property(e => e.RejectionReason).HasMaxLength(2000);
         b.Property(e => e.ConcurrencyToken).IsConcurrencyToken().ValueGeneratedNever();
 
         b.HasIndex(e => new { e.TaskId, e.AttemptNumber }).IsUnique();
 
-        b.HasIndex(e => new { e.TaskId, e.AssignmentRole }, "IX_TaskAssignmentAttempts_TaskId_AssignmentRole_PendingAcceptance")
+        b.HasIndex(e => new { e.TaskId }, "IX_TaskAssignmentAttempts_TaskId_PendingAcceptance")
             .IsUnique()
             .HasFilter("\"Status\" = 'PendingAcceptance'");
 
-        b.HasIndex(e => new { e.TaskId, e.AssignmentRole }, "IX_TaskAssignmentAttempts_TaskId_AssignmentRole_Accepted")
+        b.HasIndex(e => new { e.TaskId }, "IX_TaskAssignmentAttempts_TaskId_Accepted")
             .IsUnique()
             .HasFilter("\"Status\" = 'Accepted'");
 
