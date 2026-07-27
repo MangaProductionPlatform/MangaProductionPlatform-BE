@@ -122,6 +122,11 @@ public class StudioInvitationRepository : IStudioInvitationRepository
 
         var collaboration = new MangakaAssistantCollaboration(invitation.InviterMangakaId, assistantId, invitation.Id, now);
         _db.MangakaAssistantCollaborations.Add(collaboration);
+        if (invitation.SeriesId != Guid.Empty)
+        {
+            var grant = SeriesAccessGrant.Create(collaboration.Id, invitation.SeriesId, invitation.InviterMangakaId);
+            _db.SeriesAccessGrants.Add(grant);
+        }
         _db.CollaborationEvents.Add(new CollaborationEvent(
             collaboration.Id, CollaborationEventType.CollaborationActivated, actorId, now,
             correlationId: correlationId));
