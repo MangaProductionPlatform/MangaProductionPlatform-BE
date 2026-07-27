@@ -97,61 +97,66 @@ public class StudioInvitationRepository : IStudioInvitationRepository
     public async System.Threading.Tasks.Task<MangakaAssistantCollaboration> AcceptInvitationAsync(
         Guid invitationId, Guid assistantId, Guid actorId, DateTime now, string? correlationId, CancellationToken ct = default)
     {
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-        var invitation = await _db.StudioInvitations.FirstOrDefaultAsync(i => i.Id == invitationId, ct)
-            ?? throw new KeyNotFoundException("Invitation was not found.");
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        var actor = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == actorId, ct);
-        if (actor is null || actor.IsDeleted || actor.AccountStatus != AccountStatus.Active ||
-            actor.Role != UserRole.Assistant || actor.Id != assistantId)
-            throw new UnauthorizedAccessException("Only the active Assistant account owning this invitation can accept it.");
-
-        if (invitation.AssistantUserId != assistantId)
-            throw new UnauthorizedAccessException("You cannot process this invitation.");
-
-        if (invitation.Status != StudioInvitationStatus.Pending)
-            throw new ConflictException("This invitation has already been processed.");
-
-        if (invitation.ExpiresAt < now)
+        return await strategy.ExecuteAsync(async () =>
         {
-            invitation.Status = StudioInvitationStatus.Expired;
+            await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+            var invitation = await _db.StudioInvitations.FirstOrDefaultAsync(i => i.Id == invitationId, ct)
+                ?? throw new KeyNotFoundException("Invitation was not found.");
+
+            var actor = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == actorId, ct);
+            if (actor is null || actor.IsDeleted || actor.AccountStatus != AccountStatus.Active ||
+                actor.Role != UserRole.Assistant || actor.Id != assistantId)
+                throw new UnauthorizedAccessException("Only the active Assistant account owning this invitation can accept it.");
+
+            if (invitation.AssistantUserId != assistantId)
+                throw new UnauthorizedAccessException("You cannot process this invitation.");
+
+            if (invitation.Status != StudioInvitationStatus.Pending)
+                throw new ConflictException("This invitation has already been processed.");
+
+            if (invitation.ExpiresAt < now)
+            {
+                invitation.Status = StudioInvitationStatus.Expired;
+                invitation.RespondedAt = now;
+                await _db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                throw new ConflictException("This invitation has expired.");
+            }
+
+            if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+                throw new ConflictException("The Assistant already has a non-ended Mangaka collaboration.");
+
+            var collaboration = new MangakaAssistantCollaboration(invitation.InviterMangakaId, assistantId, invitation.Id, now);
+            _db.MangakaAssistantCollaborations.Add(collaboration);
+            if (invitation.SeriesId != Guid.Empty)
+            {
+                var grant = SeriesAccessGrant.Create(collaboration.Id, invitation.SeriesId, invitation.InviterMangakaId);
+                _db.SeriesAccessGrants.Add(grant);
+            }
+            _db.CollaborationEvents.Add(new CollaborationEvent(
+                collaboration.Id, CollaborationEventType.CollaborationActivated, actorId, now,
+                correlationId: correlationId));
+            invitation.Status = StudioInvitationStatus.Accepted;
             invitation.RespondedAt = now;
-            await _db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-            throw new ConflictException("This invitation has expired.");
-        }
-
-        if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
-            throw new ConflictException("The Assistant already has a non-ended Mangaka collaboration.");
-
-        var collaboration = new MangakaAssistantCollaboration(invitation.InviterMangakaId, assistantId, invitation.Id, now);
-        _db.MangakaAssistantCollaborations.Add(collaboration);
-        if (invitation.SeriesId != Guid.Empty)
-        {
-            var grant = SeriesAccessGrant.Create(collaboration.Id, invitation.SeriesId, invitation.InviterMangakaId);
-            _db.SeriesAccessGrants.Add(grant);
-        }
-        _db.CollaborationEvents.Add(new CollaborationEvent(
-            collaboration.Id, CollaborationEventType.CollaborationActivated, actorId, now,
-            correlationId: correlationId));
-        invitation.Status = StudioInvitationStatus.Accepted;
-        invitation.RespondedAt = now;
-        try
-        {
-            await _db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-            return collaboration;
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            await transaction.RollbackAsync(ct);
-            throw new ConflictException("The invitation could not be accepted because it changed concurrently.");
-        }
-        catch (DbUpdateException ex) when (IsConcurrencyOrKnownUniqueViolation(ex))
-        {
-            await transaction.RollbackAsync(ct);
-            throw new ConflictException("The invitation could not be accepted because the Assistant collaboration changed concurrently.");
-        }
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return collaboration;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync(ct);
+                throw new ConflictException("The invitation could not be accepted because it changed concurrently.");
+            }
+            catch (DbUpdateException ex) when (IsConcurrencyOrKnownUniqueViolation(ex))
+            {
+                await transaction.RollbackAsync(ct);
+                throw new ConflictException("The invitation could not be accepted because the Assistant collaboration changed concurrently.");
+            }
+        });
     }
 
     private static bool IsConcurrencyOrKnownUniqueViolation(DbUpdateException ex)
@@ -350,84 +355,89 @@ public class StudioInvitationRepository : IStudioInvitationRepository
     public async System.Threading.Tasks.Task<MangakaAssistantCollaboration> AdminAssignAssistantToMangakaAsync(
         Guid assistantId, Guid mangakaId, Guid adminUserId, string? reason, DateTime now, CancellationToken ct = default)
     {
-        // 1. Validate Assistant user
-        var assistantUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == assistantId, ct);
-        if (assistantUser is null || assistantUser.IsDeleted || assistantUser.Role != UserRole.Assistant)
-        {
-            throw new AdminAssignException("ASSISTANT_NOT_FOUND", $"Assistant with ID '{assistantId}' was not found.", 404);
-        }
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        if (assistantUser.AccountStatus != AccountStatus.Active)
+        return await strategy.ExecuteAsync(async () =>
         {
-            throw new AdminAssignException("ASSISTANT_NOT_ACTIVE", "Assistant account is not active.", 400);
-        }
-
-        if (await _db.MangakaAssistantCollaborations.AsNoTracking().AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
-        {
-            throw new AdminAssignException("ASSISTANT_NOT_UNASSIGNED", "Assistant is not unassigned and currently has an active collaboration.", 409);
-        }
-
-        // 2. Validate Target Mangaka user
-        var mangakaUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == mangakaId, ct);
-        if (mangakaUser is null || mangakaUser.IsDeleted)
-        {
-            throw new AdminAssignException("TARGET_MANGAKA_NOT_FOUND", $"Target Mangaka with ID '{mangakaId}' was not found.", 404);
-        }
-
-        if (mangakaUser.Role != UserRole.Mangaka)
-        {
-            throw new AdminAssignException("TARGET_USER_NOT_MANGAKA", "Target user is not a Mangaka.", 400);
-        }
-
-        if (mangakaUser.AccountStatus != AccountStatus.Active)
-        {
-            throw new AdminAssignException("TARGET_MANGAKA_INACTIVE", "Target Mangaka account is not active.", 400);
-        }
-
-        // 3. Atomic Transaction & Concurrency Protection
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
-
-        try
-        {
-            if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+            // 1. Validate Assistant user
+            var assistantUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == assistantId, ct);
+            if (assistantUser is null || assistantUser.IsDeleted || assistantUser.Role != UserRole.Assistant)
             {
-                throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assistant has already been assigned concurrently.", 409);
+                throw new AdminAssignException("ASSISTANT_NOT_FOUND", $"Assistant with ID '{assistantId}' was not found.", 404);
             }
 
-            var collaboration = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), now);
-            _db.MangakaAssistantCollaborations.Add(collaboration);
+            if (assistantUser.AccountStatus != AccountStatus.Active)
+            {
+                throw new AdminAssignException("ASSISTANT_NOT_ACTIVE", "Assistant account is not active.", 400);
+            }
 
-            _db.CollaborationEvents.Add(new CollaborationEvent(
-                collaboration.Id,
-                CollaborationEventType.CollaborationActivated,
-                adminUserId,
-                now,
-                reason: string.IsNullOrWhiteSpace(reason) ? "Assigned by Admin" : reason.Trim()
-            ));
+            if (await _db.MangakaAssistantCollaborations.AsNoTracking().AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+            {
+                throw new AdminAssignException("ASSISTANT_NOT_UNASSIGNED", "Assistant is not unassigned and currently has an active collaboration.", 409);
+            }
 
-            await _db.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
-            return collaboration;
-        }
-        catch (AdminAssignException)
-        {
-            await transaction.RollbackAsync(ct);
-            throw;
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            await transaction.RollbackAsync(ct);
-            throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assignment failed due to concurrent update.", 409);
-        }
-        catch (DbUpdateException ex) when (IsConcurrencyOrKnownUniqueViolation(ex))
-        {
-            await transaction.RollbackAsync(ct);
-            throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assignment failed due to duplicate collaboration or constraint violation.", 409);
-        }
-        catch (Exception)
-        {
-            await transaction.RollbackAsync(ct);
-            throw;
-        }
+            // 2. Validate Target Mangaka user
+            var mangakaUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == mangakaId, ct);
+            if (mangakaUser is null || mangakaUser.IsDeleted)
+            {
+                throw new AdminAssignException("TARGET_MANGAKA_NOT_FOUND", $"Target Mangaka with ID '{mangakaId}' was not found.", 404);
+            }
+
+            if (mangakaUser.Role != UserRole.Mangaka)
+            {
+                throw new AdminAssignException("TARGET_USER_NOT_MANGAKA", "Target user is not a Mangaka.", 400);
+            }
+
+            if (mangakaUser.AccountStatus != AccountStatus.Active)
+            {
+                throw new AdminAssignException("TARGET_MANGAKA_INACTIVE", "Target Mangaka account is not active.", 400);
+            }
+
+            // 3. Atomic Transaction & Concurrency Protection
+            await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
+            try
+            {
+                if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+                {
+                    throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assistant has already been assigned concurrently.", 409);
+                }
+
+                var collaboration = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), now);
+                _db.MangakaAssistantCollaborations.Add(collaboration);
+
+                _db.CollaborationEvents.Add(new CollaborationEvent(
+                    collaboration.Id,
+                    CollaborationEventType.CollaborationActivated,
+                    adminUserId,
+                    now,
+                    reason: string.IsNullOrWhiteSpace(reason) ? "Assigned by Admin" : reason.Trim()
+                ));
+
+                await _db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return collaboration;
+            }
+            catch (AdminAssignException)
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                await transaction.RollbackAsync(ct);
+                throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assignment failed due to concurrent update.", 409);
+            }
+            catch (DbUpdateException ex) when (IsConcurrencyOrKnownUniqueViolation(ex))
+            {
+                await transaction.RollbackAsync(ct);
+                throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assignment failed due to duplicate collaboration or constraint violation.", 409);
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
+        });
     }
 }
