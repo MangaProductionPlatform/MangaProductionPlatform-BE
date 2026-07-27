@@ -84,77 +84,80 @@ public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, 
         }
 
         var db = (DbContext)_dbProvider.GetDbContext();
-        var transaction = db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory"
-            ? await db.Database.BeginTransactionAsync(cancellationToken)
-            : null;
+        var strategy = db.Database.CreateExecutionStrategy();
 
-        try
+        var (createdUserId, generatedUsername, token) = await strategy.ExecuteAsync(async () =>
         {
-            // Step 2: Generate unique corporate username
-            var username = await _usernameGenerator.GenerateAsync(request.FullName, request.Role, cancellationToken);
+            await using var transaction = db.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory"
+                ? await db.Database.BeginTransactionAsync(cancellationToken)
+                : null;
 
-            // Step 3: Create user in PendingActivation state
-            var user = new User
+            try
             {
-                Username = username,
-                Email = username,               // corporate email IS the login email
-                PersonalEmail = request.PersonalEmail,
-                NormalizedPersonalEmail = request.PersonalEmail.Trim().ToLowerInvariant(),
-                PasswordHash = string.Empty,    // not set until activation
-                Role = request.Role,
-                FullName = request.FullName,
-                PhoneNumber = request.PhoneNumber,
-                ManagingTantouId = request.Role == UserRole.Mangaka ? request.ManagingTantouId : null,
-                AccountStatus = AccountStatus.PendingActivation,
-                CreatedAt = DateTime.UtcNow
-            };
-            await _userRepo.AddAsync(user, cancellationToken);
+                // Step 2: Generate unique corporate username
+                var username = await _usernameGenerator.GenerateAsync(request.FullName, request.Role, cancellationToken);
 
-            // Step 4: Generate 24h JWT invitation token
-            var jwtToken = _tokenService.GenerateInvitationToken(
-                user.Id, request.PersonalEmail, username, request.Role.ToString());
+                // Step 3: Create user in PendingActivation state
+                var user = new User
+                {
+                    Username = username,
+                    Email = username,               // corporate email IS the login email
+                    PersonalEmail = request.PersonalEmail,
+                    NormalizedPersonalEmail = request.PersonalEmail.Trim().ToLowerInvariant(),
+                    PasswordHash = string.Empty,    // not set until activation
+                    Role = request.Role,
+                    FullName = request.FullName,
+                    PhoneNumber = request.PhoneNumber,
+                    ManagingTantouId = request.Role == UserRole.Mangaka ? request.ManagingTantouId : null,
+                    AccountStatus = AccountStatus.PendingActivation,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _userRepo.AddAsync(user, cancellationToken);
 
-            // Step 5: Persist invitation token entity
-            var invToken = new InvitationToken
-            {
-                Token = jwtToken,
-                UserId = user.Id,
-                PersonalEmail = request.PersonalEmail,
-                ExpiresAt = DateTime.UtcNow.AddHours(24),
-                IsUsed = false,
-                CreatedAt = DateTime.UtcNow
-            };
-            await _invTokenRepo.AddAsync(invToken, cancellationToken);
+                // Step 4: Generate 24h JWT invitation token
+                var jwtToken = _tokenService.GenerateInvitationToken(
+                    user.Id, request.PersonalEmail, username, request.Role.ToString());
 
-            // Step 5b: Create MangakaAssistantCollaboration if Role == Assistant
-            if (request.Role == UserRole.Assistant && mangaka != null)
-            {
-                if (await _collabProvisionPort.HasNonEndedCollaborationAsync(user.Id, cancellationToken))
-                    throw new InvalidOperationException("Assistant already has a non-ended collaboration.");
+                // Step 5: Persist invitation token entity
+                var invToken = new InvitationToken
+                {
+                    Token = jwtToken,
+                    UserId = user.Id,
+                    PersonalEmail = request.PersonalEmail,
+                    ExpiresAt = DateTime.UtcNow.AddHours(24),
+                    IsUsed = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _invTokenRepo.AddAsync(invToken, cancellationToken);
 
-                await _collabProvisionPort.CreateActiveCollaborationAsync(mangaka.Id, user.Id, cancellationToken);
+                // Step 5b: Create MangakaAssistantCollaboration if Role == Assistant
+                if (request.Role == UserRole.Assistant && mangaka != null)
+                {
+                    if (await _collabProvisionPort.HasNonEndedCollaborationAsync(user.Id, cancellationToken))
+                        throw new InvalidOperationException("Assistant already has a non-ended collaboration.");
+
+                    await _collabProvisionPort.CreateActiveCollaborationAsync(mangaka.Id, user.Id, cancellationToken);
+                }
+
+                await db.SaveChangesAsync(cancellationToken);
+                if (transaction != null) await transaction.CommitAsync(cancellationToken);
+
+                return (user.Id, username, jwtToken);
             }
+            catch
+            {
+                if (transaction != null) await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        });
 
-            await db.SaveChangesAsync(cancellationToken);
-            if (transaction != null) await transaction.CommitAsync(cancellationToken);
+        // Step 6: Send activation email (outside retry strategy & transaction)
+        var baseUrl = _config["Invitation:ActivationBaseUrl"] ?? "https://company.com/activate";
+        var activationLink = $"{baseUrl}?token={Uri.EscapeDataString(token)}";
+        await _emailService.SendInvitationEmailAsync(
+            request.PersonalEmail, activationLink, generatedUsername, request.FullName, cancellationToken);
 
-            // Step 6: Send activation email
-            var baseUrl = _config["Invitation:ActivationBaseUrl"] ?? "https://company.com/activate";
-            var activationLink = $"{baseUrl}?token={Uri.EscapeDataString(jwtToken)}";
-            await _emailService.SendInvitationEmailAsync(
-                request.PersonalEmail, activationLink, username, request.FullName, cancellationToken);
-
-            return new ProvisionAccountResult(user.Id, username, request.PersonalEmail,
-                request.Role.ToString(), AccountStatus.PendingActivation.ToString());
-        }
-        catch
-        {
-            if (transaction != null) await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
-        finally
-        {
-            if (transaction != null) await transaction.DisposeAsync();
-        }
+        return new ProvisionAccountResult(createdUserId, generatedUsername, request.PersonalEmail,
+            request.Role.ToString(), AccountStatus.PendingActivation.ToString());
     }
 }

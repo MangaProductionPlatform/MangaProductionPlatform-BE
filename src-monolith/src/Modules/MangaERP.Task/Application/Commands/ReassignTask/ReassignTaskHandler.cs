@@ -75,130 +75,128 @@ public class ReassignTaskHandler : IRequestHandler<ReassignTaskCommand, AssignTa
             throw new ArgumentException("Reassignment reason is required.", nameof(request.Reason));
 
         var dbContext = _dbContextProvider?.GetDbContext() as DbContext;
-        IDbContextTransaction? transaction = null;
-
-        if (dbContext != null && dbContext.Database.CurrentTransaction == null && dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+        if (dbContext != null && dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
         {
-            transaction = await dbContext.Database.BeginTransactionAsync(ct);
+            var strategy = dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = dbContext.Database.CurrentTransaction == null
+                    ? await dbContext.Database.BeginTransactionAsync(ct)
+                    : null;
+
+                try
+                {
+                    var result = await ExecuteReassignInternalAsync(request, ct);
+                    if (transaction != null) await transaction.CommitAsync(ct);
+                    return result;
+                }
+                catch
+                {
+                    if (transaction != null) await transaction.RollbackAsync(ct);
+                    throw;
+                }
+            });
         }
 
-        try
+        return await ExecuteReassignInternalAsync(request, ct);
+    }
+
+    private async Task<AssignTaskResultDto> ExecuteReassignInternalAsync(ReassignTaskCommand request, CancellationToken ct)
+    {
+        // 1. Load task, chapter, and series
+        var task = await _taskRepo.GetByIdAsync(request.TaskId, ct)
+            ?? throw new EntityNotFoundException("PageTask", request.TaskId);
+
+        var chapter = await _chapterRepo.GetByIdAsync(task.ChapterId, ct)
+            ?? throw new EntityNotFoundException("Chapter", task.ChapterId);
+
+        var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, ct)
+            ?? throw new EntityNotFoundException("MangaSeries", chapter.SeriesId);
+
+        // 2. Authorize owner Mangaka
+        if (series.AuthorId != request.ActorUserId)
+            throw new UnauthorizedAccessException("Only the Mangaka who owns the series can reassign tasks.");
+
+        int maxWorkload = _config.GetValue<int?>("AssistantWorkload:MaximumActiveAssignments") ?? 3;
+
+        // 3. Validate New Assistant (Active collaboration, SeriesAccessGrant, Workload)
+        var newCollab = await _collabRepo.GetNonEndedCollaborationByAssistantAsync(request.NewAssistantId, ct)
+            ?? throw new ConflictException("New assistant has no collaboration with this Mangaka.");
+
+        if (newCollab.MangakaId != request.ActorUserId)
+            throw new ConflictException("New assistant collaboration is with a different Mangaka.");
+
+        if (newCollab.Status != CollaborationStatus.Accepted)
+            throw new ConflictException($"Cannot assign task to assistant in collaboration status '{newCollab.Status}'.");
+
+        var grant = await _grantRepo.GetActiveGrantAsync(newCollab.Id, series.Id, ct);
+        if (grant == null)
+            throw new ConflictException("New assistant does not have active series access for this series.");
+
+        if (task.ShouldExcludePreviousAssistant(request.NewAssistantId))
+            throw new ConflictException("PREVIOUS_TASK_ASSIGNEE_EXCLUDED: This assistant was removed from the previous version of this task and cannot be reassigned.");
+
+        int newWorkload = await _attemptRepo.GetActiveWorkloadCountAsync(request.NewAssistantId, ct, excludeTaskId: task.Id);
+        if (newWorkload >= maxWorkload)
+            throw new ConflictException($"New assistant has reached maximum active task capacity ({maxWorkload}).");
+
+        if (task.AssignedAssistantId == request.NewAssistantId)
+            throw new ConflictException("Task is already assigned to this assistant.");
+
+        DateTime now = DateTime.UtcNow;
+        var existingAttempts = (await _attemptRepo.GetByTaskIdAsync(task.Id, ct)).ToList();
+
+        // 4. Supersede current accepted attempt immediately
+        var currentAcceptedAttempt = existingAttempts.FirstOrDefault(a => a.Status == TaskAssignmentAttemptStatus.Accepted);
+        if (currentAcceptedAttempt != null)
         {
-            // 1. Load task, chapter, and series
-            var task = await _taskRepo.GetByIdAsync(request.TaskId, ct)
-                ?? throw new EntityNotFoundException("PageTask", request.TaskId);
+            currentAcceptedAttempt.Supersede(now, $"Reassigned to new assistant by Mangaka. Reason: {request.Reason}");
+            await _attemptRepo.UpdateAsync(currentAcceptedAttempt, ct);
 
-            var chapter = await _chapterRepo.GetByIdAsync(task.ChapterId, ct)
-                ?? throw new EntityNotFoundException("Chapter", task.ChapterId);
-
-            var series = await _seriesRepo.GetByIdAsync(chapter.SeriesId, ct)
-                ?? throw new EntityNotFoundException("MangaSeries", chapter.SeriesId);
-
-            // 2. Authorize owner Mangaka
-            if (series.AuthorId != request.ActorUserId)
-                throw new UnauthorizedAccessException("Only the Mangaka who owns the series can reassign tasks.");
-
-            int maxWorkload = _config.GetValue<int?>("AssistantWorkload:MaximumActiveAssignments") ?? 3;
-
-            // 3. Validate New Assistant (Active collaboration, SeriesAccessGrant, Workload)
-            var newCollab = await _collabRepo.GetNonEndedCollaborationByAssistantAsync(request.NewAssistantId, ct)
-                ?? throw new ConflictException("New assistant has no collaboration with this Mangaka.");
-
-            if (newCollab.MangakaId != request.ActorUserId)
-                throw new ConflictException("New assistant collaboration is with a different Mangaka.");
-
-            if (newCollab.Status != CollaborationStatus.Accepted)
-                throw new ConflictException($"Cannot assign task to assistant in collaboration status '{newCollab.Status}'.");
-
-            var grant = await _grantRepo.GetActiveGrantAsync(newCollab.Id, series.Id, ct);
-            if (grant == null)
-                throw new ConflictException("New assistant does not have active series access for this series.");
-
-            if (task.ShouldExcludePreviousAssistant(request.NewAssistantId))
-                throw new ConflictException("PREVIOUS_TASK_ASSIGNEE_EXCLUDED: This assistant was removed from the previous version of this task and cannot be reassigned.");
-
-            int newWorkload = await _attemptRepo.GetActiveWorkloadCountAsync(request.NewAssistantId, ct, excludeTaskId: task.Id);
-            if (newWorkload >= maxWorkload)
-                throw new ConflictException($"New assistant has reached maximum active task capacity ({maxWorkload}).");
-
-            if (task.AssignedAssistantId == request.NewAssistantId)
-                throw new ConflictException("Task is already assigned to this assistant.");
-
-            DateTime now = DateTime.UtcNow;
-            var existingAttempts = (await _attemptRepo.GetByTaskIdAsync(task.Id, ct)).ToList();
-
-            // 4. Supersede current accepted attempt immediately
-            var currentAcceptedAttempt = existingAttempts.FirstOrDefault(a => a.Status == TaskAssignmentAttemptStatus.Accepted);
-            if (currentAcceptedAttempt != null)
-            {
-                currentAcceptedAttempt.Supersede(now, $"Reassigned to new assistant by Mangaka. Reason: {request.Reason}");
-                await _attemptRepo.UpdateAsync(currentAcceptedAttempt, ct);
-
-                await _notifications.NotifyCollaborationEventAsync(
-                    currentAcceptedAttempt.AssistantId,
-                    "TaskReassigned",
-                    "Task Assignment Transferred",
-                    $"Your assignment for task #{task.PageNumber} in chapter '{chapter.Title}' has been reassigned to another assistant.",
-                    task.Id,
-                    ct);
-            }
-
-            int maxAttemptNumber = await _attemptRepo.GetMaxAttemptNumberAsync(task.Id, ct);
-            int attemptNumber = maxAttemptNumber + 1;
-
-            // 5. Create new Accepted attempt immediately
-            var replacementAttempt = TaskAssignmentAttempt.CreateAccepted(
-                task.Id,
-                request.NewAssistantId,
-                newCollab.Id,
-                attemptNumber,
-                request.ActorUserId,
-                assignedAt: now,
-                assignmentRole: "Direct",
-                workDeadline: request.Deadline);
-
-            await _attemptRepo.AddAsync(replacementAttempt, ct);
-
-            // 6. Update PageTask domain state immediately (AssignedAssistantId updated to new assistant)
-            task.ReassignDirect(request.NewAssistantId, request.Reason, request.Deadline, request.Description, now);
-            task.CurrentAssignmentAttemptId = replacementAttempt.Id;
-
-            await _taskRepo.UpdateAsync(task, ct);
-
-            // 7. Notify new assistant
             await _notifications.NotifyCollaborationEventAsync(
-                request.NewAssistantId,
+                currentAcceptedAttempt.AssistantId,
                 "TaskReassigned",
-                "Task Reassigned to You",
-                $"Task #{task.PageNumber} in chapter '{chapter.Title}' has been reassigned to you.",
+                "Task Assignment Transferred",
+                $"Your assignment for task #{task.PageNumber} in chapter '{chapter.Title}' has been reassigned to another assistant.",
                 task.Id,
                 ct);
-
-            await _attemptRepo.SaveChangesAsync(ct);
-
-            if (transaction != null)
-            {
-                await transaction.CommitAsync(ct);
-            }
-
-            var attemptDto = MapToAttemptDto(replacementAttempt);
-            return new AssignTaskResultDto(task.Id, attemptDto, null);
         }
-        catch
-        {
-            if (transaction != null)
-            {
-                await transaction.RollbackAsync(ct);
-            }
-            throw;
-        }
-        finally
-        {
-            if (transaction != null)
-            {
-                await transaction.DisposeAsync();
-            }
-        }
+
+        int maxAttemptNumber = await _attemptRepo.GetMaxAttemptNumberAsync(task.Id, ct);
+        int attemptNumber = maxAttemptNumber + 1;
+
+        // 5. Create new Accepted attempt immediately
+        var replacementAttempt = TaskAssignmentAttempt.CreateAccepted(
+            task.Id,
+            request.NewAssistantId,
+            newCollab.Id,
+            attemptNumber,
+            request.ActorUserId,
+            assignedAt: now,
+            assignmentRole: "Direct",
+            workDeadline: request.Deadline);
+
+        await _attemptRepo.AddAsync(replacementAttempt, ct);
+
+        // 6. Update PageTask domain state immediately (AssignedAssistantId updated to new assistant)
+        task.ReassignDirect(request.NewAssistantId, request.Reason, request.Deadline, request.Description, now);
+        task.CurrentAssignmentAttemptId = replacementAttempt.Id;
+
+        await _taskRepo.UpdateAsync(task, ct);
+
+        // 7. Notify new assistant
+        await _notifications.NotifyCollaborationEventAsync(
+            request.NewAssistantId,
+            "TaskReassigned",
+            "Task Reassigned to You",
+            $"Task #{task.PageNumber} in chapter '{chapter.Title}' has been reassigned to you.",
+            task.Id,
+            ct);
+
+        await _attemptRepo.SaveChangesAsync(ct);
+
+        var attemptDto = MapToAttemptDto(replacementAttempt);
+        return new AssignTaskResultDto(task.Id, attemptDto, null);
     }
 
     private static TaskAssignmentAttemptDto MapToAttemptDto(TaskAssignmentAttempt attempt)
