@@ -289,4 +289,86 @@ public class ThreeStageWorkflowTests
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             handler.Handle(new GetAssistantDetailQuery(mangakaBId, assistantId), default));
     }
+
+    [Fact]
+    public async System.Threading.Tasks.Task GetUnassignedAssistants_ReturnsOnlyFreeAssistants()
+    {
+        using var db = CreateInMemoryDb();
+        var provider = new TestDbContextProvider(db);
+
+        var mangakaId = Guid.NewGuid();
+        var mangaka = new User
+        {
+            Id = mangakaId,
+            Username = "mangaka_unassigned",
+            Email = "mgk_u@test.local",
+            PasswordHash = "hash",
+            Role = UserRole.Mangaka,
+            AccountStatus = AccountStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.Users.Add(mangaka);
+
+        // Assistant 1: Free (never had a collaboration)
+        var astFree1 = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "ast_free_1",
+            Email = "ast_free_1@test.local",
+            FullName = "Assistant Free 1",
+            PasswordHash = "hash",
+            Role = UserRole.Assistant,
+            AccountStatus = AccountStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // Assistant 2: Occupied with another Mangaka (Status = Accepted)
+        var astOccupied = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "ast_occupied",
+            Email = "ast_occupied@test.local",
+            FullName = "Assistant Occupied",
+            PasswordHash = "hash",
+            Role = UserRole.Assistant,
+            AccountStatus = AccountStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // Assistant 3: Free (previous collaboration is Ended)
+        var astEnded = new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "ast_ended",
+            Email = "ast_ended@test.local",
+            FullName = "Assistant Ended",
+            PasswordHash = "hash",
+            Role = UserRole.Assistant,
+            AccountStatus = AccountStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        db.Users.AddRange(astFree1, astOccupied, astEnded);
+
+        // Active collaboration for astOccupied (created with Status = Accepted by default)
+        var activeCollab = new MangakaAssistantCollaboration(Guid.NewGuid(), astOccupied.Id, Guid.NewGuid(), DateTime.UtcNow);
+
+        // Ended collaboration for astEnded
+        var endedCollab = new MangakaAssistantCollaboration(Guid.NewGuid(), astEnded.Id, Guid.NewGuid(), DateTime.UtcNow);
+        endedCollab.End("Ended contract", mangakaId, DateTime.UtcNow);
+
+        db.MangakaAssistantCollaborations.AddRange(activeCollab, endedCollab);
+        await db.SaveChangesAsync();
+
+        var repo = new StudioInvitationRepository(provider);
+        var handler = new MangaERP.Studio.Application.Queries.GetUnassignedAssistants.GetUnassignedAssistantsHandler(repo);
+
+        var result = await handler.Handle(new MangaERP.Studio.Application.Queries.GetUnassignedAssistants.GetUnassignedAssistantsQuery(mangakaId), default);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.UnassignedAssistants.Count);
+        Assert.Contains(result.UnassignedAssistants, x => x.UserId == astFree1.Id);
+        Assert.Contains(result.UnassignedAssistants, x => x.UserId == astEnded.Id);
+        Assert.DoesNotContain(result.UnassignedAssistants, x => x.UserId == astOccupied.Id);
+    }
 }

@@ -251,4 +251,183 @@ public class StudioInvitationRepository : IStudioInvitationRepository
             r.CreatedAt
         ));
     }
+
+    public async System.Threading.Tasks.Task<IEnumerable<UnassignedAssistantInfo>> GetUnassignedAssistantsAsync(Guid mangakaId, CancellationToken ct = default)
+    {
+        var nonEndedAssistantIds = _db.MangakaAssistantCollaborations.AsNoTracking()
+            .Where(c => c.Status != CollaborationStatus.Ended)
+            .Select(c => c.AssistantId);
+
+        var pendingInvitedAssistantIds = _db.StudioInvitations.AsNoTracking()
+            .Where(i => i.InviterMangakaId == mangakaId && i.Status == StudioInvitationStatus.Pending && i.AssistantUserId.HasValue)
+            .Select(i => i.AssistantUserId!.Value);
+
+        var unassignedUsers = await _db.Users.AsNoTracking()
+            .Where(u => u.Role == UserRole.Assistant &&
+                        u.AccountStatus == AccountStatus.Active &&
+                        !u.IsDeleted &&
+                        !nonEndedAssistantIds.Contains(u.Id) &&
+                        !pendingInvitedAssistantIds.Contains(u.Id))
+            .OrderByDescending(u => u.CreatedAt)
+            .ToListAsync(ct);
+
+        return unassignedUsers.Select(u => new UnassignedAssistantInfo(
+            u.Id,
+            u.Username,
+            u.FullName ?? string.Empty,
+            u.Email ?? string.Empty,
+            u.PhoneNumber,
+            u.CreatedAt
+        ));
+    }
+
+    public async System.Threading.Tasks.Task<IEnumerable<AdminUnassignedAssistantInfo>> GetAdminUnassignedAssistantsAsync(CancellationToken ct = default)
+    {
+        var nonEndedAssistantIds = _db.MangakaAssistantCollaborations.AsNoTracking()
+            .Where(c => c.Status != CollaborationStatus.Ended)
+            .Select(c => c.AssistantId);
+
+        var unassignedUsers = await _db.Users.AsNoTracking()
+            .Where(u => u.Role == UserRole.Assistant &&
+                        u.AccountStatus == AccountStatus.Active &&
+                        !u.IsDeleted &&
+                        !nonEndedAssistantIds.Contains(u.Id))
+            .OrderByDescending(u => u.CreatedAt)
+            .ToListAsync(ct);
+
+        var resultList = new List<AdminUnassignedAssistantInfo>();
+        foreach (var u in unassignedUsers)
+        {
+            var lastEnded = await _db.MangakaAssistantCollaborations.AsNoTracking()
+                .Where(c => c.AssistantId == u.Id && c.Status == CollaborationStatus.Ended)
+                .OrderByDescending(c => c.EndedAt ?? c.UpdatedAt)
+                .FirstOrDefaultAsync(ct);
+
+            Guid? previousMangakaId = lastEnded?.MangakaId;
+            string? previousMangakaName = null;
+            if (previousMangakaId.HasValue)
+            {
+                var prevMgk = await _db.Users.AsNoTracking().FirstOrDefaultAsync(m => m.Id == previousMangakaId.Value, ct);
+                if (prevMgk != null)
+                {
+                    previousMangakaName = !string.IsNullOrWhiteSpace(prevMgk.FullName)
+                        ? prevMgk.FullName
+                        : (!string.IsNullOrWhiteSpace(prevMgk.PenName) ? prevMgk.PenName : prevMgk.Username);
+                }
+            }
+
+            string displayName = !string.IsNullOrWhiteSpace(u.FullName)
+                ? u.FullName
+                : (!string.IsNullOrWhiteSpace(u.PenName) ? u.PenName : u.Username);
+
+            resultList.Add(new AdminUnassignedAssistantInfo(
+                u.Id,
+                displayName,
+                u.Email ?? string.Empty,
+                u.AccountStatus.ToString(),
+                lastEnded?.EndedAt,
+                previousMangakaId,
+                previousMangakaName,
+                true
+            ));
+        }
+
+        return resultList;
+    }
+
+    public async System.Threading.Tasks.Task<bool> IsAssistantUnassignedAsync(Guid assistantId, CancellationToken ct = default)
+    {
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == assistantId, ct);
+        if (user is null || user.IsDeleted || user.Role != UserRole.Assistant || user.AccountStatus != AccountStatus.Active)
+        {
+            return false;
+        }
+
+        return !await _db.MangakaAssistantCollaborations.AsNoTracking()
+            .AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct);
+    }
+
+    public async System.Threading.Tasks.Task<MangakaAssistantCollaboration> AdminAssignAssistantToMangakaAsync(
+        Guid assistantId, Guid mangakaId, Guid adminUserId, string? reason, DateTime now, CancellationToken ct = default)
+    {
+        // 1. Validate Assistant user
+        var assistantUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == assistantId, ct);
+        if (assistantUser is null || assistantUser.IsDeleted || assistantUser.Role != UserRole.Assistant)
+        {
+            throw new AdminAssignException("ASSISTANT_NOT_FOUND", $"Assistant with ID '{assistantId}' was not found.", 404);
+        }
+
+        if (assistantUser.AccountStatus != AccountStatus.Active)
+        {
+            throw new AdminAssignException("ASSISTANT_NOT_ACTIVE", "Assistant account is not active.", 400);
+        }
+
+        if (await _db.MangakaAssistantCollaborations.AsNoTracking().AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+        {
+            throw new AdminAssignException("ASSISTANT_NOT_UNASSIGNED", "Assistant is not unassigned and currently has an active collaboration.", 409);
+        }
+
+        // 2. Validate Target Mangaka user
+        var mangakaUser = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == mangakaId, ct);
+        if (mangakaUser is null || mangakaUser.IsDeleted)
+        {
+            throw new AdminAssignException("TARGET_MANGAKA_NOT_FOUND", $"Target Mangaka with ID '{mangakaId}' was not found.", 404);
+        }
+
+        if (mangakaUser.Role != UserRole.Mangaka)
+        {
+            throw new AdminAssignException("TARGET_USER_NOT_MANGAKA", "Target user is not a Mangaka.", 400);
+        }
+
+        if (mangakaUser.AccountStatus != AccountStatus.Active)
+        {
+            throw new AdminAssignException("TARGET_MANGAKA_INACTIVE", "Target Mangaka account is not active.", 400);
+        }
+
+        // 3. Atomic Transaction & Concurrency Protection
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
+        try
+        {
+            if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId && c.Status != CollaborationStatus.Ended, ct))
+            {
+                throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assistant has already been assigned concurrently.", 409);
+            }
+
+            var collaboration = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), now);
+            _db.MangakaAssistantCollaborations.Add(collaboration);
+
+            _db.CollaborationEvents.Add(new CollaborationEvent(
+                collaboration.Id,
+                CollaborationEventType.CollaborationActivated,
+                adminUserId,
+                now,
+                reason: string.IsNullOrWhiteSpace(reason) ? "Assigned by Admin" : reason.Trim()
+            ));
+
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return collaboration;
+        }
+        catch (AdminAssignException)
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync(ct);
+            throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assignment failed due to concurrent update.", 409);
+        }
+        catch (DbUpdateException ex) when (IsConcurrencyOrKnownUniqueViolation(ex))
+        {
+            await transaction.RollbackAsync(ct);
+            throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assignment failed due to duplicate collaboration or constraint violation.", 409);
+        }
+        catch (Exception)
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
+    }
 }

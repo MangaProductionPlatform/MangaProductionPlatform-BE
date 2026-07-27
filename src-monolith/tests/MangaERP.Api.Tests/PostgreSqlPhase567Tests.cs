@@ -31,13 +31,29 @@ public class PostgreSqlPhase567Tests
     public async STTask PostgreSql_ProgressUpdatesAndAuditTrail_PersistedSuccessfully()
     {
         using var db = CreatePostgreSqlDbContext();
+        Guid authorId = Guid.NewGuid();
         Guid seriesId = Guid.NewGuid();
         Guid chapterId = Guid.NewGuid();
         Guid taskId = Guid.NewGuid();
         Guid attemptId = Guid.NewGuid();
         Guid assistantId = Guid.NewGuid();
 
-        // Create parent Chapter & PageTask to satisfy foreign key constraints
+        var author = new MangaERP.Identity.Domain.Entities.User
+        {
+            Id = authorId,
+            Username = $"author_567_1_{Guid.NewGuid():N}",
+            Email = $"auth1_{Guid.NewGuid():N}@test.local",
+            PasswordHash = "hash",
+            Role = MangaERP.Identity.Domain.Enums.UserRole.Mangaka,
+            AccountStatus = MangaERP.Identity.Domain.Enums.AccountStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        await db.Users.AddAsync(author);
+
+        var series = MangaERP.Series.Domain.Entities.MangaSeries.Create(authorId, null, "FK Test Series 567-1", "Desc", "Action", null);
+        typeof(MangaERP.Series.Domain.Entities.MangaSeries).GetProperty("Id")!.SetValue(series, seriesId);
+        await db.MangaSeries.AddAsync(series);
+
         var chapter = ChapterEntity.Create(seriesId, "PG Test Ch", 1, 10);
         typeof(ChapterEntity).GetProperty("Id")!.SetValue(chapter, chapterId);
         await db.Chapters.AddAsync(chapter);
@@ -68,6 +84,8 @@ public class PostgreSqlPhase567Tests
         db.AuditEvents.Remove(savedAudit);
         db.PageTasks.Remove(task);
         db.Chapters.Remove(chapter);
+        db.MangaSeries.Remove(series);
+        db.Users.Remove(author);
         await db.SaveChangesAsync();
     }
 
@@ -75,11 +93,27 @@ public class PostgreSqlPhase567Tests
     public async STTask PostgreSql_TaskCheckpoints_ComputeStatusCorrectly()
     {
         using var db = CreatePostgreSqlDbContext();
+        Guid authorId = Guid.NewGuid();
         Guid seriesId = Guid.NewGuid();
         Guid chapterId = Guid.NewGuid();
         Guid taskId = Guid.NewGuid();
 
-        // Create parent Chapter & PageTask to satisfy foreign key constraints
+        var author = new MangaERP.Identity.Domain.Entities.User
+        {
+            Id = authorId,
+            Username = $"author_567_2_{Guid.NewGuid():N}",
+            Email = $"auth2_{Guid.NewGuid():N}@test.local",
+            PasswordHash = "hash",
+            Role = MangaERP.Identity.Domain.Enums.UserRole.Mangaka,
+            AccountStatus = MangaERP.Identity.Domain.Enums.AccountStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+        await db.Users.AddAsync(author);
+
+        var series = MangaERP.Series.Domain.Entities.MangaSeries.Create(authorId, null, "FK Test Series 567-2", "Desc", "Action", null);
+        typeof(MangaERP.Series.Domain.Entities.MangaSeries).GetProperty("Id")!.SetValue(series, seriesId);
+        await db.MangaSeries.AddAsync(series);
+
         var chapter = ChapterEntity.Create(seriesId, "PG Test Ch 2", 2, 10);
         typeof(ChapterEntity).GetProperty("Id")!.SetValue(chapter, chapterId);
         await db.Chapters.AddAsync(chapter);
@@ -103,6 +137,8 @@ public class PostgreSqlPhase567Tests
         db.TaskCheckpoints.Remove(saved);
         db.PageTasks.Remove(task);
         db.Chapters.Remove(chapter);
+        db.MangaSeries.Remove(series);
+        db.Users.Remove(author);
         await db.SaveChangesAsync();
     }
 }
