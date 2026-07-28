@@ -111,14 +111,15 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public void SubmitForQA()
     {
         if (Status != ChapterStatus.Draft && Status != ChapterStatus.QaRevisionRequired &&
-            Status != ChapterStatus.MangakaRevisionRequired)
-            throw new InvalidOperationException("Only Draft or QaRevisionRequired chapters can be submitted for QA.");
+            Status != ChapterStatus.MangakaRevisionRequired && Status != ChapterStatus.ReadyForQA &&
+            Status != ChapterStatus.PendingEditorialReview)
+            throw new InvalidOperationException("Only Draft, ReadyForQA or QaRevisionRequired chapters can be submitted for QA.");
 
         if (!CanSubmitForQA())
             throw new InvalidOperationException(
                 $"All {TotalPages} pages must be approved before submitting for QA.");
 
-        Status = ChapterStatus.PendingEditorialReview;
+        Status = ChapterStatus.ReadyForQA;
     }
 
     [Obsolete("Tantou Editor cannot return or gatekeep chapters.")]

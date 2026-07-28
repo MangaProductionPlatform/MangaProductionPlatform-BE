@@ -55,7 +55,7 @@ public class ChapterRepository : IChapterRepository
 
     public async System.Threading.Tasks.Task<IEnumerable<ChapterEntity>> GetQAQueueAsync(Guid editorId, CancellationToken ct = default)
         => await _db.Chapters
-            .Where(c => c.Status == ChapterStatus.ReadyForQA && c.AssignedEditorId == editorId)
+            .Where(c => (c.Status == ChapterStatus.ReadyForQA || c.Status == ChapterStatus.PendingEditorialReview) && c.AssignedEditorId == editorId)
             .OrderBy(c => c.CreatedAt)
             .ToListAsync(ct);
 

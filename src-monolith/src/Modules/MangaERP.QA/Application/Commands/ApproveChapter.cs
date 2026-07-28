@@ -46,7 +46,7 @@ public class ApproveChapterHandler : IRequestHandler<ApproveChapterCommand, Appr
         if (chapter.Status == ChapterStatus.Approved)
             return new ApproveChapterResult(chapter.Id, chapter.Status.ToString(), DateTime.UtcNow);
 
-        if (chapter.Status != ChapterStatus.ReadyForQA)
+        if (chapter.Status != ChapterStatus.ReadyForQA && chapter.Status != ChapterStatus.PendingEditorialReview)
             throw new InvalidOperationException("Chỉ có thể phê duyệt chương truyện ở trạng thái ReadyForQA.");
 
         // 2. Load Bug Pins and ensure all are resolved

@@ -44,7 +44,7 @@ public class SendFeedbackBatchHandler : IRequestHandler<SendFeedbackBatchCommand
         if (chapter.AssignedEditorId != request.EditorId)
             throw new UnauthorizedAccessException("Bạn không phải Tantou Editor được giao cho chương truyện này.");
 
-        if (chapter.Status != ChapterStatus.ReadyForQA)
+        if (chapter.Status != ChapterStatus.ReadyForQA && chapter.Status != ChapterStatus.PendingEditorialReview)
             throw new InvalidOperationException("Chỉ có thể gửi phản hồi cho chương truyện đang trong trạng thái ReadyForQA.");
 
         // 2. Load Series to get Mangaka ID
