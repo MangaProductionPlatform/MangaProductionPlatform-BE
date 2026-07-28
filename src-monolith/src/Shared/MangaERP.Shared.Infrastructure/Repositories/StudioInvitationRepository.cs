@@ -424,7 +424,23 @@ public class StudioInvitationRepository : IStudioInvitationRepository
                     throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assistant has already been assigned concurrently.", 409);
                 }
 
-                var collaboration = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), now);
+                var email = assistantUser.PersonalEmail ?? assistantUser.Email ?? assistantUser.Username;
+                var invitation = new StudioInvitation
+                {
+                    Id = Guid.NewGuid(),
+                    InviterMangakaId = mangakaId,
+                    AssistantEmail = email,
+                    NormalizedAssistantEmail = email.Trim().ToLowerInvariant(),
+                    AssistantUserId = assistantId,
+                    Message = string.IsNullOrWhiteSpace(reason) ? "Assigned by Admin" : reason.Trim(),
+                    Status = StudioInvitationStatus.Accepted,
+                    CreatedAt = now,
+                    RespondedAt = now,
+                    ExpiresAt = now.AddDays(30)
+                };
+                _db.StudioInvitations.Add(invitation);
+
+                var collaboration = new MangakaAssistantCollaboration(mangakaId, assistantId, invitation.Id, now);
                 _db.MangakaAssistantCollaborations.Add(collaboration);
 
                 _db.CollaborationEvents.Add(new CollaborationEvent(
