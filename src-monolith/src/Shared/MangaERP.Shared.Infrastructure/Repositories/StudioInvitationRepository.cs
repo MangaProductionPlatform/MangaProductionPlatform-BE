@@ -130,11 +130,33 @@ public class StudioInvitationRepository : IStudioInvitationRepository
                 throw new ConflictException("This invitation has expired.");
             }
 
-            if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId &&
+            var existingCollab = await _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.AssistantId == assistantId &&
                 c.Status != CollaborationStatus.Ended &&
                 c.Status != CollaborationStatus.Rejected &&
-                c.Status != CollaborationStatus.Cancelled, ct))
-                throw new ConflictException("The Assistant already has a non-ended Mangaka collaboration.");
+                c.Status != CollaborationStatus.Cancelled, ct);
+
+            if (existingCollab != null)
+            {
+                if (existingCollab.MangakaId != invitation.InviterMangakaId)
+                    throw new ConflictException("The Assistant already has a non-ended collaboration with another Mangaka.");
+
+                if (invitation.SeriesId != Guid.Empty)
+                {
+                    var existingGrant = await _db.SeriesAccessGrants.FirstOrDefaultAsync(
+                        g => g.CollaborationId == existingCollab.Id && g.SeriesId == invitation.SeriesId && g.IsActive, ct);
+                    if (existingGrant == null)
+                    {
+                        var grant = SeriesAccessGrant.Create(existingCollab.Id, invitation.SeriesId, invitation.InviterMangakaId);
+                        _db.SeriesAccessGrants.Add(grant);
+                    }
+                }
+
+                invitation.Status = StudioInvitationStatus.Accepted;
+                invitation.RespondedAt = now;
+                await _db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return existingCollab;
+            }
 
             var collaboration = new MangakaAssistantCollaboration(invitation.InviterMangakaId, assistantId, invitation.Id, now);
             _db.MangakaAssistantCollaborations.Add(collaboration);

@@ -79,44 +79,7 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
             var myCollabs = await _invitationRepo.GetNonEndedCollaborationsByMangakaAsync(request.MangakaId, cancellationToken);
             var existingCollab = myCollabs.FirstOrDefault(c => c.AssistantId == existingAssistantId.Value);
 
-            if (existingCollab != null)
-            {
-                // Assistant already belongs to THIS Mangaka's Studio! Grant Series Access directly.
-                var existingGrant = await _grantRepo.GetActiveGrantAsync(existingCollab.Id, request.SeriesId, cancellationToken);
-                if (existingGrant == null)
-                {
-                    var grant = SeriesAccessGrant.Create(existingCollab.Id, request.SeriesId, request.MangakaId);
-                    await _grantRepo.AddAsync(grant, cancellationToken);
-                    await _grantRepo.SaveChangesAsync(cancellationToken);
-                }
-
-                var acceptedInv = new StudioInvitation
-                {
-                    InviterMangakaId = request.MangakaId,
-                    SeriesId = request.SeriesId,
-                    AssistantEmail = personalEmail,
-                    NormalizedAssistantEmail = personalEmail,
-                    AssistantUserId = existingAssistantId.Value,
-                    Message = request.Message,
-                    IsNewAccountFlow = false,
-                    Status = StudioInvitationStatus.Pending, // or Accepted
-                    RespondedAt = DateTime.UtcNow,
-                    ExpiresAt = DateTime.UtcNow.AddDays(30),
-                    CreatedAt = DateTime.UtcNow
-                };
-                acceptedInv.Status = StudioInvitationStatus.Accepted;
-                await _invitationRepo.AddAsync(acceptedInv, cancellationToken);
-                await _invitationRepo.SaveChangesAsync(cancellationToken);
-
-                return new InviteAssistantResult(
-                    acceptedInv.Id,
-                    personalEmail,
-                    "ExistingAccount",
-                    "Series access granted to Assistant in your Studio."
-                );
-            }
-
-            if (await _invitationRepo.HasNonEndedCollaborationAsync(existingAssistantId.Value, cancellationToken))
+            if (existingCollab == null && await _invitationRepo.HasNonEndedCollaborationAsync(existingAssistantId.Value, cancellationToken))
             {
                 throw new MangaERP.Shared.Domain.Exceptions.ConflictException("The Assistant already has a non-ended collaboration with another Mangaka.");
             }
