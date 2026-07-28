@@ -62,14 +62,17 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
         if (!Enum.TryParse<PageTaskType>(cmd.TaskType, ignoreCase: true, out var taskType))
             throw new InvalidOperationException($"Invalid TaskType '{cmd.TaskType}'. Valid values: {string.Join(", ", Enum.GetNames<PageTaskType>())}");
 
-        // Activate page task to unassigned Pending state ready for TaskAssignment workflow
+        Guid? targetAssistantId = cmd.AssignedAssistantId != Guid.Empty
+            ? cmd.AssignedAssistantId
+            : null;
+
         pageTask.TaskType = taskType;
         pageTask.Description = cmd.Description ?? pageTask.Description;
         pageTask.Deadline = cmd.Deadline ?? pageTask.Deadline;
         pageTask.TaskStatus = PageTaskStatus.Pending;
         pageTask.WorkStartedAt = null;
-        pageTask.AssignedAssistantId = null;
-        pageTask.PrimaryAssistantId = null;
+        pageTask.AssignedAssistantId = targetAssistantId;
+        pageTask.PrimaryAssistantId = targetAssistantId;
         pageTask.BackupAssistantId = null;
         pageTask.CurrentAssignmentAttemptId = null;
 
@@ -79,7 +82,7 @@ public class ActivatePageTaskHandler : IRequestHandler<ActivatePageTaskCommand, 
         return new ActivatePageTaskResult(
             pageTask.Id,
             pageTask.PageNumber,
-            Guid.Empty,
+            pageTask.AssignedAssistantId ?? Guid.Empty,
             pageTask.TaskStatus.ToString(),
             pageTask.Description,
             pageTask.Deadline,
