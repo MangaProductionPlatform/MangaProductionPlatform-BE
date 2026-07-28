@@ -75,12 +75,12 @@ public class ReassignTaskHandler : IRequestHandler<ReassignTaskCommand, AssignTa
             throw new ArgumentException("Reassignment reason is required.", nameof(request.Reason));
 
         var dbContext = _dbContextProvider?.GetDbContext() as DbContext;
-        if (dbContext != null && dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory")
+        if (dbContext != null)
         {
             var strategy = dbContext.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-                await using var transaction = dbContext.Database.CurrentTransaction == null
+                await using var transaction = dbContext.Database.ProviderName != "Microsoft.EntityFrameworkCore.InMemory" && dbContext.Database.CurrentTransaction == null
                     ? await dbContext.Database.BeginTransactionAsync(ct)
                     : null;
 

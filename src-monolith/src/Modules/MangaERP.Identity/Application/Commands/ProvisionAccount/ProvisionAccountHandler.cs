@@ -23,7 +23,8 @@ public record ProvisionAccountResult(
     string GeneratedUsername,
     string PersonalEmail,
     string Role,
-    string Status
+    string Status,
+    string? Warning = null
 );
 
 public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, ProvisionAccountResult>
@@ -152,12 +153,21 @@ public class ProvisionAccountHandler : IRequestHandler<ProvisionAccountCommand, 
         });
 
         // Step 6: Send activation email (outside retry strategy & transaction)
-        var baseUrl = _config["Invitation:ActivationBaseUrl"] ?? "https://company.com/activate";
-        var activationLink = $"{baseUrl}?token={Uri.EscapeDataString(token)}";
-        await _emailService.SendInvitationEmailAsync(
-            request.PersonalEmail, activationLink, generatedUsername, request.FullName, cancellationToken);
+        string? warning = null;
+        try
+        {
+            var baseUrl = _config["Invitation:ActivationBaseUrl"] ?? "https://company.com/activate";
+            var activationLink = $"{baseUrl}?token={Uri.EscapeDataString(token)}";
+            await _emailService.SendInvitationEmailAsync(
+                request.PersonalEmail, activationLink, generatedUsername, request.FullName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // DB commit succeeded, account is created. Preserve user and set Warning so Admin can resend activation email.
+            warning = $"Account created successfully, but activation email failed to send ({ex.Message}). Activation email can be resent from the user management screen.";
+        }
 
         return new ProvisionAccountResult(createdUserId, generatedUsername, request.PersonalEmail,
-            request.Role.ToString(), AccountStatus.PendingActivation.ToString());
+            request.Role.ToString(), AccountStatus.PendingActivation.ToString(), warning);
     }
 }
