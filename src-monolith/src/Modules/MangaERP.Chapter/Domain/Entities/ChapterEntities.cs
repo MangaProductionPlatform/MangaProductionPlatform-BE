@@ -167,8 +167,8 @@ public class Chapter : AggregateRoot, ISoftDeletable
 
     public void Approve()
     {
-        if (Status != ChapterStatus.PendingEditorialReview && Status != ChapterStatus.ConflictEscalated)
-            throw new InvalidOperationException("Only the Editorial Board or Editor in Chief can approve this chapter.");
+        if (Status != ChapterStatus.ReadyForQA && Status != ChapterStatus.PendingEditorialReview && Status != ChapterStatus.ConflictEscalated)
+            throw new InvalidOperationException("Only the Editorial Board, Editor in Chief, or assigned Tantou Editor can approve this chapter.");
         Status = ChapterStatus.Approved;
     }
     public void RequestQaRevision() => Status = ChapterStatus.QaRevisionRequired;
