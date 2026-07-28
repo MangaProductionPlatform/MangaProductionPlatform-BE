@@ -381,7 +381,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
 
     public void CompleteTask(DateTime completedAt)
     {
-        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
             throw new InvalidOperationException($"Cannot complete task in status '{TaskStatus}'.");
 
         ProgressPercent = 100;
@@ -422,8 +422,8 @@ public class PageTask : AggregateRoot, ISoftDeletable
 
     public void Reassign(Guid assistantId, string? description = null)
     {
-        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
-            throw new InvalidOperationException("Only Incomplete or RevisionAlert page tasks can be reassigned.");
+        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+            throw new InvalidOperationException("Only Pending, Incomplete or RevisionAlert page tasks can be reassigned.");
 
         AssignedAssistantId = assistantId;
         Description = description ?? Description;
@@ -433,8 +433,8 @@ public class PageTask : AggregateRoot, ISoftDeletable
 
     public void MarkReviewing()
     {
-        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
-            throw new InvalidOperationException("Layer can only be submitted from Incomplete or RevisionAlert status.");
+        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+            throw new InvalidOperationException("Layer can only be submitted from Pending, Incomplete or RevisionAlert status.");
 
         TaskStatus = PageTaskStatus.Reviewing;
         UpdatedAt = DateTime.UtcNow;
@@ -476,7 +476,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public bool CanSubmitLayer(Guid assistantId)
     {
         return AssignedAssistantId == assistantId
-            && (TaskStatus == PageTaskStatus.Incomplete || TaskStatus == PageTaskStatus.RevisionAlert);
+            && (TaskStatus == PageTaskStatus.Pending || TaskStatus == PageTaskStatus.Incomplete || TaskStatus == PageTaskStatus.RevisionAlert);
     }
 
     /// <summary>

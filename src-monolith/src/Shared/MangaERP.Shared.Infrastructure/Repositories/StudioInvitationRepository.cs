@@ -226,7 +226,7 @@ public class StudioInvitationRepository : IStudioInvitationRepository
         var activeTasks = await _db.PageTasks.AsNoTracking()
             .Where(t => t.AssignedAssistantId != null &&
                         idsList.Contains(t.AssignedAssistantId.Value) &&
-                        (t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
+                        (t.TaskStatus == PageTaskStatus.Pending || t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
             .Select(t => new {
                 AssistantId = t.AssignedAssistantId!.Value,
                 t.Deadline
@@ -253,7 +253,7 @@ public class StudioInvitationRepository : IStudioInvitationRepository
         var tasks = await _db.PageTasks.AsNoTracking()
             .Include(t => t.Chapter)
             .Where(t => t.AssignedAssistantId == assistantId &&
-                        (t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
+                        (t.TaskStatus == PageTaskStatus.Pending || t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
             .ToListAsync(ct);
 
         return tasks.Select(t => new AssistantActiveTaskInfo(

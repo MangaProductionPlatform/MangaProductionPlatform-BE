@@ -117,7 +117,7 @@ public sealed class CollaborationAuthorizationService : ICollaborationAuthorizat
     public async Task<bool> CanSubmitProgressAsync(Guid assistantId, Guid taskId, CancellationToken ct = default)
     {
         var task = await _db.PageTasks.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskId, ct);
-        if (task == null || (task.TaskStatus != PageTaskStatus.Incomplete && task.TaskStatus != PageTaskStatus.RevisionAlert))
+        if (task == null || (task.TaskStatus != PageTaskStatus.Pending && task.TaskStatus != PageTaskStatus.Incomplete && task.TaskStatus != PageTaskStatus.RevisionAlert))
             return false;
 
         if (task.AssignedAssistantId != assistantId)
