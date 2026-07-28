@@ -181,9 +181,10 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 5,
+                PermitLimit = 30,
                 Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
+                QueueLimit = 5,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
             }));
 
     // Policy chung cho toàn bộ API còn lại (baseline chống spam/DOS cơ bản)
@@ -192,9 +193,9 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 100,
+                PermitLimit = 300,
                 Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 10,
+                QueueLimit = 20,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst
             }));
 });
