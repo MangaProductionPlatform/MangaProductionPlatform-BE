@@ -35,7 +35,8 @@ public class AssistantInvitationRulesTests
         identity.Setup(x => x.SendAssistantRegistrationEmailAsync(userId, "token", It.IsAny<CancellationToken>()))
             .Callback(() => actions.Add("registration")).Returns(System.Threading.Tasks.Task.CompletedTask);
 
-        var result = await new InviteAssistantHandler(repo.Object, identity.Object, SeriesRepository(series).Object)
+        var grantRepo = new Mock<ISeriesAccessGrantRepository>();
+        var result = await new InviteAssistantHandler(repo.Object, grantRepo.Object, identity.Object, SeriesRepository(series).Object)
             .Handle(new(mangaka, series.Id, "  Person@Example.COM ", null), default);
 
         Assert.Equal("person@example.com", result.AssistantEmail);
@@ -50,9 +51,10 @@ public class AssistantInvitationRulesTests
         var series = MangaSeries.Create(mangaka, null, "Series", null, null, null);
         var identity = new Mock<IStudioIdentityService>();
         identity.Setup(x => x.IsInternalEmailAsync("editor@company.internal", It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        var grantRepo = new Mock<ISeriesAccessGrantRepository>();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new InviteAssistantHandler(Repository(series.Id, []).Object, identity.Object, SeriesRepository(series).Object)
+            new InviteAssistantHandler(Repository(series.Id, []).Object, grantRepo.Object, identity.Object, SeriesRepository(series).Object)
                 .Handle(new(mangaka, series.Id, "editor@company.internal", null), default));
     }
 
@@ -64,12 +66,14 @@ public class AssistantInvitationRulesTests
         var assistantId = Guid.NewGuid();
         var repo = Repository(series.Id, []);
         repo.Setup(x => x.HasNonEndedCollaborationAsync(assistantId, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        repo.Setup(x => x.GetNonEndedCollaborationsByMangakaAsync(mangaka, It.IsAny<CancellationToken>())).ReturnsAsync(Enumerable.Empty<MangakaAssistantCollaboration>());
         var identity = new Mock<IStudioIdentityService>();
         identity.Setup(x => x.IsInternalEmailAsync("assistant@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(false);
         identity.Setup(x => x.FindActiveAssistantByEmailAsync("assistant@example.com", It.IsAny<CancellationToken>())).ReturnsAsync(assistantId);
+        var grantRepo = new Mock<ISeriesAccessGrantRepository>();
 
         await Assert.ThrowsAsync<MangaERP.Shared.Domain.Exceptions.ConflictException>(() =>
-            new InviteAssistantHandler(repo.Object, identity.Object, SeriesRepository(series).Object)
+            new InviteAssistantHandler(repo.Object, grantRepo.Object, identity.Object, SeriesRepository(series).Object)
                 .Handle(new(mangaka, series.Id, "assistant@example.com", null), default));
     }
 

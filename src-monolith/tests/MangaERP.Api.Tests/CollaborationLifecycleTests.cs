@@ -31,7 +31,8 @@ public class CollaborationLifecycleTests
         identityServiceMock.Setup(i => i.ProvisionAssistantAccountAsync("assistant@gmail.com", null, series.Title, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid.NewGuid(), "token-123"));
 
-        var handler = new InviteAssistantHandler(invitationRepoMock.Object, identityServiceMock.Object, seriesRepoMock.Object);
+        var grantRepoMock = new Mock<ISeriesAccessGrantRepository>();
+        var handler = new InviteAssistantHandler(invitationRepoMock.Object, grantRepoMock.Object, identityServiceMock.Object, seriesRepoMock.Object);
         var result = await handler.Handle(new InviteAssistantCommand(mangakaId, seriesId, "assistant@gmail.com", "Join my team"), CancellationToken.None);
 
         Assert.NotNull(result);
@@ -46,6 +47,7 @@ public class CollaborationLifecycleTests
         var invitationRepoMock = new Mock<IStudioInvitationRepository>();
         var identityServiceMock = new Mock<IStudioIdentityService>();
         var seriesRepoMock = new Mock<ISeriesRepository>();
+        var grantRepoMock = new Mock<ISeriesAccessGrantRepository>();
 
         var mangakaId = Guid.NewGuid();
         var seriesId = Guid.NewGuid();
@@ -58,8 +60,10 @@ public class CollaborationLifecycleTests
             .ReturnsAsync(assistantId);
         invitationRepoMock.Setup(r => r.HasNonEndedCollaborationAsync(assistantId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
+        invitationRepoMock.Setup(r => r.GetNonEndedCollaborationsByMangakaAsync(mangakaId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Enumerable.Empty<MangakaAssistantCollaboration>());
 
-        var handler = new InviteAssistantHandler(invitationRepoMock.Object, identityServiceMock.Object, seriesRepoMock.Object);
+        var handler = new InviteAssistantHandler(invitationRepoMock.Object, grantRepoMock.Object, identityServiceMock.Object, seriesRepoMock.Object);
 
         await Assert.ThrowsAsync<ConflictException>(() =>
             handler.Handle(new InviteAssistantCommand(mangakaId, seriesId, "active@gmail.com", null), CancellationToken.None));
