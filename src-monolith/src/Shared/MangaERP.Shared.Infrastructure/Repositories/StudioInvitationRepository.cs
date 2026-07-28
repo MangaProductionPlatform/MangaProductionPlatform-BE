@@ -143,7 +143,7 @@ public class StudioInvitationRepository : IStudioInvitationRepository
                 if (invitation.SeriesId != Guid.Empty)
                 {
                     var existingGrant = await _db.SeriesAccessGrants.FirstOrDefaultAsync(
-                        g => g.CollaborationId == existingCollab.Id && g.SeriesId == invitation.SeriesId && g.IsActive, ct);
+                        g => g.CollaborationId == existingCollab.Id && g.SeriesId == invitation.SeriesId && g.RevokedAt == null, ct);
                     if (existingGrant == null)
                     {
                         var grant = SeriesAccessGrant.Create(existingCollab.Id, invitation.SeriesId, invitation.InviterMangakaId);
