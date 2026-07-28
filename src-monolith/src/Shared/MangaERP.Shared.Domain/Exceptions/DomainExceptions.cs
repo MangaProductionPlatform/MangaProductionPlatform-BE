@@ -8,7 +8,7 @@ public class DomainException : Exception
 public class UserAlreadyExistsException : DomainException
 {
     public UserAlreadyExistsException(string email)
-        : base($"A user with personal email '{email}' is already pending or active.") { }
+        : base($"A user with personal email '{email}' is already registered in the system.") { }
 }
 
 public class InvalidInvitationTokenException : DomainException

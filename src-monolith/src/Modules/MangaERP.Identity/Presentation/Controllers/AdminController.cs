@@ -56,7 +56,7 @@ public class AdminController : ControllerBase
             var result = await _mediator.Send(command, ct);
             return CreatedAtAction(nameof(ProvisionAccount), new { result.UserId }, result);
         }
-        catch (UserAlreadyExistsException ex) { return Conflict(new { message = ex.Message }); }
+        catch (UserAlreadyExistsException ex) { return Conflict(new { error = "UserAlreadyExists", message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
@@ -163,7 +163,7 @@ public class AdminController : ControllerBase
             return Ok(result);
         }
         catch (EntityNotFoundException ex) { return NotFound(new { message = ex.Message }); }
-        catch (UserAlreadyExistsException ex) { return Conflict(new { message = ex.Message }); }
+        catch (UserAlreadyExistsException ex) { return Conflict(new { error = "UserAlreadyExists", message = ex.Message }); }
         catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
