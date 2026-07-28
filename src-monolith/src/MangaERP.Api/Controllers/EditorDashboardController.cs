@@ -76,13 +76,15 @@ public class EditorDashboardController : ControllerBase
         // 2. QA Queue
         var qaQueue = await _db.Chapters
             .Where(c => c.AssignedEditorId == userId && (c.Status == ChapterStatus.ReadyForQA || c.Status == ChapterStatus.PendingEditorialReview) && !c.IsDeleted)
-            .Select(c => new
+            .Join(_db.MangaSeries, c => c.SeriesId, s => s.Id, (c, s) => new
             {
                 id = c.Id,
                 title = c.Title,
                 chapterNumber = c.ChapterNumber,
                 seriesId = c.SeriesId,
-                submittedAt = c.CreatedAt
+                seriesTitle = s.Title,
+                submittedAt = c.CreatedAt,
+                status = c.Status.ToString()
             })
             .ToListAsync(ct);
 
