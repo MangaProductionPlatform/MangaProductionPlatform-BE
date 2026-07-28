@@ -99,7 +99,7 @@ public class GetMyAssistantsHandler : IRequestHandler<GetMyAssistantsQuery, MyAs
             resultList.Add(new MyAssistantDto(
                 assistant.Id,
                 displayName,
-                assistant.Email,
+                assistant.PersonalEmail ?? assistant.Email,
                 collab.Id,
                 collab.Status.ToString(),
                 assistant.AccountStatus.ToString(),

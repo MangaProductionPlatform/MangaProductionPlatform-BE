@@ -136,7 +136,7 @@ public static class AssistantCandidateHelper
             var dto = new AssistantCandidateDto(
                 assistant.Id,
                 displayName,
-                assistant.Email,
+                assistant.PersonalEmail ?? assistant.Email,
                 activeTaskCount,
                 pendingCount,
                 totalWorkload,

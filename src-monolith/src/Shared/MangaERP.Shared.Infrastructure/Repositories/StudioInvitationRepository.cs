@@ -340,7 +340,7 @@ public class StudioInvitationRepository : IStudioInvitationRepository
             resultList.Add(new AdminUnassignedAssistantInfo(
                 u.Id,
                 displayName,
-                u.Email ?? string.Empty,
+                u.PersonalEmail ?? u.Email ?? string.Empty,
                 u.AccountStatus.ToString(),
                 lastEnded?.EndedAt,
                 previousMangakaId,
