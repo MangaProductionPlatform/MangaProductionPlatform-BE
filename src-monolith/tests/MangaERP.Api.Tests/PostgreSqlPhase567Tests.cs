@@ -15,7 +15,7 @@ public class PostgreSqlPhase567Tests
     private string GetPostgreSqlConnectionString()
     {
         return Environment.GetEnvironmentVariable("PHASE1_POSTGRES_CONNECTION")
-            ?? "Host=localhost;Port=5432;Database=MangaProductionDB;Username=postgres;Password=MangaERP_Pass1234!";
+            ?? throw new InvalidOperationException("PHASE1_POSTGRES_CONNECTION is required for PostgreSQL integration tests.");
     }
 
     private AppDbContext CreatePostgreSqlDbContext()

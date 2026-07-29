@@ -152,14 +152,14 @@ public class BulkActivatePageTasksTests
         Assert.Equal(chapterId, result.ChapterId);
         Assert.Equal(2, result.ActivatedPages.Count);
 
-        // Verify status and unassigned Pending state ready for candidate selection
+        // Verify status and assigned Pending state
         Assert.Equal(PageTaskStatus.Pending, page1.TaskStatus);
-        Assert.Null(page1.AssignedAssistantId);
+        Assert.Equal(assistantId, page1.AssignedAssistantId);
         Assert.Null(page1.WorkStartedAt);
         Assert.Equal("Please draw backgrounds.", page1.Description);
 
         Assert.Equal(PageTaskStatus.Pending, page2.TaskStatus);
-        Assert.Null(page2.AssignedAssistantId);
+        Assert.Equal(assistantId, page2.AssignedAssistantId);
         Assert.Null(page2.WorkStartedAt);
         Assert.Equal("Please draw backgrounds.", page2.Description);
 

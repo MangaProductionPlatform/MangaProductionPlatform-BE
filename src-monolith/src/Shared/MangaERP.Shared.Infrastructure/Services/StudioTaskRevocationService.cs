@@ -93,7 +93,7 @@ public class StudioTaskRevocationService : IStudioTaskRevocationService
             foreach (var attempt in acceptedAttempts)
             {
                 var task = await _db.PageTasks.FirstOrDefaultAsync(t => t.Id == attempt.TaskId, ct);
-                if (task != null && (task.TaskStatus == PageTaskStatus.Incomplete || task.TaskStatus == PageTaskStatus.RevisionAlert))
+                if (task != null && (task.TaskStatus == PageTaskStatus.Pending || task.TaskStatus == PageTaskStatus.Incomplete || task.TaskStatus == PageTaskStatus.RevisionAlert))
                 {
                     attempt.Cancel(now, $"Cancelled due to collaboration state change: {newStatus}");
                     task.MarkReassignmentRequired();

@@ -23,9 +23,13 @@ public class UserRepository : IUserRepository
         => _db.Set<User>().FirstOrDefaultAsync(u => u.Username == username, ct);
 
     public Task<bool> PersonalEmailExistsActiveOrPendingAsync(string personalEmail, CancellationToken ct = default)
-        => _db.Set<User>().AnyAsync(u =>
-            u.NormalizedPersonalEmail == personalEmail.Trim().ToLower() &&
-            (u.AccountStatus == AccountStatus.PendingActivation || u.AccountStatus == AccountStatus.Active), ct);
+    {
+        if (string.IsNullOrWhiteSpace(personalEmail)) return Task.FromResult(false);
+        var normalized = personalEmail.Trim().ToLowerInvariant();
+        return _db.Set<User>()
+            .IgnoreQueryFilters()
+            .AnyAsync(u => u.NormalizedPersonalEmail == normalized || (u.PersonalEmail != null && u.PersonalEmail.Trim().ToLower() == normalized), ct);
+    }
 
     public Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default)
         => _db.Set<User>().AnyAsync(u => u.Username == username, ct);

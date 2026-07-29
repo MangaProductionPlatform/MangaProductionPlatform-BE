@@ -85,6 +85,11 @@ public class GlobalExceptionMiddleware : IMiddleware
                 "Conflict",
                 conflictEx.Message),
 
+            UserAlreadyExistsException userExistsEx => (
+                StatusCodes.Status409Conflict,
+                "UserAlreadyExists",
+                userExistsEx.Message),
+
             InvalidStateTransitionException stateEx => (
                 StatusCodes.Status409Conflict,
                 "InvalidStateTransition",

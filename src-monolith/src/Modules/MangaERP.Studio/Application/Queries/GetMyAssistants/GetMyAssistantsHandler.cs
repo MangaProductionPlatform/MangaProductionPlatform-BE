@@ -26,6 +26,8 @@ public record MyAssistantDto(
     int OverdueTaskCount,
     int NearDeadlineTaskCount,
     DateTime AssignedAt,
+    Guid ConcurrencyToken,
+    Guid ExpectedConcurrencyToken,
     List<MySeriesAccessDto> SeriesAccess
 );
 
@@ -54,15 +56,11 @@ public class GetMyAssistantsHandler : IRequestHandler<GetMyAssistantsQuery, MyAs
 
     public async Task<MyAssistantsResponseDto> Handle(GetMyAssistantsQuery request, CancellationToken ct)
     {
-        var rawCollabs = await _collabRepo.GetNonEndedCollaborationsByMangakaAsync(request.MangakaId, ct);
-        var collaborations = rawCollabs
-            .Where(c => c.Status != CollaborationStatus.Ended &&
-                        c.Status != CollaborationStatus.Rejected &&
-                        c.Status != CollaborationStatus.Cancelled)
-            .ToList();
-
+        var collaborations = (await _collabRepo.GetNonEndedCollaborationsByMangakaAsync(request.MangakaId, ct)).ToList();
         if (!collaborations.Any())
+        {
             return new MyAssistantsResponseDto(new List<MyAssistantDto>());
+        }
 
         var assistantIds = collaborations.Select(c => c.AssistantId).Distinct().ToList();
         var workloadMetricsMap = await _collabRepo.GetAssistantWorkloadMetricsBatchAsync(assistantIds, ct);
@@ -72,8 +70,7 @@ public class GetMyAssistantsHandler : IRequestHandler<GetMyAssistantsQuery, MyAs
         foreach (var collab in collaborations)
         {
             var assistant = await _userRepo.GetByIdAsync(collab.AssistantId, ct);
-            if (assistant == null || assistant.IsDeleted)
-                continue;
+            if (assistant == null || assistant.IsDeleted) continue;
 
             var grants = await _grantRepo.GetByCollaborationIdAsync(collab.Id, ct);
             var seriesAccessList = grants.Select(g => new MySeriesAccessDto(g.SeriesId, g.IsActive)).ToList();
@@ -99,7 +96,7 @@ public class GetMyAssistantsHandler : IRequestHandler<GetMyAssistantsQuery, MyAs
             resultList.Add(new MyAssistantDto(
                 assistant.Id,
                 displayName,
-                assistant.Email,
+                assistant.PersonalEmail ?? assistant.Email,
                 collab.Id,
                 collab.Status.ToString(),
                 assistant.AccountStatus.ToString(),
@@ -109,6 +106,8 @@ public class GetMyAssistantsHandler : IRequestHandler<GetMyAssistantsQuery, MyAs
                 overdueTaskCount,
                 nearDeadlineTaskCount,
                 collab.StartedAt != default ? collab.StartedAt : collab.CreatedAt,
+                collab.ConcurrencyToken,
+                collab.ConcurrencyToken,
                 seriesAccessList));
         }
 

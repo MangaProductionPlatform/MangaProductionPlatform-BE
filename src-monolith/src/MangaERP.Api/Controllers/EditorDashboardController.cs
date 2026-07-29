@@ -57,7 +57,7 @@ public class EditorDashboardController : ControllerBase
             .CountAsync(ct);
 
         var chaptersWaitingForQa = await _db.Chapters
-            .Where(c => c.AssignedEditorId == userId && c.Status == ChapterStatus.ReadyForQA && !c.IsDeleted)
+            .Where(c => c.AssignedEditorId == userId && (c.Status == ChapterStatus.ReadyForQA || c.Status == ChapterStatus.PendingEditorialReview) && !c.IsDeleted)
             .CountAsync(ct);
 
         var chaptersInRevision = await _db.Chapters
@@ -75,14 +75,16 @@ public class EditorDashboardController : ControllerBase
 
         // 2. QA Queue
         var qaQueue = await _db.Chapters
-            .Where(c => c.AssignedEditorId == userId && c.Status == ChapterStatus.ReadyForQA && !c.IsDeleted)
-            .Select(c => new
+            .Where(c => c.AssignedEditorId == userId && (c.Status == ChapterStatus.ReadyForQA || c.Status == ChapterStatus.PendingEditorialReview) && !c.IsDeleted)
+            .Join(_db.MangaSeries, c => c.SeriesId, s => s.Id, (c, s) => new
             {
                 id = c.Id,
                 title = c.Title,
                 chapterNumber = c.ChapterNumber,
                 seriesId = c.SeriesId,
-                submittedAt = c.CreatedAt
+                seriesTitle = s.Title,
+                submittedAt = c.CreatedAt,
+                status = c.Status.ToString()
             })
             .ToListAsync(ct);
 

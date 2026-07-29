@@ -50,13 +50,17 @@ public class BulkActivatePageTasksHandler : IRequestHandler<BulkActivatePageTask
             if (!pageTasksDict.TryGetValue(pageNum, out var pageTask))
                 throw new KeyNotFoundException($"Page {pageNum} not found in chapter {cmd.ChapterId}.");
 
+            Guid? targetAssistantId = cmd.AssignedAssistantId != Guid.Empty
+                ? cmd.AssignedAssistantId
+                : null;
+
             pageTask.TaskType = taskType;
             pageTask.Description = cmd.Description ?? pageTask.Description;
             pageTask.Deadline = cmd.Deadline ?? pageTask.Deadline;
             pageTask.TaskStatus = PageTaskStatus.Pending;
             pageTask.WorkStartedAt = null;
-            pageTask.AssignedAssistantId = null;
-            pageTask.PrimaryAssistantId = null;
+            pageTask.AssignedAssistantId = targetAssistantId;
+            pageTask.PrimaryAssistantId = targetAssistantId;
             pageTask.BackupAssistantId = null;
             pageTask.CurrentAssignmentAttemptId = null;
 

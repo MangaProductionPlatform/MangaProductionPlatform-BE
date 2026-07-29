@@ -111,14 +111,15 @@ public class Chapter : AggregateRoot, ISoftDeletable
     public void SubmitForQA()
     {
         if (Status != ChapterStatus.Draft && Status != ChapterStatus.QaRevisionRequired &&
-            Status != ChapterStatus.MangakaRevisionRequired)
-            throw new InvalidOperationException("Only Draft or QaRevisionRequired chapters can be submitted for QA.");
+            Status != ChapterStatus.MangakaRevisionRequired && Status != ChapterStatus.ReadyForQA &&
+            Status != ChapterStatus.PendingEditorialReview)
+            throw new InvalidOperationException("Only Draft, ReadyForQA or QaRevisionRequired chapters can be submitted for QA.");
 
         if (!CanSubmitForQA())
             throw new InvalidOperationException(
                 $"All {TotalPages} pages must be approved before submitting for QA.");
 
-        Status = ChapterStatus.PendingEditorialReview;
+        Status = ChapterStatus.ReadyForQA;
     }
 
     [Obsolete("Tantou Editor cannot return or gatekeep chapters.")]
@@ -166,8 +167,8 @@ public class Chapter : AggregateRoot, ISoftDeletable
 
     public void Approve()
     {
-        if (Status != ChapterStatus.PendingEditorialReview && Status != ChapterStatus.ConflictEscalated)
-            throw new InvalidOperationException("Only the Editorial Board or Editor in Chief can approve this chapter.");
+        if (Status != ChapterStatus.ReadyForQA && Status != ChapterStatus.PendingEditorialReview && Status != ChapterStatus.ConflictEscalated)
+            throw new InvalidOperationException("Only the Editorial Board, Editor in Chief, or assigned Tantou Editor can approve this chapter.");
         Status = ChapterStatus.Approved;
     }
     public void RequestQaRevision() => Status = ChapterStatus.QaRevisionRequired;
@@ -381,7 +382,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
 
     public void CompleteTask(DateTime completedAt)
     {
-        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
             throw new InvalidOperationException($"Cannot complete task in status '{TaskStatus}'.");
 
         ProgressPercent = 100;
@@ -422,8 +423,8 @@ public class PageTask : AggregateRoot, ISoftDeletable
 
     public void Reassign(Guid assistantId, string? description = null)
     {
-        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
-            throw new InvalidOperationException("Only Incomplete or RevisionAlert page tasks can be reassigned.");
+        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+            throw new InvalidOperationException("Only Pending, Incomplete or RevisionAlert page tasks can be reassigned.");
 
         AssignedAssistantId = assistantId;
         Description = description ?? Description;
@@ -433,8 +434,8 @@ public class PageTask : AggregateRoot, ISoftDeletable
 
     public void MarkReviewing()
     {
-        if (TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
-            throw new InvalidOperationException("Layer can only be submitted from Incomplete or RevisionAlert status.");
+        if (TaskStatus != PageTaskStatus.Pending && TaskStatus != PageTaskStatus.Incomplete && TaskStatus != PageTaskStatus.RevisionAlert)
+            throw new InvalidOperationException("Layer can only be submitted from Pending, Incomplete or RevisionAlert status.");
 
         TaskStatus = PageTaskStatus.Reviewing;
         UpdatedAt = DateTime.UtcNow;
@@ -476,7 +477,7 @@ public class PageTask : AggregateRoot, ISoftDeletable
     public bool CanSubmitLayer(Guid assistantId)
     {
         return AssignedAssistantId == assistantId
-            && (TaskStatus == PageTaskStatus.Incomplete || TaskStatus == PageTaskStatus.RevisionAlert);
+            && (TaskStatus == PageTaskStatus.Pending || TaskStatus == PageTaskStatus.Incomplete || TaskStatus == PageTaskStatus.RevisionAlert);
     }
 
     /// <summary>

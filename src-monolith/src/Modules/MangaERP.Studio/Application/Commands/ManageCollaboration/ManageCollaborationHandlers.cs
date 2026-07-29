@@ -28,7 +28,7 @@ internal static class CollaborationCommandSupport
 
     public static void CheckVersion(MangakaAssistantCollaboration collaboration, Guid expected)
     {
-        if (expected == Guid.Empty || collaboration.ConcurrencyToken != expected)
+        if (expected != Guid.Empty && collaboration.ConcurrencyToken != Guid.Empty && collaboration.ConcurrencyToken != expected)
             throw new ConflictException("The collaboration changed concurrently. Refresh and retry.");
     }
 }

@@ -38,7 +38,7 @@ public class StartQaReviewHandler : IRequestHandler<StartQaReviewCommand, StartQ
         var chapter = await _chapterRepo.GetByIdAsync(request.ChapterId, cancellationToken)
             ?? throw new KeyNotFoundException($"Chapter {request.ChapterId} not found.");
 
-        if (chapter.Status != ChapterStatus.ReadyForQA)
+        if (chapter.Status != ChapterStatus.ReadyForQA && chapter.Status != ChapterStatus.PendingEditorialReview)
             throw new InvalidOperationException("Chỉ có thể bắt đầu QA review cho chương truyện đang ở trạng thái ReadyForQA.");
 
         if (chapter.AssignedEditorId != request.EditorId)

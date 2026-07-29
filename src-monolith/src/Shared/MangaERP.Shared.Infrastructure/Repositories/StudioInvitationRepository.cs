@@ -130,11 +130,33 @@ public class StudioInvitationRepository : IStudioInvitationRepository
                 throw new ConflictException("This invitation has expired.");
             }
 
-            if (await _db.MangakaAssistantCollaborations.AnyAsync(c => c.AssistantId == assistantId &&
+            var existingCollab = await _db.MangakaAssistantCollaborations.FirstOrDefaultAsync(c => c.AssistantId == assistantId &&
                 c.Status != CollaborationStatus.Ended &&
                 c.Status != CollaborationStatus.Rejected &&
-                c.Status != CollaborationStatus.Cancelled, ct))
-                throw new ConflictException("The Assistant already has a non-ended Mangaka collaboration.");
+                c.Status != CollaborationStatus.Cancelled, ct);
+
+            if (existingCollab != null)
+            {
+                if (existingCollab.MangakaId != invitation.InviterMangakaId)
+                    throw new ConflictException("The Assistant already has a non-ended collaboration with another Mangaka.");
+
+                if (invitation.SeriesId != Guid.Empty)
+                {
+                    var existingGrant = await _db.SeriesAccessGrants.FirstOrDefaultAsync(
+                        g => g.CollaborationId == existingCollab.Id && g.SeriesId == invitation.SeriesId && g.RevokedAt == null, ct);
+                    if (existingGrant == null)
+                    {
+                        var grant = SeriesAccessGrant.Create(existingCollab.Id, invitation.SeriesId, invitation.InviterMangakaId);
+                        _db.SeriesAccessGrants.Add(grant);
+                    }
+                }
+
+                invitation.Status = StudioInvitationStatus.Accepted;
+                invitation.RespondedAt = now;
+                await _db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+                return existingCollab;
+            }
 
             var collaboration = new MangakaAssistantCollaboration(invitation.InviterMangakaId, assistantId, invitation.Id, now);
             _db.MangakaAssistantCollaborations.Add(collaboration);
@@ -204,7 +226,7 @@ public class StudioInvitationRepository : IStudioInvitationRepository
         var activeTasks = await _db.PageTasks.AsNoTracking()
             .Where(t => t.AssignedAssistantId != null &&
                         idsList.Contains(t.AssignedAssistantId.Value) &&
-                        (t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
+                        (t.TaskStatus == PageTaskStatus.Pending || t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
             .Select(t => new {
                 AssistantId = t.AssignedAssistantId!.Value,
                 t.Deadline
@@ -231,7 +253,7 @@ public class StudioInvitationRepository : IStudioInvitationRepository
         var tasks = await _db.PageTasks.AsNoTracking()
             .Include(t => t.Chapter)
             .Where(t => t.AssignedAssistantId == assistantId &&
-                        (t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
+                        (t.TaskStatus == PageTaskStatus.Pending || t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert))
             .ToListAsync(ct);
 
         return tasks.Select(t => new AssistantActiveTaskInfo(
@@ -340,7 +362,7 @@ public class StudioInvitationRepository : IStudioInvitationRepository
             resultList.Add(new AdminUnassignedAssistantInfo(
                 u.Id,
                 displayName,
-                u.Email ?? string.Empty,
+                u.PersonalEmail ?? u.Email ?? string.Empty,
                 u.AccountStatus.ToString(),
                 lastEnded?.EndedAt,
                 previousMangakaId,
@@ -424,7 +446,23 @@ public class StudioInvitationRepository : IStudioInvitationRepository
                     throw new AdminAssignException("ASSIGNMENT_CONCURRENCY_CONFLICT", "Assistant has already been assigned concurrently.", 409);
                 }
 
-                var collaboration = new MangakaAssistantCollaboration(mangakaId, assistantId, Guid.NewGuid(), now);
+                var email = assistantUser.PersonalEmail ?? assistantUser.Email ?? assistantUser.Username;
+                var invitation = new StudioInvitation
+                {
+                    Id = Guid.NewGuid(),
+                    InviterMangakaId = mangakaId,
+                    AssistantEmail = email,
+                    NormalizedAssistantEmail = email.Trim().ToLowerInvariant(),
+                    AssistantUserId = assistantId,
+                    Message = string.IsNullOrWhiteSpace(reason) ? "Assigned by Admin" : reason.Trim(),
+                    Status = StudioInvitationStatus.Accepted,
+                    CreatedAt = now,
+                    RespondedAt = now,
+                    ExpiresAt = now.AddDays(30)
+                };
+                _db.StudioInvitations.Add(invitation);
+
+                var collaboration = new MangakaAssistantCollaboration(mangakaId, assistantId, invitation.Id, now);
                 _db.MangakaAssistantCollaborations.Add(collaboration);
 
                 _db.CollaborationEvents.Add(new CollaborationEvent(

@@ -27,15 +27,18 @@ public record InviteAssistantResult(
 public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, InviteAssistantResult>
 {
     private readonly IStudioInvitationRepository _invitationRepo;
+    private readonly ISeriesAccessGrantRepository _grantRepo;
     private readonly IStudioIdentityService _identityService;
     private readonly ISeriesRepository _seriesRepo;
 
     public InviteAssistantHandler(
         IStudioInvitationRepository invitationRepo,
+        ISeriesAccessGrantRepository grantRepo,
         IStudioIdentityService identityService,
         ISeriesRepository seriesRepo)
     {
         _invitationRepo = invitationRepo;
+        _grantRepo = grantRepo;
         _identityService = identityService;
         _seriesRepo = seriesRepo;
     }
@@ -43,7 +46,7 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
     public async Task<InviteAssistantResult> Handle(InviteAssistantCommand request, CancellationToken cancellationToken)
     {
         var personalEmail = request.AssistantEmail.Trim().ToLowerInvariant();
-        // Invitation identity is an exact, complete personal email.  Do not
+        // Invitation identity is an exact, complete personal email. Do not
         // allow partial values to reach account lookup/provisioning (the
         // frontend debounce is only a convenience; the backend is authoritative).
         if (!IsCompleteEmail(personalEmail))
@@ -71,8 +74,16 @@ public class InviteAssistantHandler : IRequestHandler<InviteAssistantCommand, In
 
         var existingAssistantId = await _identityService.FindActiveAssistantByEmailAsync(personalEmail, cancellationToken);
 
-        if (existingAssistantId.HasValue && await _invitationRepo.HasNonEndedCollaborationAsync(existingAssistantId.Value, cancellationToken))
-            throw new MangaERP.Shared.Domain.Exceptions.ConflictException("The Assistant already has a non-ended Mangaka collaboration.");
+        if (existingAssistantId.HasValue)
+        {
+            var myCollabs = await _invitationRepo.GetNonEndedCollaborationsByMangakaAsync(request.MangakaId, cancellationToken);
+            var existingCollab = myCollabs.FirstOrDefault(c => c.AssistantId == existingAssistantId.Value);
+
+            if (existingCollab == null && await _invitationRepo.HasNonEndedCollaborationAsync(existingAssistantId.Value, cancellationToken))
+            {
+                throw new MangaERP.Shared.Domain.Exceptions.ConflictException("The Assistant already has a non-ended collaboration with another Mangaka.");
+            }
+        }
 
         string resultCase;
         string statusMsg;

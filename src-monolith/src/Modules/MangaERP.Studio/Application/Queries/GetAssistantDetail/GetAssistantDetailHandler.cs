@@ -128,7 +128,7 @@ public class GetAssistantDetailHandler : IRequestHandler<GetAssistantDetailQuery
         return new AssistantDetailResponseDto(
             assistant.Id,
             displayName,
-            assistant.Email,
+            assistant.PersonalEmail ?? assistant.Email,
             assistant.AccountStatus.ToString(),
             collab.Id,
             collab.Status.ToString(),

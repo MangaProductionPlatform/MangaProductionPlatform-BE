@@ -45,7 +45,7 @@ public class AddBugPinHandler : IRequestHandler<AddBugPinCommand, Guid>
         if (chapter.AssignedEditorId != request.EditorId)
             throw new UnauthorizedAccessException("Bạn không phải Tantou Editor được giao cho chương truyện này.");
 
-        if (chapter.Status != ChapterStatus.ReadyForQA)
+        if (chapter.Status != ChapterStatus.ReadyForQA && chapter.Status != ChapterStatus.PendingEditorialReview)
             throw new InvalidOperationException("Chỉ có thể thêm ghim lỗi cho chương truyện đang trong trạng thái ReadyForQA.");
 
         var pageTask = await _pageTaskRepo.GetByIdAsync(request.PageTaskId, cancellationToken)

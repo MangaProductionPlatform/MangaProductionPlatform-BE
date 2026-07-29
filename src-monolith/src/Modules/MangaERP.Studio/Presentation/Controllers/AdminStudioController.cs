@@ -1,6 +1,7 @@
 using MediatR;
 using MangaERP.Studio.Application.Commands.AssignAssistantToMangaka;
 using MangaERP.Studio.Application.Queries.GetAdminUnassignedAssistants;
+using MangaERP.Studio.Application.Queries.GetMyAssistants;
 using MangaERP.Shared.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +38,21 @@ public class AdminStudioController : ControllerBase
     public async Task<IActionResult> GetUnassignedAssistants(CancellationToken ct)
     {
         var query = new GetAdminUnassignedAssistantsQuery();
+        var result = await _mediator.Send(query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// [Admin] Lấy danh sách Assistant đang thuộc quyền quản lý của một Mangaka cụ thể.
+    /// Route: GET /api/v1/admin/mangakas/{mangakaId:guid}/assistants
+    /// </summary>
+    [HttpGet("mangakas/{mangakaId:guid}/assistants")]
+    [ProducesResponseType(typeof(MyAssistantsResponseDto), 200)]
+    [ProducesResponseType(401)]
+    [ProducesResponseType(403)]
+    public async Task<IActionResult> GetMangakaAssistants(Guid mangakaId, CancellationToken ct)
+    {
+        var query = new GetMyAssistantsQuery(mangakaId);
         var result = await _mediator.Send(query, ct);
         return Ok(result);
     }

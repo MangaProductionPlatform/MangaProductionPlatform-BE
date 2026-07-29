@@ -58,7 +58,7 @@ public class TaskDeadlineMonitorService : BackgroundService
         // Lấy tất cả PageTask chưa hoàn thành (Incomplete hoặc RevisionAlert) và có đặt Deadline
         var activeTasks = await db.PageTasks
             .Where(t => t.Deadline != null &&
-                        (t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert) &&
+                        (t.TaskStatus == PageTaskStatus.Pending || t.TaskStatus == PageTaskStatus.Incomplete || t.TaskStatus == PageTaskStatus.RevisionAlert) &&
                         t.AssignedAssistantId != null)
             .ToListAsync(ct);
 
