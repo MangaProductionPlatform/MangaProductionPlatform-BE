@@ -39,9 +39,12 @@ public class GetUserStatsHandler : IRequestHandler<GetUserStatsQuery, UserStatsR
         var usersQuery = (await _repo.GetAllAsync(ct)).AsQueryable();
 
         if (request.StartDate.HasValue)
-            usersQuery = usersQuery.Where(u => u.CreatedAt >= request.StartDate.Value);
+            usersQuery = usersQuery.Where(u => u.CreatedAt >= request.StartDate.Value.Date);
         if (request.EndDate.HasValue)
-            usersQuery = usersQuery.Where(u => u.CreatedAt <= request.EndDate.Value);
+        {
+            var nextDay = request.EndDate.Value.Date.AddDays(1);
+            usersQuery = usersQuery.Where(u => u.CreatedAt < nextDay);
+        }
 
         var users = usersQuery.ToList();
 

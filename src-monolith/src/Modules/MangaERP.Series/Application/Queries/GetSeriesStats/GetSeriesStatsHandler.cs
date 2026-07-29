@@ -38,9 +38,12 @@ public class GetSeriesStatsHandler : IRequestHandler<GetSeriesStatsQuery, Series
         var query = (await _repo.GetAllAsync(ct)).AsQueryable();
 
         if (request.StartDate.HasValue)
-            query = query.Where(s => s.CreatedAt >= request.StartDate.Value);
+            query = query.Where(s => s.CreatedAt >= request.StartDate.Value.Date);
         if (request.EndDate.HasValue)
-            query = query.Where(s => s.CreatedAt <= request.EndDate.Value);
+        {
+            var nextDay = request.EndDate.Value.Date.AddDays(1);
+            query = query.Where(s => s.CreatedAt < nextDay);
+        }
 
         var all = query.ToList();
 
