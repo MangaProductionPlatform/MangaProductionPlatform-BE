@@ -66,6 +66,25 @@ public class EditorialWorkflowIntegrationTests
         Assert.DoesNotContain(eic, await db.EditorialReviewAssignments.Select(x => x.ReviewerId).ToListAsync());
     }
 
+    [Fact]
+    public async System.Threading.Tasks.Task EditorInChiefResolvesSplitWithNullFeedback_UsesCombinedReviewerFeedbackFallback()
+    {
+        await using var db = CreateDb();
+        var setup = await SeedPendingRound(db);
+        var eic = Guid.NewGuid();
+        db.Users.Add(ActiveUser(eic, UserRole.EditorInChief));
+        await db.SaveChangesAsync();
+
+        await Controller(db, setup.Reviewer1).Decide(setup.Assignment1, new(EditorialDecision.Approved, null), default);
+        await Controller(db, setup.Reviewer2).Decide(setup.Assignment2, new(EditorialDecision.Rejected, "Reviewer 2 rejection reason"), default);
+        await Controller(db, eic).Resolve("SeriesSubmission", setup.WorkId, new(EditorialDecision.Rejected, null), default);
+
+        var work = await db.SeriesSubmissions.SingleAsync(x => x.Id == setup.WorkId);
+        Assert.Equal(SubmissionStatus.EB_Rejected, work.Status);
+        Assert.Equal("Reviewer 2 rejection reason", work.FeedbackMessage);
+    }
+
+
     private static AppDbContext CreateDb() => new(new DbContextOptionsBuilder<AppDbContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
