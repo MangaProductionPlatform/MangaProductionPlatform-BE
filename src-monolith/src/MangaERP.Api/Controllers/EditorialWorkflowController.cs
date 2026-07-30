@@ -173,16 +173,17 @@ public class EditorialWorkflowController : ControllerBase
             await LockWorkAsync(metadata.WorkType, metadata.WorkId, ct);
 
             // [DEMO] First-come-first-serve: any EB can take a Pending slot.
-            // Check if this EB already has their own slot for this work/round.
+            // Check if this EB already has their own Pending slot for this work/round.
             var mine = await _db.EditorialReviewAssignments
                 .SingleOrDefaultAsync(x => x.WorkType == metadata.WorkType
                     && x.WorkId == metadata.WorkId
                     && x.RoundNumber == metadata.RoundNumber
-                    && x.ReviewerId == UserId, ct);
+                    && x.ReviewerId == UserId
+                    && x.Status == EditorialReviewAssignmentStatus.Pending, ct);
 
             if (mine is null)
             {
-                // Find any slot still Pending (i.e., not yet taken by another EB who voted first)
+                // Find any slot still Pending (i.e., not yet taken or completed)
                 var pendingSlot = await _db.EditorialReviewAssignments
                     .Where(x => x.WorkType == metadata.WorkType
                         && x.WorkId == metadata.WorkId
@@ -191,7 +192,7 @@ public class EditorialWorkflowController : ControllerBase
                     .FirstOrDefaultAsync(ct);
 
                 if (pendingSlot is null)
-                    return Conflict(new { message = "Both review slots have already been filled by other reviewers." });
+                    return Conflict(new { message = "Both review slots have already been completed by reviewers." });
 
                 // Take this slot (first-come-first-serve)
                 pendingSlot.OverrideReviewerForDemo(UserId);
@@ -214,7 +215,14 @@ public class EditorialWorkflowController : ControllerBase
             if (decisions.All(x => x == EditorialDecision.Approved))
                 await ApproveWork(mine.WorkType, mine.WorkId, UserId, ct);
             else if (decisions.All(x => x == EditorialDecision.Rejected))
-                await RejectWork(mine.WorkType, mine.WorkId, UserId, string.Join("\n\n", round.Select(x => x.Feedback)), ct);
+            {
+                var combinedFeedback = string.Join("\n\n", round.Select(x => x.Feedback).Where(f => !string.IsNullOrWhiteSpace(f)));
+                if (string.IsNullOrWhiteSpace(combinedFeedback))
+                {
+                    combinedFeedback = "Bản thảo/Chương đã bị từ chối bởi Ban Biên Tập (Editorial Board).";
+                }
+                await RejectWork(mine.WorkType, mine.WorkId, UserId, combinedFeedback, ct);
+            }
             else
                 await EscalateWork(mine.WorkType, mine.WorkId, ct);
             await _db.SaveChangesAsync(ct);
