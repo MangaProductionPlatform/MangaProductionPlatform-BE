@@ -308,7 +308,18 @@ public class EditorialWorkflowController : ControllerBase
             if (request.Decision == EditorialDecision.Approved)
                 await ApproveWork(type, workId, UserId, ct, true);
             else
-                await RejectWork(type, workId, UserId, request.Feedback ?? string.Empty, ct);
+            {
+                var feedback = request.Feedback;
+                if (string.IsNullOrWhiteSpace(feedback))
+                {
+                    feedback = string.Join("\n\n", reviews.Select(x => x.Feedback).Where(f => !string.IsNullOrWhiteSpace(f)));
+                }
+                if (string.IsNullOrWhiteSpace(feedback))
+                {
+                    feedback = "Bản thảo/Chương đã bị từ chối bởi Tổng Biên Tập (Editor-in-Chief).";
+                }
+                await RejectWork(type, workId, UserId, feedback, ct, true);
+            }
             await _db.SaveChangesAsync(ct);
             if (transaction is not null) await transaction.CommitAsync(ct);
             return (IActionResult)Ok(new { status = request.Decision.ToString() });
@@ -381,18 +392,18 @@ public class EditorialWorkflowController : ControllerBase
         var submission = await _db.SeriesSubmissions.FindAsync([id], ct) ?? throw new KeyNotFoundException();
         if (eic) submission.ApproveByEIC(actorId); else submission.ApproveByBoard(actorId);
 
-        if (!await _db.MangaSeries.AnyAsync(x => x.SubmissionId == id, ct))
+        if (!await _db.MangaSeries.IgnoreQueryFilters().AnyAsync(x => x.SubmissionId == id, ct))
             _db.MangaSeries.Add(MangaSeries.Create(submission.SubmitterId, submission.Id, submission.Title, submission.Description, submission.Genre, submission.CoverImageUrl));
 
         await AddNotificationAsync(submission.SubmitterId, "Series submission approved", submission.Title, id, "SeriesSubmission", $"/submissions/{id}", ct);
     }
 
-    private async System.Threading.Tasks.Task RejectWork(EditorialWorkType type, Guid id, Guid actorId, string feedback, CancellationToken ct)
+    private async System.Threading.Tasks.Task RejectWork(EditorialWorkType type, Guid id, Guid actorId, string feedback, CancellationToken ct, bool eic = false)
     {
         if (type == EditorialWorkType.SeriesSubmission)
         {
             var submission = await _db.SeriesSubmissions.FindAsync([id], ct) ?? throw new KeyNotFoundException();
-            submission.RejectByBoard(actorId, feedback); // Sets status to EB_Rejected
+            if (eic) submission.RejectByEIC(actorId, feedback); else submission.RejectByBoard(actorId, feedback);
             await AddNotificationAsync(submission.SubmitterId, "Series submission rejected", feedback, id, "SeriesSubmission", $"/submissions/{id}", ct);
         }
         else

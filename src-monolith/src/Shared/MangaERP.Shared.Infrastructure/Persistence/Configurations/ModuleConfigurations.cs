@@ -21,7 +21,7 @@ public class SeriesSubmissionConfiguration : IEntityTypeConfiguration<SeriesSubm
         b.ToTable("SeriesSubmissions", table =>
             table.HasCheckConstraint(
                 "CK_SeriesSubmissions_Status",
-                "\"Status\" IN ('Draft', 'Pending_Tantou_Review', 'Tantou_Revision_Required', 'Pending_EB_Review', 'Editorial_Rejected_To_Tantou', 'Mangaka_Revision_Required', 'EB_Approved', 'Conflict_Escalated')"));
+                "\"Status\" IN ('Draft', 'Pending_Tantou_Review', 'Tantou_Revision_Required', 'Pending_EB_Review', 'Requires_Revision', 'Editorial_Rejected_To_Tantou', 'Mangaka_Revision_Required', 'EB_Approved', 'EB_Rejected', 'Conflict_Escalated')"));
         b.HasKey(e => e.Id);
         b.Property(e => e.Title).IsRequired().HasMaxLength(256);
         b.Property(e => e.ManuscriptUrl).IsRequired(false).HasMaxLength(2048);

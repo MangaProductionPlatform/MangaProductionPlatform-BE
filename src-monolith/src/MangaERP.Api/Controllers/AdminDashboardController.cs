@@ -65,6 +65,11 @@ public class AdminDashboardController : ControllerBase
         [FromQuery] DateTime? endDate,
         CancellationToken ct)
     {
+        if (startDate.HasValue && endDate.HasValue && startDate.Value.Date > endDate.Value.Date)
+        {
+            return BadRequest(new { message = "Start date must be on or before end date." });
+        }
+
         // Guardrail 1.2: Audit log bắt buộc cho endpoint xem toàn hệ thống
         var actorId = Guid.TryParse(
             User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : (Guid?)null;
@@ -349,14 +354,19 @@ public class AdminDashboardController : ControllerBase
         [FromQuery] string groupBy = "day",
         CancellationToken ct = default)
     {
-        var start = startDate ?? DateTime.UtcNow.AddDays(-30);
-        var end = endDate ?? DateTime.UtcNow;
+        if (startDate.HasValue && endDate.HasValue && startDate.Value.Date > endDate.Value.Date)
+        {
+            return BadRequest(new { message = "Start date must be on or before end date." });
+        }
+
+        var start = startDate?.Date ?? DateTime.UtcNow.AddDays(-30).Date;
+        var nextDay = (endDate?.Date ?? DateTime.UtcNow.Date).AddDays(1);
 
         var isMonthly = string.Equals(groupBy, "month", StringComparison.OrdinalIgnoreCase);
 
         // 1. Submissions trend
         var submissionsQuery = _db.SeriesSubmissions.AsNoTracking()
-            .Where(s => s.CreatedAt >= start && s.CreatedAt <= end);
+            .Where(s => s.CreatedAt >= start && s.CreatedAt < nextDay);
 
         List<TrendDataPointDto> submissionTrends;
         if (isMonthly)
@@ -386,7 +396,7 @@ public class AdminDashboardController : ControllerBase
 
         // 2. Series trend
         var seriesQuery = _db.MangaSeries.AsNoTracking()
-            .Where(s => s.CreatedAt >= start && s.CreatedAt <= end);
+            .Where(s => s.CreatedAt >= start && s.CreatedAt < nextDay);
 
         List<TrendDataPointDto> seriesTrends;
         if (isMonthly)
@@ -560,16 +570,21 @@ public class AdminDashboardController : ControllerBase
         [FromQuery] DateTime? endDate,
         CancellationToken ct = default)
     {
-        var start = startDate ?? DateTime.UtcNow.AddDays(-90);
-        var end = endDate ?? DateTime.UtcNow;
+        if (startDate.HasValue && endDate.HasValue && startDate.Value.Date > endDate.Value.Date)
+        {
+            return BadRequest(new { message = "Start date must be on or before end date." });
+        }
+
+        var start = startDate?.Date ?? DateTime.UtcNow.AddDays(-90).Date;
+        var nextDay = (endDate?.Date ?? DateTime.UtcNow.Date).AddDays(1);
 
         var rawSubmissions = await _db.SeriesSubmissions.AsNoTracking()
-            .Where(s => s.CreatedAt >= start && s.CreatedAt <= end)
+            .Where(s => s.CreatedAt >= start && s.CreatedAt < nextDay)
             .Select(s => s.CreatedAt)
             .ToListAsync(ct);
 
         var rawChapters = await _db.Chapters.AsNoTracking()
-            .Where(c => c.CreatedAt >= start && c.CreatedAt <= end)
+            .Where(c => c.CreatedAt >= start && c.CreatedAt < nextDay)
             .Select(c => c.CreatedAt)
             .ToListAsync(ct);
 
@@ -589,7 +604,7 @@ public class AdminDashboardController : ControllerBase
         return Ok(new
         {
             startDate = start,
-            endDate = end,
+            endDate = endDate ?? DateTime.UtcNow,
             generatedAt = DateTime.UtcNow,
             dayOfWeekFrequencies
         });
