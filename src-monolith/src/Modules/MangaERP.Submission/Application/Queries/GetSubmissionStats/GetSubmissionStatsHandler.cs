@@ -40,17 +40,20 @@ public class GetSubmissionStatsHandler : IRequestHandler<GetSubmissionStatsQuery
         var query = (await _repo.GetAllAsync(ct)).AsQueryable();
 
         if (request.StartDate.HasValue)
-            query = query.Where(s => s.CreatedAt >= request.StartDate.Value);
+            query = query.Where(s => s.CreatedAt >= request.StartDate.Value.Date);
         if (request.EndDate.HasValue)
-            query = query.Where(s => s.CreatedAt <= request.EndDate.Value);
+        {
+            var nextDay = request.EndDate.Value.Date.AddDays(1);
+            query = query.Where(s => s.CreatedAt < nextDay);
+        }
 
         var all = query.ToList();
 
         return new SubmissionStatsResult(
             TotalSubmissions:  all.Count,
             Draft:             all.Count(s => s.Status == SubmissionStatus.Draft),
-            PendingEBReview:   all.Count(s => s.Status == SubmissionStatus.Pending_EB_Review),
-            RequiresRevision:  all.Count(s => s.Status == SubmissionStatus.Requires_Revision),
+            PendingEBReview:   all.Count(s => s.Status == SubmissionStatus.Pending_EB_Review || s.Status == SubmissionStatus.Pending_Tantou_Review),
+            RequiresRevision:  all.Count(s => s.Status == SubmissionStatus.Requires_Revision || s.Status == SubmissionStatus.Tantou_Revision_Required || s.Status == SubmissionStatus.Mangaka_Revision_Required || s.Status == SubmissionStatus.Editorial_Rejected_To_Tantou),
             ConflictEscalated: all.Count(s => s.Status == SubmissionStatus.Conflict_Escalated),
             EBApproved:        all.Count(s => s.Status == SubmissionStatus.EB_Approved),
             EBRejected:        all.Count(s => s.Status == SubmissionStatus.EB_Rejected),
