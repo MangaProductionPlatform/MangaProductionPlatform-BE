@@ -381,7 +381,7 @@ public class EditorialWorkflowController : ControllerBase
         var submission = await _db.SeriesSubmissions.FindAsync([id], ct) ?? throw new KeyNotFoundException();
         if (eic) submission.ApproveByEIC(actorId); else submission.ApproveByBoard(actorId);
 
-        if (!await _db.MangaSeries.AnyAsync(x => x.SubmissionId == id, ct))
+        if (!await _db.MangaSeries.IgnoreQueryFilters().AnyAsync(x => x.SubmissionId == id, ct))
             _db.MangaSeries.Add(MangaSeries.Create(submission.SubmitterId, submission.Id, submission.Title, submission.Description, submission.Genre, submission.CoverImageUrl));
 
         await AddNotificationAsync(submission.SubmitterId, "Series submission approved", submission.Title, id, "SeriesSubmission", $"/submissions/{id}", ct);
