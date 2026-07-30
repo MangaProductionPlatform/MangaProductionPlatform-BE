@@ -175,7 +175,7 @@ public class EditorialWorkflowController : ControllerBase
             // [DEMO] First-come-first-serve: any EB can take a Pending slot.
             // Check if this EB already has their own Pending slot for this work/round.
             var mine = await _db.EditorialReviewAssignments
-                .SingleOrDefaultAsync(x => x.WorkType == metadata.WorkType
+                .FirstOrDefaultAsync(x => x.WorkType == metadata.WorkType
                     && x.WorkId == metadata.WorkId
                     && x.RoundNumber == metadata.RoundNumber
                     && x.ReviewerId == UserId
